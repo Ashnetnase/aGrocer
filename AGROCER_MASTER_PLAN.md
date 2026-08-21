@@ -581,6 +581,41 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-22 — Image built, legacy removed, merged to main (Claude Code)
+
+**Stage:** Stage 1
+**Status:** In progress — only deployment to the staging VM and the acceptance review remain
+
+Completed:
+
+- removed `legacy/` on request, along with the tsconfig / ESLint / dockerignore exclusions that
+  existed only to keep it out of the build. Recoverable from commit `1a1a986`.
+- fast-forwarded `main` to the Stage 1 work and pushed; the branch and `main` now match
+- **built the Docker image for the first time** and smoke-tested the running container:
+  - reports `healthy` on the first healthcheck probe
+  - all nine routes return 200, as do the manifest, service worker, an icon and a meal photo
+  - `/login` returns the styled 404
+  - runs as `uid=1000(node)`, confirming the non-root setup
+  - 76.3 MB content / 319 MB on disk
+
+This closes the last item that could be verified from the development machine. Every remaining
+Stage 1 task needs the staging VM.
+
+Checks run:
+
+- `npm run typecheck`, `npm run lint` — clean
+- `npm run test` — 89 tests passing
+- `docker compose build` — succeeded
+- container smoke test as above
+
+Blockers:
+
+- **PWA install still needs HTTPS.** Unchanged and still undecided; `docs/staging.md` sets out
+  the options. Definition of Done item 11 cannot be met over plain HTTP on the LAN.
+- The app has still never been opened in a browser by a human or by an agent on this machine.
+  Chrome refuses all loopback connections here; the container smoke test is HTTP-level only,
+  so nothing has confirmed the UI *looks* right since the port.
+
 ## 2026-08-22 — Error and not-found boundaries (Claude Code)
 
 **Stage:** Stage 1
