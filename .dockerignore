@@ -9,9 +9,6 @@ dist
 .git
 .gitignore
 
-# The original Magic Patterns prototype — reference only, never built.
-legacy
-
 npm-debug.log*
 yarn-error.log*
 *.tsbuildinfo

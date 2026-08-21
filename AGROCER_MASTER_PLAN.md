@@ -282,8 +282,8 @@ Create a polished, installable, manual-first Agrocer application that the family
 - [x] Production build clean
 - [x] Basic tests for important domain logic
 - [x] Meal creation/editing UI
-- [ ] Remove the temporary `legacy/` Vite source once the port is signed off
-- [ ] GitHub repository established
+- [x] Remove the temporary `legacy/` Vite source once the port is signed off
+- [x] GitHub repository established
 - [ ] Staging VM prepared
 - [ ] Docker deployment to staging VM
 - [ ] Open Agrocer from phone on the home network / secured URL
@@ -907,8 +907,8 @@ The second Lenovo ThinkCentre Proxmox node is the first staging target. AWS/Azur
 The following decisions are already approved unless explicitly changed:
 
 - ~~Fresh Next.js scaffold/port is preferred over mutating the Vite app in place.~~ Done 2026-08-22.
-- Keep the Vite source temporarily during the port until the new implementation is verified.
-  Now at `legacy/`; delete after the Stage 1 acceptance review.
+- ~~Keep the Vite source temporarily during the port until the new implementation is verified.~~
+  Removed 2026-08-22 on request. Recoverable from commit `1a1a986` if ever needed.
 - ~~Use localStorage-backed persistence for Stage 1.~~ Done 2026-08-22.
 - ~~Use real current dates by default, with optional pinned demo date support.~~ Done 2026-08-22 —
   the pinned date is a household setting on the Settings screen.

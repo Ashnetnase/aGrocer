@@ -38,7 +38,6 @@ src/data/             Repository interfaces, localStorage implementation, seed d
 src/features/         One folder per domain: screens and their components
 src/components/       agrocer/ design primitives (incl. RHF form fields), layout/ shell
 src/providers/        AgrocerProvider and the date hooks
-legacy/               The original Magic Patterns Vite app, kept for reference during Stage 1
 ```
 
 ### Architecture notes
