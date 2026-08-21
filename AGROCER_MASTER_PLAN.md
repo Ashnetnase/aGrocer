@@ -281,8 +281,8 @@ Create a polished, installable, manual-first Agrocer application that the family
 - [x] Typecheck clean
 - [x] Production build clean
 - [x] Basic tests for important domain logic
+- [x] Meal creation/editing UI
 - [ ] Remove the temporary `legacy/` Vite source once the port is signed off
-- [ ] Meal creation/editing UI (catalogue is currently read-only)
 - [ ] GitHub repository established
 - [ ] Staging VM prepared
 - [ ] Docker deployment to staging VM
@@ -580,6 +580,70 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-22 — Docker packaging and staging runbook (Claude Code)
+
+**Stage:** Stage 1
+**Status:** In progress — container defined and validated; VM provisioning is a manual step
+
+Completed:
+
+- `output: 'standalone'` in `next.config.ts` so the runtime image carries only traced dependencies
+- multi-stage `Dockerfile` (deps / builder / runner) on `node:22-alpine`, running as non-root
+  with a dependency-free healthcheck
+- `.dockerignore` excluding `legacy/`, `.next`, `node_modules`, docs and env files
+- `docker-compose.yml` for `agrocer-stg01`: one service, no database (Stage 1 data is local
+  to each browser), 512 MB limit, log rotation
+- `docs/staging.md`: VM sizing, Docker install, deploy/update commands, verification steps
+
+Checks run:
+
+- `npm run build` — clean, `.next/standalone/server.js` produced
+- ran the standalone bundle directly with the Dockerfile's asset layout and confirmed 200 for
+  `/`, `/meals`, `/manifest.webmanifest`, `/icons/icon-192.png`, `/sw.js` and a meal photo.
+  This validates the image's COPY layout and CMD without the Docker daemon.
+- `npm run typecheck`, `npm run lint` — clean
+
+Blockers:
+
+- `docker build` not executed: the Docker CLI is installed on the dev machine but the Docker
+  Desktop daemon is not running. The image has never actually been built.
+- **PWA install needs HTTPS.** A plain `http://<vm-address>:3000` origin is not a secure
+  context, so the service worker will not register and no install prompt appears. Definition
+  of Done item 11 ("install/use the PWA foundation") therefore cannot be met over plain HTTP
+  on the LAN. `docs/staging.md` sets out the options; Tailscale looks like the least work.
+  This needs a decision before the Stage 1 acceptance review.
+
+## 2026-08-22 — Meal creation and editing (Claude Code)
+
+**Stage:** Stage 1
+**Status:** In progress — Definition of Done item 7 ("create/view meals") now satisfied
+
+Completed:
+
+- `MealFormSheet`: create/edit/delete a meal using the established BottomSheet + RHF/Zod pattern
+- meal catalogue is now persisted and mutable through `MealsRepository` (`create`/`update`/`remove`)
+- deleting a meal also strips it from the planner, so no dangling meal ids can remain
+- creating happens from the meal picker via a dashed button, matching the existing
+  "Plan dinner" affordance; editing via a pencil on each picker row
+- two new form primitives: `FormChipMultiSelect` (meal tags) and `FormStringListField` (ingredients)
+- `Meal.image` is now optional, with a new `MealImage` component rendering a token-based
+  placeholder — Stage 1 has no upload, so family-created meals have no photo
+- 5 new tests covering `removeMealFromPlan` and `countPlannedUses`
+
+Checks run:
+
+- `npm run test` — 66 tests, all passing
+- `npm run typecheck` — clean
+- `npm run lint` — clean
+- `npm run build` — clean, 11 routes prerendered
+
+Blockers:
+
+- browser verification of this feature could not be completed: Chrome began refusing all
+  loopback connections mid-session (`ERR_CONNECTION_REFUSED` on ports 3000 and 3005) while
+  `curl` returned 200 over both IPv4 and IPv6. An environment issue, not an application one,
+  but the new meal sheet has not yet been seen rendered.
 
 ## 2026-08-22 — Next.js App Router migration (Claude Code)
 

@@ -1,0 +1,31 @@
+# Anything not needed to build the app. Keeping this tight matters: everything
+# here would otherwise be sent to the daemon as build context.
+node_modules
+.next
+out
+build
+dist
+
+.git
+.gitignore
+
+# The original Magic Patterns prototype — reference only, never built.
+legacy
+
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+.env
+.env*.local
+
+.vscode
+.idea
+.DS_Store
+
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+*.md
+docs
