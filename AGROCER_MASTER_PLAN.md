@@ -581,6 +581,44 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-22 — Repository layer test coverage (Claude Code)
+
+**Stage:** Stage 1
+**Status:** In progress
+
+Context: the localStorage repository layer had no tests, despite backing Definition of Done
+item 10 ("refresh/reopen without losing Stage 1 data") and being the exact component a Stage 2
+backend replaces. Its contract is now pinned down before that swap happens.
+
+Completed:
+
+- `testStorage.ts`: an in-memory `localStorage` stand-in that can also simulate a full quota
+- 23 repository tests covering:
+  - seed fallback when nothing is stored, and no writes on a plain read
+  - malformed JSON and schema-invalid stored data both falling back to the seed
+  - a failed write (quota) not throwing into the UI
+  - pantry stock rules applied through `adjustQuantity`, and unknown ids returning
+    `undefined` rather than throwing
+  - shopping merge-on-add, including case-insensitivity, not merging into an item already
+    in the trolley, and merging repeats within a single `addMany` batch
+  - meal delete also stripping the meal from the planner
+  - household initials derived on add and re-derived on rename
+  - settings merging rather than replacing on a partial update
+  - `reset` clearing storage so the seed returns
+
+Checks run:
+
+- `npm run test` — 89 tests across 7 files, all passing
+- `npm run typecheck`, `npm run lint` — clean
+- mutation check: breaking merge-on-add in `localRepositories.ts` failed exactly the three
+  tests that should catch it, confirming the new suite is not vacuous. Source restored after.
+
+Blockers unchanged:
+
+- Docker image still never built (Docker Desktop daemon not running)
+- meals UI still never seen rendered (Chrome refusing all loopback connections on this machine)
+- PWA install still needs an HTTPS origin for staging
+
 ## 2026-08-22 — Docker packaging and staging runbook (Claude Code)
 
 **Stage:** Stage 1
