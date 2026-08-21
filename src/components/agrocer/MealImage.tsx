@@ -37,7 +37,7 @@ export function MealImage({ src, width, height, className, iconClassName, priori
   return (
     <div
       aria-hidden="true"
-      className={cn('flex items-center justify-center bg-moss-50 text-moss-300', className)}
+      className={cn('flex items-center justify-center bg-moss-50 text-moss-500', className)}
     >
       <CookingPotIcon className={iconClassName ?? 'h-6 w-6'} strokeWidth={1.75} />
     </div>

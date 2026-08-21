@@ -13,7 +13,11 @@ const config: Config = {
         canvas: '#F7F3EC',
         surface: '#FFFFFF',
         ink: '#17231D',
-        muted: '#6B7A72',
+        // Magic Patterns had #6B7A72, which reaches only 4.08:1 on canvas and
+        // fails WCAG AA for the subtitles, section labels and placeholders it is
+        // used for. Darkened 6% — the smallest change that clears 4.5:1 — with
+        // hue and saturation preserved.
+        muted: '#65736B',
         line: '#E8E2D7',
         moss: {
           50: '#EDF4EF',
@@ -37,7 +41,9 @@ const config: Config = {
         honey: {
           50: '#FCF3DE',
           500: '#C08A16',
-          600: '#9C6F10',
+          // Was #9C6F10 — 4.05:1 on honey-50, failing AA for the "Low" stock
+          // chip and the pantry stat tile. Darkened 6.5% to clear 4.5:1.
+          600: '#92680F',
         },
         berry: {
           50: '#FBEAE7',

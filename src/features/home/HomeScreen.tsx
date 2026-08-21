@@ -48,7 +48,9 @@ export function HomeScreen() {
               a
             </span>
             <div>
-              <p className="text-[19px] font-extrabold leading-none tracking-tight text-ink">Agrocer</p>
+              {/* The app name is this screen's h1: Home has no ScreenHeader, so
+                  without it the page would start at h2. */}
+              <h1 className="text-[19px] font-extrabold leading-none tracking-tight text-ink">Agrocer</h1>
               <p className="mt-1 text-[11px] font-medium text-muted">Meals, pantry and groceries</p>
             </div>
           </div>

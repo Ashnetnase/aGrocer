@@ -581,6 +581,45 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-22 — Accessibility pass (Claude Code)
+
+**Stage:** Stage 1
+**Status:** In progress
+
+Audited the token palette against WCAG 2.1 AA and the screens for structural issues.
+Six contrast failures found and fixed, plus three markup issues.
+
+Contrast (ratios computed for the pairs actually used in the UI):
+
+- `muted` `#6B7A72` → `#65736B`. Was 4.08:1 on canvas, failing AA for screen subtitles,
+  section labels and input placeholders. Darkened 6% — the smallest change that clears
+  4.5:1 — preserving hue and saturation.
+- `honey.600` `#9C6F10` → `#92680F`. Was 4.05:1 on `honey-50`, failing for the "Low" stock
+  chip and the pantry stat tile. Darkened 6.5% to reach 4.52:1.
+- Meal placeholder icon moved from `moss-300` (1.95:1) to `moss-500` (4.41:1).
+
+These are the only deviations from the Magic Patterns palette, and both are within a few
+percent of the originals. ADR-001 permits changes that fix a real accessibility issue; the
+measurements are recorded here so the decision is auditable.
+
+Markup:
+
+- Home had no `h1` — the page started at `h2`. The "Agrocer" wordmark is now the heading.
+- Shopping Mode had the same problem; the "N left to grab" count is now its `h1`.
+- `ShoppingRow` rendered the item details inside a *disabled* button in Shopping Mode,
+  dropping the item name out of the tab order and presenting it as a dead control. The
+  details are now plain content when the row is not editable.
+
+Checks run:
+
+- `npm run typecheck`, `npm run lint` — clean
+- `npm run test` — 89 tests passing
+- contrast re-audited after the changes: every text pair in use now passes AA
+
+Not covered by this pass: focus-visible styling was not systematically reviewed, and no
+screen-reader walkthrough has been done — both want a real device, and the app still cannot
+be opened in a browser on this machine.
+
 ## 2026-08-22 — Repository layer test coverage (Claude Code)
 
 **Stage:** Stage 1

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { CheckIcon, FlagIcon } from 'lucide-react';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import { lineTotal } from '@/domain/services/shopping';
@@ -12,6 +13,24 @@ interface ShoppingRowProps {
   shoppingMode: boolean;
   onToggle: () => void;
   onEdit?: () => void;
+}
+
+/** The item details: a button when the row can be edited, plain content otherwise. */
+function Details({
+  asButton,
+  onClick,
+  children,
+}: {
+  asButton: boolean;
+  onClick: (() => void) | undefined;
+  children: ReactNode;
+}) {
+  if (!asButton) return <div className="min-w-0 flex-1">{children}</div>;
+  return (
+    <button type="button" onClick={onClick} className="min-w-0 flex-1 text-left">
+      {children}
+    </button>
+  );
 }
 
 export function ShoppingRow({ item, shoppingMode, onToggle, onEdit }: ShoppingRowProps) {
@@ -34,12 +53,12 @@ export function ShoppingRow({ item, shoppingMode, onToggle, onEdit }: ShoppingRo
         <CheckIcon className={shoppingMode ? 'h-6 w-6' : 'h-4 w-4'} strokeWidth={3} />
       </button>
 
-      <button
-        type="button"
-        onClick={onEdit}
-        disabled={!onEdit}
-        className="min-w-0 flex-1 text-left disabled:cursor-default"
-      >
+      {/*
+        In Shopping Mode rows are not editable. Rendering a disabled button
+        would drop the item name out of the tab order and read it as a dead
+        control, so the details become plain content instead.
+      */}
+      <Details asButton={Boolean(onEdit)} onClick={onEdit}>
         <div className="flex items-center gap-1.5">
           <p
             className={cn(
@@ -58,7 +77,7 @@ export function ShoppingRow({ item, shoppingMode, onToggle, onEdit }: ShoppingRo
           {item.quantity} × {item.unit}
           {item.note ? ` · ${item.note}` : ''}
         </p>
-      </button>
+      </Details>
 
       <span
         className={cn(

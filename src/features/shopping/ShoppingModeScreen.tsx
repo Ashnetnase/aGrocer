@@ -36,9 +36,10 @@ export function ShoppingModeScreen() {
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-moss-200">
               <ScanLineIcon className="h-3.5 w-3.5" /> Shopping mode
             </p>
-            <p className="mt-1 text-[26px] font-extrabold leading-tight tracking-tight">
+            {/* This screen has no ScreenHeader, so the count is its h1. */}
+            <h1 className="mt-1 text-[26px] font-extrabold leading-tight tracking-tight">
               {remaining.length} left to grab
-            </p>
+            </h1>
             <p className="mt-0.5 text-sm text-moss-100">
               {nzd(trolleyTotal)} in trolley · {nzd(total)} estimated
             </p>
