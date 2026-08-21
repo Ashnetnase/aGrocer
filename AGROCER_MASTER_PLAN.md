@@ -612,9 +612,12 @@ Blockers:
 
 - **PWA install still needs HTTPS.** Unchanged and still undecided; `docs/staging.md` sets out
   the options. Definition of Done item 11 cannot be met over plain HTTP on the LAN.
-- The app has still never been opened in a browser by a human or by an agent on this machine.
-  Chrome refuses all loopback connections here; the container smoke test is HTTP-level only,
-  so nothing has confirmed the UI *looks* right since the port.
+
+Resolved after this entry was written: the app was opened and confirmed working by Ash on
+2026-08-22. This clears the caveat carried through the migration, meals, accessibility and
+error-boundary entries below — every agent-side check in those entries was HTTP-level or
+static, and none of them had confirmed the UI actually rendered correctly. It now has been,
+on the development machine.
 
 ## 2026-08-22 — Error and not-found boundaries (Claude Code)
 
