@@ -581,6 +581,40 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-22 — Error and not-found boundaries (Claude Code)
+
+**Stage:** Stage 1
+**Status:** In progress
+
+The app had no error or 404 handling, so a render failure or a stale link dropped the family
+onto Next's default unstyled page — jarring in an installed PWA, which has no browser chrome
+to explain it.
+
+Completed:
+
+- `MessageScreen`: the shared card behind every failure screen, so a failure never looks like
+  it came from a different application
+- `app/(app)/error.tsx`: render errors inside the shell, with retry and a route home
+- `app/not-found.tsx`: styled 404
+- `app/global-error.tsx`: last-resort boundary for root-layout failures. Deliberately
+  dependency-free — no shared components, no icon library, no font variable — since whatever
+  broke may be the thing those imports rely on
+- `app/offline/page.tsx` refactored onto the shared card
+
+All three failure screens state that data on the device is untouched. The instinct on seeing
+an error screen is to assume the shopping list is gone.
+
+Checks run:
+
+- `npm run typecheck`, `npm run lint` — clean
+- `npm run build` — clean
+- served the production bundle and confirmed `/login` returns HTTP 404 with the styled page,
+  and `/offline` renders
+
+Not verified: `error.tsx` and `global-error.tsx` have not been triggered — doing so needs a
+deliberately thrown render error. They are standard Next conventions and typecheck, but no
+one has seen them on screen.
+
 ## 2026-08-22 — Accessibility pass (Claude Code)
 
 **Stage:** Stage 1
