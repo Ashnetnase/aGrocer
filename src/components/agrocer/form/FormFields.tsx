@@ -7,6 +7,7 @@ import {
   type FieldPath,
   type FieldValues,
 } from 'react-hook-form';
+import { PlusIcon, XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QuantityStepper } from '../QuantityStepper';
 
@@ -194,6 +195,111 @@ export function FormChipSelect<TValues extends FieldValues, TOption extends stri
           );
         })}
       </div>
+      <FieldError id={`${name}-error`} message={fieldState.error?.message} />
+    </div>
+  );
+}
+
+/** Pill selector that accepts several values at once — used for meal tags. */
+export function FormChipMultiSelect<TValues extends FieldValues, TOption extends string>({
+  control,
+  name,
+  label,
+  options,
+}: BaseProps<TValues> & { options: readonly TOption[] }) {
+  const { field, fieldState } = useController({ control, name });
+  const selected: TOption[] = Array.isArray(field.value) ? field.value : [];
+
+  const toggle = (option: TOption) =>
+    field.onChange(
+      selected.includes(option) ? selected.filter((value) => value !== option) : [...selected, option],
+    );
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-semibold text-ink">{label}</span>
+      <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const active = selected.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => toggle(option)}
+              aria-pressed={active}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors duration-150 ease-out',
+                active
+                  ? 'border-moss-600 bg-moss-600 text-white'
+                  : 'border-line bg-canvas text-muted hover:text-ink',
+              )}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+      <FieldError id={`${name}-error`} message={fieldState.error?.message} />
+    </div>
+  );
+}
+
+/**
+ * A repeatable list of short strings — the meal's ingredients.
+ *
+ * Rows reuse the standard field styling and each gets its own remove button,
+ * so the list reads like the divided row groups used elsewhere in the app.
+ */
+export function FormStringListField<TValues extends FieldValues>({
+  control,
+  name,
+  label,
+  placeholder,
+  addLabel,
+}: BaseProps<TValues> & { placeholder?: string; addLabel: string }) {
+  const { field, fieldState } = useController({ control, name });
+  const values: string[] = Array.isArray(field.value) ? field.value : [];
+
+  const update = (index: number, value: string) =>
+    field.onChange(values.map((existing, position) => (position === index ? value : existing)));
+
+  const remove = (index: number) => field.onChange(values.filter((_, position) => position !== index));
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-semibold text-ink">{label}</span>
+      <div className="space-y-2">
+        {values.map((value, index) => (
+          // Index keys are correct here: rows have no stable id and are
+          // identified purely by position in the list.
+          <div key={index} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={value}
+              onChange={(event) => update(index, event.target.value)}
+              onBlur={field.onBlur}
+              placeholder={placeholder}
+              aria-label={`${label} ${index + 1}`}
+              className="h-12 min-w-0 flex-1 rounded-2xl border border-line bg-canvas px-4 text-[15px] text-ink placeholder:text-muted focus:border-moss-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-moss-100"
+            />
+            <button
+              type="button"
+              onClick={() => remove(index)}
+              aria-label={`Remove ${label} ${index + 1}`}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-line text-muted transition-colors duration-150 ease-out hover:bg-berry-50 hover:text-berry-500"
+            >
+              <XIcon className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => field.onChange([...values, ''])}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
+      >
+        <PlusIcon className="h-4 w-4" /> {addLabel}
+      </button>
       <FieldError id={`${name}-error`} message={fieldState.error?.message} />
     </div>
   );

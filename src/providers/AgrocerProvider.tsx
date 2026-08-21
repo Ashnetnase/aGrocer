@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { DayKey, Slot } from '@/domain/schemas/common';
 import type { Household, HouseholdMemberDraft, Settings } from '@/domain/schemas/household';
-import type { Meal, Plan } from '@/domain/schemas/meal';
+import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
 import type { Product } from '@/domain/schemas/product';
 import type { ShoppingItem, ShoppingItemDraft, ShoppingItemPatch } from '@/domain/schemas/shopping';
@@ -49,6 +49,9 @@ interface AgrocerActions {
 
   assignMeal: (day: DayKey, slot: Slot, mealId: string) => Promise<void>;
   clearMeal: (day: DayKey, slot: Slot) => Promise<void>;
+  addMeal: (draft: MealDraft) => Promise<void>;
+  updateMeal: (id: string, draft: MealDraft) => Promise<void>;
+  removeMeal: (id: string) => Promise<void>;
 
   toggleFavourite: (id: string) => Promise<void>;
 
@@ -114,6 +117,15 @@ export function AgrocerProvider({ children, repositories = localRepositories }: 
     setState((prev) => ({ ...prev, products }));
   }, [repositories]);
 
+  /** Deleting a meal also rewrites the plan, so both are refreshed together. */
+  const refreshMeals = useCallback(async () => {
+    const [meals, plan] = await Promise.all([
+      repositories.meals.list(),
+      repositories.meals.getPlan(),
+    ]);
+    setState((prev) => ({ ...prev, meals, plan }));
+  }, [repositories]);
+
   const refreshHousehold = useCallback(async () => {
     const household = await repositories.household.get();
     setState((prev) => ({ ...prev, household }));
@@ -171,6 +183,18 @@ export function AgrocerProvider({ children, repositories = localRepositories }: 
         const plan = await repositories.meals.clear(day, slot);
         setState((prev) => ({ ...prev, plan }));
       },
+      async addMeal(draft) {
+        await repositories.meals.create(draft);
+        await refreshMeals();
+      },
+      async updateMeal(id, draft) {
+        await repositories.meals.update(id, draft);
+        await refreshMeals();
+      },
+      async removeMeal(id) {
+        await repositories.meals.remove(id);
+        await refreshMeals();
+      },
 
       async toggleFavourite(id) {
         await repositories.products.toggleFavourite(id);
@@ -199,7 +223,15 @@ export function AgrocerProvider({ children, repositories = localRepositories }: 
         await loadAll();
       },
     }),
-    [repositories, refreshPantry, refreshShopping, refreshProducts, refreshHousehold, loadAll],
+    [
+      repositories,
+      refreshPantry,
+      refreshShopping,
+      refreshProducts,
+      refreshMeals,
+      refreshHousehold,
+      loadAll,
+    ],
   );
 
   const value = useMemo<AgrocerValue>(() => ({ ...state, ...actions }), [state, actions]);

@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -20,6 +19,7 @@ import { findMeal, mealFor, pantryItemToShoppingDraft } from '@/domain/services/
 import { needsAttention, describeStock } from '@/domain/services/pantry';
 import { isOnList, summariseShopping } from '@/domain/services/shopping';
 import { StockChip } from '@/components/agrocer/StockChip';
+import { MealImage } from '@/components/agrocer/MealImage';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -104,13 +104,13 @@ export function HomeScreen() {
               href="/meals"
               className="group relative block w-full overflow-hidden rounded-3xl text-left shadow-card"
             >
-              <Image
+              <MealImage
                 src={tonight.image}
-                alt=""
                 width={440}
                 height={192}
                 priority
-                className="h-48 w-full object-cover"
+                className="h-48 w-full"
+                iconClassName="h-12 w-12"
               />
               <div className="absolute inset-0 bg-ink/45" />
               <div className="absolute inset-x-0 bottom-0 p-4">
@@ -263,13 +263,7 @@ export function HomeScreen() {
                   )}
                 >
                   {meal ? (
-                    <Image
-                      src={meal.image}
-                      alt=""
-                      width={132}
-                      height={64}
-                      className="h-16 w-full object-cover"
-                    />
+                    <MealImage src={meal.image} width={132} height={64} className="h-16 w-full" />
                   ) : (
                     <div className="flex h-16 w-full items-center justify-center bg-canvas text-muted">
                       <CalendarPlusIcon className="h-4 w-4" />

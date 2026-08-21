@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import { ClockIcon, RefreshCwIcon, ShoppingCartIcon, Trash2Icon, UsersIcon } from 'lucide-react';
 import type { Meal } from '@/domain/schemas/meal';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
+import { MealImage } from '@/components/agrocer/MealImage';
 
 interface MealDetailSheetProps {
   open: boolean;
@@ -70,12 +70,12 @@ export function MealDetailSheet({
     >
       {meal ? (
         <div>
-          <Image
+          <MealImage
             src={meal.image}
-            alt=""
             width={400}
             height={160}
-            className="h-40 w-full rounded-2xl object-cover"
+            className="h-40 w-full rounded-2xl"
+            iconClassName="h-10 w-10"
           />
           <div className="mt-3 flex flex-wrap gap-1.5">
             {meal.tags.map((tag) => (

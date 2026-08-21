@@ -1,29 +1,50 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { ClockIcon, PlusIcon, UsersIcon } from 'lucide-react';
 import type { DayKey, Slot } from '@/domain/schemas/common';
-import { countPlannedDinners, findMeal, ingredientsToShoppingDrafts, mealFor } from '@/domain/services/meals';
+import type { Meal } from '@/domain/schemas/meal';
+import {
+  countPlannedDinners,
+  countPlannedUses,
+  findMeal,
+  ingredientsToShoppingDrafts,
+  mealFor,
+} from '@/domain/services/meals';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { usePlannerWeek } from '@/providers/useToday';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
+import { MealImage } from '@/components/agrocer/MealImage';
 import { MealPickerSheet } from './components/MealPickerSheet';
 import { MealDetailSheet } from './components/MealDetailSheet';
+import { MealFormSheet } from './components/MealFormSheet';
 import { cn } from '@/lib/utils';
 
 const SLOT_LABELS: Record<Slot, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
 
 export function MealsScreen() {
   const searchParams = useSearchParams();
-  const { plan, meals, products, household, assignMeal, clearMeal, addShoppingItems } = useAgrocer();
+  const {
+    plan,
+    meals,
+    products,
+    household,
+    assignMeal,
+    clearMeal,
+    addShoppingItems,
+    addMeal,
+    updateMeal,
+    removeMeal,
+  } = useAgrocer();
   const week = usePlannerWeek();
 
   const [showAllSlots, setShowAllSlots] = useState(household.settings.showBreakfastAndLunch);
   const [target, setTarget] = useState<{ day: DayKey; slot: Slot }>({ day: week.todayKey, slot: 'dinner' });
   const [pickerOpen, setPickerOpen] = useState(searchParams.get('add') === '1');
   const [detailOpen, setDetailOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [addedFor, setAddedFor] = useState<string[]>([]);
 
   const plannedCount = countPlannedDinners(plan, week.days.map((day) => day.key));
@@ -92,12 +113,11 @@ export function MealsScreen() {
                       onClick={() => openSlot(day.key, 'dinner')}
                       className="flex w-full items-center gap-3 rounded-2xl bg-surface p-2 text-left shadow-card transition-colors duration-150 ease-out hover:bg-canvas"
                     >
-                      <Image
+                      <MealImage
                         src={dinner.image}
-                        alt=""
                         width={64}
                         height={64}
-                        className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                        className="h-16 w-16 shrink-0 rounded-xl"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-bold text-ink">{dinner.name}</p>
@@ -172,6 +192,26 @@ export function MealsScreen() {
         dayLabel={targetDay?.label ?? ''}
         slotLabel={SLOT_LABELS[target.slot].toLowerCase()}
         onPick={(mealId) => void assignMeal(target.day, target.slot, mealId)}
+        onCreate={() => {
+          setEditingMeal(null);
+          setFormOpen(true);
+        }}
+        onEdit={(meal) => {
+          setEditingMeal(meal);
+          setFormOpen(true);
+        }}
+      />
+
+      <MealFormSheet
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        meal={editingMeal}
+        plannedUses={editingMeal ? countPlannedUses(plan, editingMeal.id) : 0}
+        onSave={(draft) => {
+          if (editingMeal) void updateMeal(editingMeal.id, draft);
+          else void addMeal(draft);
+        }}
+        onDelete={editingMeal ? () => void removeMeal(editingMeal.id) : undefined}
       />
 
       <MealDetailSheet

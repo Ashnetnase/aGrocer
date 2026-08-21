@@ -13,6 +13,7 @@ const PREFIX = 'agrocer:v1:';
 export const STORAGE_KEYS = {
   pantry: `${PREFIX}pantry`,
   shopping: `${PREFIX}shopping`,
+  meals: `${PREFIX}meals`,
   plan: `${PREFIX}plan`,
   products: `${PREFIX}products`,
   household: `${PREFIX}household`,

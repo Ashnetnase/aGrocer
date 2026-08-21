@@ -4,7 +4,7 @@ import type {
   HouseholdMemberDraft,
   Settings,
 } from '@/domain/schemas/household';
-import type { Meal, Plan } from '@/domain/schemas/meal';
+import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
 import type { Product, ProductPatch } from '@/domain/schemas/product';
 import type { ShoppingItem, ShoppingItemDraft, ShoppingItemPatch } from '@/domain/schemas/shopping';
@@ -40,6 +40,10 @@ export interface ShoppingRepository {
 
 export interface MealsRepository {
   list(): Promise<Meal[]>;
+  create(draft: MealDraft): Promise<Meal>;
+  update(id: string, draft: MealDraft): Promise<Meal | undefined>;
+  /** Also strips the meal from any planned slots, so no dangling ids remain. */
+  remove(id: string): Promise<void>;
   getPlan(): Promise<Plan>;
   assign(day: DayKey, slot: Slot, mealId: string): Promise<Plan>;
   clear(day: DayKey, slot: Slot): Promise<Plan>;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { householdSchema, type Household, type HouseholdMemberDraft, type Settings } from '@/domain/schemas/household';
-import { planSchema, type Meal, type Plan } from '@/domain/schemas/meal';
+import { mealSchema, planSchema, type Meal, type MealDraft, type Plan } from '@/domain/schemas/meal';
 import { pantryItemSchema, type PantryItem, type PantryItemDraft, type PantryItemPatch } from '@/domain/schemas/pantry';
 import { productSchema, type Product, type ProductPatch } from '@/domain/schemas/product';
 import {
@@ -12,6 +12,7 @@ import {
 import type { DayKey, Slot } from '@/domain/schemas/common';
 import { adjustQuantity } from '@/domain/services/pantry';
 import { findUncheckedByName } from '@/domain/services/shopping';
+import { removeMealFromPlan } from '@/domain/services/meals';
 import { initialsOf } from '@/domain/services/household';
 import { householdSeed } from '@/data/seed/household';
 import { mealsSeed, planSeed } from '@/data/seed/meals';
@@ -38,7 +39,10 @@ const pantryListSchema = z.array(pantryItemSchema);
 const shoppingListSchema = z.array(shoppingItemSchema);
 const productListSchema = z.array(productSchema);
 
+const mealListSchema = z.array(mealSchema);
+
 const loadPantry = () => readJson(STORAGE_KEYS.pantry, pantryListSchema, pantrySeed);
+const loadMeals = () => readJson(STORAGE_KEYS.meals, mealListSchema, mealsSeed);
 const loadShopping = () => readJson(STORAGE_KEYS.shopping, shoppingListSchema, shoppingSeed);
 const loadPlan = () => readJson(STORAGE_KEYS.plan, planSchema, planSeed);
 const loadProducts = () => readJson(STORAGE_KEYS.products, productListSchema, productsSeed);
@@ -163,8 +167,33 @@ const shopping: ShoppingRepository = {
 
 const meals: MealsRepository = {
   async list(): Promise<Meal[]> {
-    // The catalogue is read-only in Stage 1; creating meals arrives with the backend.
-    return mealsSeed;
+    return loadMeals();
+  },
+
+  async create(draft: MealDraft) {
+    const meal: Meal = { ...draft, id: createId('m') };
+    writeJson(STORAGE_KEYS.meals, [meal, ...loadMeals()]);
+    return meal;
+  },
+
+  async update(id: string, draft: MealDraft) {
+    let updated: Meal | undefined;
+    const next = loadMeals().map((meal) => {
+      if (meal.id !== id) return meal;
+      updated = { ...meal, ...draft };
+      return updated;
+    });
+    if (updated) writeJson(STORAGE_KEYS.meals, next);
+    return updated;
+  },
+
+  async remove(id: string) {
+    writeJson(
+      STORAGE_KEYS.meals,
+      loadMeals().filter((meal) => meal.id !== id),
+    );
+    // Keep the plan consistent: a deleted meal must not linger as a dangling id.
+    writeJson(STORAGE_KEYS.plan, removeMealFromPlan(loadPlan(), id));
   },
 
   async getPlan() {

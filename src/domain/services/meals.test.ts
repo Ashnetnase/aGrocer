@@ -4,11 +4,13 @@ import type { Product } from '../schemas/product';
 import type { PantryItem } from '../schemas/pantry';
 import {
   countPlannedDinners,
+  countPlannedUses,
   findMeal,
   ingredientsToShoppingDrafts,
   matchProduct,
   mealFor,
   pantryItemToShoppingDraft,
+  removeMealFromPlan,
   UNKNOWN_ITEM_PRICE,
 } from './meals';
 
@@ -59,6 +61,34 @@ describe('findMeal', () => {
 describe('countPlannedDinners', () => {
   it('counts only dinners', () => {
     expect(countPlannedDinners(plan, ['mon', 'tue', 'wed'])).toBe(1);
+  });
+});
+
+describe('countPlannedUses', () => {
+  it('counts every slot across the week that uses a meal', () => {
+    expect(countPlannedUses(plan, 'm1')).toBe(2);
+  });
+
+  it('is zero for a meal that is not planned', () => {
+    expect(countPlannedUses(plan, 'm9')).toBe(0);
+  });
+});
+
+describe('removeMealFromPlan', () => {
+  it('strips the meal from every slot it was planned into', () => {
+    const next = removeMealFromPlan(plan, 'm1');
+    expect(countPlannedUses(next, 'm1')).toBe(0);
+  });
+
+  it('leaves other meals untouched', () => {
+    const busy: Plan = { mon: { dinner: 'm1', lunch: 'm2' }, tue: { dinner: 'm2' } };
+    const next = removeMealFromPlan(busy, 'm1');
+    expect(next.mon).toEqual({ lunch: 'm2' });
+    expect(next.tue).toEqual({ dinner: 'm2' });
+  });
+
+  it('is a no-op for a meal that was never planned', () => {
+    expect(removeMealFromPlan(plan, 'nope')).toEqual(plan);
   });
 });
 

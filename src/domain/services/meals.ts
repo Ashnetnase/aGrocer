@@ -20,6 +20,32 @@ export function findMeal(meals: Meal[], id: string | undefined): Meal | undefine
   return meals.find((meal) => meal.id === id);
 }
 
+/**
+ * Strips every reference to a meal from the plan.
+ *
+ * Deleting a meal that is planned would otherwise leave dangling ids, which
+ * render as empty slots that cannot be cleared.
+ */
+export function removeMealFromPlan(plan: Plan, mealId: string): Plan {
+  const next: Plan = {};
+  for (const [day, slots] of Object.entries(plan) as [DayKey, Plan[DayKey]][]) {
+    if (!slots) continue;
+    const kept = Object.fromEntries(
+      Object.entries(slots).filter(([, id]) => id !== mealId),
+    ) as NonNullable<Plan[DayKey]>;
+    next[day] = kept;
+  }
+  return next;
+}
+
+/** How many slots across the week a meal is currently planned into. */
+export function countPlannedUses(plan: Plan, mealId: string): number {
+  return Object.values(plan).reduce(
+    (total, slots) => total + Object.values(slots ?? {}).filter((id) => id === mealId).length,
+    0,
+  );
+}
+
 export function countPlannedDinners(plan: Plan, dayKeys: readonly DayKey[]): number {
   return dayKeys.filter((key) => Boolean(plan[key]?.dinner)).length;
 }
