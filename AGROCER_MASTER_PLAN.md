@@ -248,7 +248,8 @@ agrocer/
 
 ## Stage 1 — Product foundation and usable manual PWA
 
-**STATUS: IN PROGRESS**
+**STATUS: COMPLETE (2026-08-22)** — dev-complete milestone. Definition of done items 12 and 13
+were explicitly waived by Ash and the staging work moved into Stage 2 (ADR-012).
 
 ### Goal
 
@@ -284,10 +285,13 @@ Create a polished, installable, manual-first Agrocer application that the family
 - [x] Meal creation/editing UI
 - [x] Remove the temporary `legacy/` Vite source once the port is signed off
 - [x] GitHub repository established
-- [ ] Staging VM prepared
-- [ ] Docker deployment to staging VM
-- [ ] Open Agrocer from phone on the home network / secured URL
-- [ ] Stage 1 acceptance review completed
+- [x] Stage 1 acceptance review completed — app opened and confirmed working by Ash, 2026-08-22
+
+Moved to Stage 2 (ADR-012), as deployment rather than product work:
+
+- ~~Staging VM prepared~~
+- ~~Docker deployment to staging VM~~
+- ~~Open Agrocer from phone on the home network / secured URL~~
 
 ### Stage 1 explicitly excludes
 
@@ -323,8 +327,15 @@ The family can:
 9. Manage household members/preferences.
 10. Refresh/reopen without losing Stage 1 data.
 11. Install/use the PWA foundation.
-12. Access the staging deployment.
-13. Use the app without the main Ryzen PC being powered on.
+12. ~~Access the staging deployment.~~ **Waived 2026-08-22**, moved to Stage 2.
+13. ~~Use the app without the main Ryzen PC being powered on.~~ **Waived 2026-08-22**, moved to Stage 2.
+
+Items 1–11 are satisfied. Items 12 and 13 describe deployment rather than product, and Stage 2
+already owns Docker Compose deployment and the staging pipeline — see ADR-012.
+
+Note on item 11: `http://localhost` is a secure context, so the PWA installs from a production
+build or the container on the development machine. A LAN address over plain HTTP is *not* a
+secure context, which is why installing from a phone waits on the HTTPS decision in Stage 2.
 
 ---
 
@@ -353,6 +364,18 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [ ] Docker Compose deployment
 - [ ] CI checks
 - [ ] staging deployment pipeline
+
+Inherited from Stage 1 (ADR-012) — the container and runbook already exist, so this is
+provisioning rather than build work:
+
+- [ ] provision the `agrocer-stg01` VM (spec in section 12)
+- [ ] deploy the existing `agrocer:stage1` image via `docker compose up -d --build`
+- [ ] **decide the HTTPS approach** — Tailscale, Caddy with an internal CA, or a real domain.
+      A LAN address over plain HTTP is not a secure context, so without this the service
+      worker will not register and the PWA cannot be installed on a phone. `docs/staging.md`
+      compares the options; Tailscale is the standing recommendation.
+- [ ] open Agrocer from a phone on the home network and install it
+- [ ] confirm it stays reachable with the Ryzen desktop powered off (ADR-007)
 
 ### Not yet
 
@@ -580,6 +603,33 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-22 — Stage 1 closed (Claude Code)
+
+**Stage:** Stage 1
+**Status:** COMPLETE — dev-complete milestone
+
+Ash waived definition-of-done items 12 and 13 and approved moving the staging work into
+Stage 2, recorded as ADR-012. Stage 1 therefore closes with items 1–11 satisfied.
+
+Delivered across Stage 1:
+
+- the Magic Patterns prototype ported to Next.js App Router with the visual design preserved
+- seven screens: Home, Pantry, Shopping, Shopping Mode, Meals, Products, Household, Settings
+- Zod-backed domain layer, repository abstraction, localStorage persistence
+- meal creation and editing; real date/week service; accessible sheets
+- PWA foundation: manifest, icons, offline shell, service worker
+- error, not-found and global-error boundaries
+- WCAG AA contrast fixes and heading structure corrections
+- Docker image, built and smoke-tested
+- 89 tests; typecheck, lint and build clean
+
+Moved to Stage 2:
+
+- provisioning `agrocer-stg01`, deploying to it, and the HTTPS decision that gates
+  installing the PWA on a phone
+
+Next stage is **not** started and needs explicit authorisation before any Stage 2 work begins.
 
 ## 2026-08-22 — Image built, legacy removed, merged to main (Claude Code)
 
@@ -905,6 +955,24 @@ Use Radix/shadcn for behaviour/accessibility where needed, but preserve Agrocer'
 **Status:** Accepted
 
 The Ryzen/RTX desktop may be powered off. Staging/production services must not depend on it being online.
+
+## ADR-012 — Stage 1 closes as a dev-complete milestone; staging moves to Stage 2
+
+**Status:** Accepted (2026-08-22, Ash)
+
+Stage 1's definition of done mixed product work with deployment work. Items 1–11 describe what
+the family can do with the app; items 12 and 13 describe where it runs. The product items are
+all satisfied and the app has been confirmed working, while the deployment items need a VM that
+does not exist yet.
+
+Stage 2 already owns "Docker Compose deployment" and "staging deployment pipeline", so splitting
+homelab work across two stages created an artificial dependency: Stage 1 could not close on a
+task Stage 2 was going to repeat. Items 12 and 13 are therefore waived for Stage 1 and the
+staging tasks folded into Stage 2, where they sit alongside the backend they will eventually
+serve.
+
+Nothing is abandoned — the container is built and smoke-tested and `docs/staging.md` is written.
+This changes when that work happens, not whether.
 
 ## ADR-009 — App content renders client-side behind a hydration gate
 
