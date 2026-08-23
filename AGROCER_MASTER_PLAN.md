@@ -341,7 +341,7 @@ secure context, which is why installing from a phone waits on the HTTPS decision
 
 ## Stage 2 — Real backend and household data
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS (started 2026-08-23)**
 
 ### Goal
 
@@ -349,10 +349,11 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 
 ### Planned scope
 
-- [ ] PostgreSQL
-- [ ] backend/API architecture
-- [ ] authentication
-- [ ] household/user permissions
+- [ ] Supabase project provisioned (managed PostgreSQL — ADR-013)
+- [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_bouncy_shockwave.sql`
+- [ ] backend/API architecture — Next.js route handlers behind the existing repository interfaces
+- [ ] authentication (Supabase Auth)
+- [ ] household/user permissions (RLS as defence in depth)
 - [ ] persistent pantry
 - [ ] persistent products
 - [ ] persistent shopping lists
@@ -489,7 +490,7 @@ Use Agrocer as a strong real-world cloud engineering portfolio project.
 - [ ] EventBridge
 - [ ] Secrets Manager
 - [ ] CloudWatch
-- [ ] Cognito
+- [ ] ~~Cognito~~ — redundant while Supabase Auth owns identity (ADR-013); revisit only if Agrocer leaves Supabase
 - [ ] Bedrock where useful
 - [ ] backup/export strategy
 
@@ -603,6 +604,65 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-23 — Stage 2 started: Drizzle schema and initial migration (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Ash authorised Stage 2. First task complete: the database schema and its migration.
+
+Added:
+
+- `src/db/schema.ts` — 7 tables mirroring the Zod domain schemas, 7 Postgres enums kept
+  byte-identical to the `z.enum` options
+- `drizzle.config.ts`, `.env.example`, and `db:generate` / `db:migrate` / `db:studio` scripts
+- `drizzle/0000_bouncy_shockwave.sql` — 108 lines, generated offline
+
+Dependencies: `drizzle-orm` ^0.45.2, `postgres` ^3.4.9, `drizzle-kit` ^0.31.10 (dev).
+
+Modelling decisions worth recording:
+
+- `households` is the tenant root; every other table carries an indexed `household_id`, so
+  RLS becomes one predicate per table once auth lands
+- `Settings` folded into `households` — it is 1:1 and would otherwise be a one-row table
+- `plan_entries` replaces the nested day/slot/mealId record, keyed on
+  (household_id, day, slot). `ON DELETE CASCADE` from `meals` now does what the
+  hand-written dangling-slot cleanup in `MealsRepository.remove()` did
+- prices stored as integer cents, anticipated by section 5. `numeric` would arrive from the
+  driver as a string and need mapping regardless, so cents costs nothing and removes rounding
+  ambiguity. The repository divides by 100; `priceSchema` stays a plain number
+- meal `ingredients` and `tags` are array columns, matching the Stage 1 domain. A structured
+  `meal_ingredients` table becomes worthwhile in Stage 4 for pantry-to-recipe matching
+
+Checks: typecheck, lint, 89 tests and production build all clean. No UI files touched.
+
+**Not done, deliberately:** no Supabase project provisioned and no cloud resource created —
+that is spending and needs Ash's tier decision first. The migration has never been applied.
+
+Next: repository implementations against Drizzle, then auth and RLS.
+
+## 2026-08-23 — Stage 2 database decision (Claude Code)
+
+**Stage:** Stage 2 (planning only — no implementation authorised or performed)
+**Status:** Decision recorded
+
+Ash asked whether Stage 2 should use DynamoDB or Supabase, with eventual cloud migration as a
+requirement. Recorded as ADR-013: **Supabase managed PostgreSQL**, DynamoDB rejected.
+
+Plan changes:
+
+- Stage 2 planned scope now names Supabase, Drizzle migrations, and route handlers behind the
+  existing repository interfaces
+- ADR-013 added; ADR-008 narrowed to the application tier
+- Cognito struck from the Stage 6 AWS scope
+
+Verified before deciding: `npm run check` clean — typecheck, lint, 89 tests passing.
+
+No code was written. Stage 2 implementation still needs explicit authorisation.
+
+Open questions for Ash: Supabase free tier (pauses after ~1 week idle) vs Pro; and whether to
+ratify Drizzle.
 
 ## 2026-08-22 — Stage 1 closed (Claude Code)
 
@@ -974,6 +1034,43 @@ serve.
 Nothing is abandoned — the container is built and smoke-tested and `docs/staging.md` is written.
 This changes when that work happens, not whether.
 
+## ADR-013 — Supabase (managed PostgreSQL) is the Stage 2 database
+
+**Status:** Accepted (2026-08-23, Ash)
+
+Stage 2 originally said only "PostgreSQL". The open questions were the engine and the host.
+
+**DynamoDB was considered and rejected.** Agrocer's data is relational — households to members,
+products to pantry items to shopping items, meal plans keyed by (day, slot) to meals, plus Stage 2's
+meal feedback history and inventory events. `MealsRepository.remove()` already has to strip a deleted
+meal from dangling planned slots, which is a foreign key in Postgres and hand-written application code
+in Dynamo. Stage 4 then wants consumption history, low-stock prediction and budget aggregation, all of
+which are ad-hoc analytical queries — precisely what a single-table Dynamo design punishes. At a scale
+of two adults and three children, none of Dynamo's advantages apply.
+
+The decisive argument is the cloud-migration requirement. DynamoDB is not a migration path, it is a
+destination with no exit: choosing it would bind Stage 6 to AWS permanently. Supabase is plain Postgres,
+so moving to RDS or Aurora later is a dump, a restore and a connection string. Choosing Supabase keeps
+the cloud options open; choosing Dynamo would close them.
+
+**Supabase over a self-hosted Postgres container.** Ash already uses Supabase. It supplies Auth and RLS,
+collapsing much of Stage 2's authentication and household-permission work, and its generated types pair
+cleanly with the Zod-first domain layer. The self-hosted Supabase stack (~8 containers) would not sit
+comfortably on the 3 GB `agrocer-stg01` spec anyway.
+
+**Consequences**
+
+- The app tier stays on the homelab; the data tier becomes managed cloud. ADR-008 is narrowed, not revoked.
+- ADR-007 is strengthened: the data outlives the Ryzen desktop *and* the ThinkCentre node.
+- Cognito drops out of the Stage 6 AWS scope while Supabase Auth owns identity.
+- Family grocery data now lives with a third party. Accepted deliberately as the price of the above.
+- **Open risk:** Supabase free-tier projects pause after ~1 week of inactivity, which is a poor fit for an
+  app the family opens a couple of times a week. Either the Pro plan or an accepted cold-start is a
+  decision Stage 2 must make before the family relies on it.
+
+**Not decided here:** Drizzle is the standing recommendation for schema and migrations (`drizzle-zod`
+keeps Zod as the single source of truth per section 5) but is not yet ratified.
+
 ## ADR-009 — App content renders client-side behind a hydration gate
 
 **Status:** Accepted
@@ -1002,9 +1099,13 @@ dependency. Workbox/next-pwa can replace it later without changing app behaviour
 
 ## ADR-008 — Homelab staging first
 
-**Status:** Accepted
+**Status:** Accepted, narrowed by ADR-013 (2026-08-23)
 
 The second Lenovo ThinkCentre Proxmox node is the first staging target. AWS/Azure is introduced later where it creates real value.
+
+ADR-013 narrows this to the *application tier*. From Stage 2 the Next.js container still runs on
+`agrocer-stg01`, but the database is managed Supabase rather than a self-hosted Postgres container.
+The homelab remains the deployment target; it is no longer the system of record.
 
 ---
 
