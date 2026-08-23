@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
@@ -73,8 +74,14 @@ export const households = pgTable('households', {
   shopLabel: text('shop_label').notNull().default(''),
   currency: text('currency').notNull().default('NZD'),
   pinDemoDate: boolean('pin_demo_date').notNull().default(false),
-  /** Only meaningful while `pin_demo_date` is true (ADR-005). */
-  pinnedDate: date('pinned_date'),
+  /**
+   * Only meaningful while `pin_demo_date` is true (ADR-005), but NOT NULL because
+   * `settingsSchema.pinnedDate` is a required string — the seed defaults it to today.
+   * A nullable column would force the repository to invent a date on every read.
+   */
+  pinnedDate: date('pinned_date')
+    .notNull()
+    .default(sql`CURRENT_DATE`),
   showBreakfastAndLunch: boolean('show_breakfast_and_lunch').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

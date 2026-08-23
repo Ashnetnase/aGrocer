@@ -21,7 +21,7 @@ CREATE TABLE "households" (
 	"shop_label" text DEFAULT '' NOT NULL,
 	"currency" text DEFAULT 'NZD' NOT NULL,
 	"pin_demo_date" boolean DEFAULT false NOT NULL,
-	"pinned_date" date,
+	"pinned_date" date DEFAULT CURRENT_DATE NOT NULL,
 	"show_breakfast_and_lunch" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL

@@ -351,13 +351,13 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 
 - [ ] Supabase project provisioned (managed PostgreSQL — ADR-013)
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_bouncy_shockwave.sql`
-- [ ] backend/API architecture — Next.js route handlers behind the existing repository interfaces
+- [~] backend/API architecture — Drizzle repository implementation done; route handlers still to come
 - [ ] authentication (Supabase Auth)
 - [ ] household/user permissions (RLS as defence in depth)
-- [ ] persistent pantry
-- [ ] persistent products
-- [ ] persistent shopping lists
-- [ ] persistent meal plans
+- [~] persistent pantry — repository written, not yet wired or run against a database
+- [~] persistent products — repository written, not yet wired or run against a database
+- [~] persistent shopping lists — repository written, not yet wired or run against a database
+- [~] persistent meal plans — repository written, not yet wired or run against a database
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
 - [ ] migrations
@@ -604,6 +604,53 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-23 — Drizzle repository implementation and local verification (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Added the Supabase-backed repository implementation behind the Stage 1 contracts.
+
+Added:
+
+- `src/db/client.ts` — server-only Drizzle client, cached on `globalThis` so hot reload
+  cannot leak connections; `prepare: false` for the Supabase pooler
+- `src/db/mappers.ts` — pure row/domain mapping, isolating the three places storage and
+  the domain disagree: integer cents vs number, NULL vs `undefined`, plan rows vs record
+- `src/data/drizzle/drizzleRepositories.ts` — `createDrizzleRepositories(db, householdId)`
+  satisfying `AgrocerRepositories` in full
+- `src/db/mappers.test.ts` — 23 tests
+
+Behaviour worth recording:
+
+- `adjustQuantity` and `toggle` clamp/flip in SQL rather than read-modify-write, so two
+  phones acting at once cannot lose an update
+- `addMany` runs in a transaction; a failed "add all ingredients" can no longer half-apply
+- `meals.remove()` no longer touches the plan — the `plan_entries` cascade does it
+- `reset()` deliberately throws. Wiping localStorage was safe; truncating the family's
+  real data from a UI action is not. Re-seeding belongs in a deliberate script
+- every statement filters on `household_id`, so RLS will be reinforcement, not the only guard
+- `households.pinned_date` changed to NOT NULL DEFAULT CURRENT_DATE, because
+  `settingsSchema.pinnedDate` is required. Migration regenerated as
+  `0000_mysterious_black_cat.sql` — it had never been applied anywhere
+
+New test: the seven Postgres enums are asserted equal to their Zod counterparts, so the
+two hand-maintained lists cannot drift silently.
+
+Checks: typecheck, lint, 112 tests (was 89) and production build all clean. Ran `npm run dev`
+and confirmed Home, Shopping and Meals render correctly with a clean console and no server
+errors. Client bundle sizes are byte-identical to before, confirming no database code leaked
+into the browser.
+
+**Still on localStorage.** `AgrocerProvider` has not been switched over — that needs a live
+database, which needs the Supabase project, which needs Ash's tier decision.
+
+Observed incidentally: the dev server's LAN address is a Tailscale one (100.119.81.51), so
+Tailscale is already running on this machine. That materially lowers the cost of the
+Tailscale HTTPS option in the Stage 2 staging list.
+
+Next: route handlers, then auth and RLS, then wire the provider.
 
 ## 2026-08-23 — Stage 2 started: Drizzle schema and initial migration (Claude Code)
 

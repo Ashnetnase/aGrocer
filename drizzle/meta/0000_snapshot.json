@@ -1,5 +1,5 @@
 {
-  "id": "06c4b587-07a9-4987-b423-87b8b963ce3b",
+  "id": "aaf5c631-af5f-4cda-8454-54630ac8dc24",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -135,7 +135,8 @@
           "name": "pinned_date",
           "type": "date",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "CURRENT_DATE"
         },
         "show_breakfast_and_lunch": {
           "name": "show_breakfast_and_lunch",
