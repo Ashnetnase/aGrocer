@@ -41,15 +41,26 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] row ↔ domain mappers with tests
 - [x] server-only Drizzle client (`src/db/client.ts`)
 - [x] Drizzle repository implementation behind the Stage 1 contracts
-- [ ] **Supabase project provisioned** (ADR-013) — blocks everything below
-- [ ] migration applied and the 7 tables confirmed to exist
+- [x] **Supabase project provisioned** (ADR-013) — `agrocer` / `ojlzjjvrtnslcxqdmpay`,
+      ap-southeast-2. Required pausing `Salon Booking App UI Design`: the free tier caps one
+      user at 2 active projects across every org they own or administer
+- [x] migration applied and the 7 tables confirmed to exist (applied through the Supabase
+      management API, not `drizzle-kit`)
+- [ ] `.env.local` written with the session-pooler `DATABASE_URL` — needs the database
+      password, which only the user can retrieve from the dashboard
+- [!] reconcile Drizzle's migration journal with this database — `npm run db:migrate` will
+      try to re-apply `0000` and fail. Blocks migration `0001`
+- [ ] first real query from the repository against Supabase (proves the repositories)
 - [~] backend/API architecture — repositories done, route handlers still to come
 - [~] persistent shopping lists — written, not wired, never run against a database
 - [~] persistent pantry — written, not wired, never run against a database
 - [~] persistent products — written, not wired, never run against a database
 - [~] persistent meal plans — written, not wired, never run against a database
 - [ ] authentication (Supabase Auth)
-- [ ] household/user permissions (RLS as defence in depth)
+- [!] **RLS is disabled on all 7 tables** — anyone with the anon key can read or write every
+      row. Tables are empty so nothing is exposed yet, but this must close before any real
+      family data is entered. Enabling RLS without policies blocks all access, so it ships
+      with authentication, not before
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
 - [ ] backup/restore plan

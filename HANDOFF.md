@@ -31,12 +31,15 @@ What actually runs today:
 
 What is written but **not yet running**:
 
-- The PostgreSQL schema (`src/db/schema.ts`, 7 tables) and its migration
-  (`drizzle/0000_mysterious_black_cat.sql`). Generated but never applied to a real database.
+- The PostgreSQL schema is now live in Supabase (all 7 tables, 0 rows), but nothing in this
+  repository has connected to it — the schema was applied through the Supabase API, not by
+  the app or by `drizzle-kit`.
 - The Drizzle repository implementation (`src/data/drizzle/drizzleRepositories.ts`). It satisfies
   the same contracts as the local repositories but is not wired into the provider and has never
   executed a query against a live database.
-- `src/db/client.ts` throws unless `DATABASE_URL` is set. No Supabase project is provisioned yet.
+- `src/db/client.ts` throws unless `DATABASE_URL` is set. The Supabase project now exists, but
+  `.env.local` has not been created — the database password is only visible in the Supabase
+  dashboard, so nothing has connected to the database from this repository yet.
 
 ## Completed
 
@@ -50,6 +53,7 @@ What is written but **not yet running**:
   - Drizzle repository implementation behind the Stage 1 contracts.
   - Server-only Drizzle client with dev hot-reload connection caching (`src/db/client.ts`).
   - `.env.example` documenting every required variable.
+  - Supabase project provisioned and the schema applied — all 7 tables confirmed present.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
   expanded `CLAUDE.md` (AshHome vision, interface modes, wall dashboard, device architecture,
   agent safety, handoff system).
@@ -100,7 +104,12 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
 
 - Node: 20+ (Next.js 15 / React 19).
 - Dev server: `npm run dev` — http://localhost:3000.
-- Database: Supabase managed PostgreSQL. **Not yet provisioned.**
+- Database: Supabase managed PostgreSQL (ADR-013). **Provisioned 2026-08-27.**
+  Project `agrocer`, ref `ojlzjjvrtnslcxqdmpay`, region `ap-southeast-2` (Sydney),
+  API URL `https://ojlzjjvrtnslcxqdmpay.supabase.co`. Schema applied, 7 tables live, 0 rows.
+  Free tier caps one user at 2 active projects across all orgs they own, so
+  `Salon Booking App UI Design` was paused (2026-08-27, user's decision) to make room.
+  It is restorable from the Supabase dashboard.
 - Variables (see `.env.example`, fill into gitignored `.env.local`):
   `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
   `SUPABASE_SERVICE_ROLE_KEY`.
@@ -119,12 +128,24 @@ Last run 2026-08-27, all passing:
 - `npm run test` — 112 tests across 8 files, all passing.
 - `npm run check` runs all three.
 
-Not verified: `npm run db:migrate` has never been run — there is no database to run it against.
+Not verified: `npm run db:migrate` has never been run from this repository. The schema was
+applied to Supabase through the management API instead, and confirmed by listing the tables.
+No application query has yet run against the database.
 
 ## Known Problems
 
 - The Drizzle repositories and mappers are unit-tested but have **never touched a real
-  database**. Treat them as unproven until a migration runs and queries succeed.
+  database**. The schema now exists in Supabase, but no query has been run from this
+  repository. Treat the repositories as unproven until a real read and write succeed.
+- **RLS is disabled on all 7 tables.** Anyone holding the anon key can read or modify every
+  row. The tables are empty, so nothing is exposed yet, but this must be closed before any
+  real family data is entered. Enabling RLS without policies blocks all access, so it has to
+  land together with authentication — see `TASKS.md`.
+- **Drizzle's migration journal is out of sync with this database.** The schema was applied
+  through the Supabase API rather than `drizzle-kit`, so Supabase records the migration but
+  Drizzle's `__drizzle_migrations` table does not exist. Running `npm run db:migrate` against
+  this database will try to re-apply `0000` and fail with "type already exists". Reconcile
+  before generating migration `0001`.
 - `AGROCER_MASTER_PLAN.md` cites the migration as `drizzle/0000_bouncy_shockwave.sql`; the
   actual file is `drizzle/0000_mysterious_black_cat.sql`. The repository is correct.
 - `next lint` is deprecated (removed in Next.js 16).
@@ -137,14 +158,19 @@ Not verified: `npm run db:migrate` has never been run — there is no database t
 
 ## NEXT TASK
 
-Provision the Supabase project (ADR-013), put its connection string in `.env.local`, run
-`npm run db:migrate` to apply `drizzle/0000_mysterious_black_cat.sql`, and confirm the seven
-tables exist. This requires the user's Supabase account and cannot be done by an agent alone.
+Get the database password from the Supabase dashboard (Project Settings → Database) and write
+`.env.local` from `.env.example` with the session-pooler `DATABASE_URL` for project
+`ojlzjjvrtnslcxqdmpay`. Only the user can retrieve that password.
 
-Once the database is live, the following task is: wire `drizzleRepositories` behind Next.js
-route handlers and verify one vertical slice (shopping list read + write) end to end against
-real PostgreSQL. Do not convert every feature at once, and do not start authentication,
-RLS or pantry persistence until the shopping slice works.
+Then reconcile Drizzle's migration journal (see Known Problems) so `npm run db:migrate` is
+usable for migration `0001` onward.
+
+Then wire `drizzleRepositories` behind Next.js route handlers and verify one vertical slice —
+shopping list read + write — end to end against real PostgreSQL. Do not convert every feature
+at once, and do not start pantry persistence until the shopping slice works.
+
+RLS plus authentication is the task after that, and must land before any real family data
+is entered.
 
 ## Do Not Accidentally Change
 

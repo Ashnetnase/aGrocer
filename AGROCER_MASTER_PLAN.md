@@ -349,7 +349,8 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 
 ### Planned scope
 
-- [ ] Supabase project provisioned (managed PostgreSQL — ADR-013)
+- [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
+      `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
 - [~] backend/API architecture — Drizzle repository implementation done; route handlers still to come
 - [ ] authentication (Supabase Auth)
@@ -604,6 +605,35 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-27 — Supabase provisioned and Stage 2 schema applied (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Created the Supabase project (ADR-013) and applied the Stage 2 schema.
+
+- Project `agrocer`, ref `ojlzjjvrtnslcxqdmpay`, region `ap-southeast-2` (Sydney),
+  organisation `Ashnetnase's Org git`. $0/month.
+- The first creation attempt was refused: the Supabase free tier caps a single user at two
+  active projects **across every organisation they own or administer** — not per organisation,
+  which is why a second (Vercel-managed) org did not help. `Salon Booking App UI Design` was
+  paused on the user's instruction to make room; its data is retained and restorable.
+- `drizzle/0000_mysterious_black_cat.sql` applied through the Supabase management API. All
+  seven tables confirmed present and empty.
+
+Two consequences recorded rather than fixed:
+
+- **RLS is disabled on all seven tables.** With the anon key, every row is readable and
+  writable. The tables are empty, so nothing is exposed today, but enabling RLS without
+  policies blocks all access — so it must ship together with authentication, before any real
+  family data is entered.
+- **Drizzle's migration journal does not know about this database.** The schema was applied
+  out-of-band, so `__drizzle_migrations` does not exist and `npm run db:migrate` would try to
+  re-apply `0000`. This needs reconciling before migration `0001` is generated.
+
+Still blocked on the user: the database password is only visible in the Supabase dashboard,
+so `.env.local` does not exist and nothing in the repository has connected to the database.
 
 ## 2026-08-27 — Phase 0 documentation baseline and AshHome instructions (Claude Code)
 
