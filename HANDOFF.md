@@ -24,10 +24,10 @@ What actually runs today:
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
-- **Shopping, pantry and meals read and write Postgres** through their route handlers when
-  `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"`. All three verified in the browser against Supabase:
-  toggling a shopping item, stepping a pantry quantity, and planning a dinner all persist.
-  Products and household are still localStorage.
+- **Every feature reads and writes Postgres** through its route handlers when
+  `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"` — shopping, pantry, meals, products, household. Each
+  verified in the browser against Supabase: toggling a shopping item, stepping a pantry
+  quantity, planning a dinner, starring a product, and reading the household all persist.
 - Without that flag the whole app runs on localStorage and needs no database at all.
   `AgrocerProvider` picks via `repositoriesForEnvironment()`.
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
@@ -35,8 +35,9 @@ What actually runs today:
 
 What is written but **not yet running**:
 
-- Products and household still run on localStorage. Their Drizzle repositories are verified
-  (`npm run test:db`) but no route handlers expose them yet.
+- The localStorage implementation is intact and still runs when the flag is off. It is not
+  dead code: it is the no-database path, what the provider's tests use, and the fallback when
+  the database is unreachable in development.
 
 ## Completed
 
@@ -61,17 +62,15 @@ What is written but **not yet running**:
   - `/api/pantry` route handlers and `apiPantryRepository`, verified the same way.
   - `/api/meals` (catalogue) and `/api/meals/plan/[day]/[slot]` (weekly plan), plus
     `apiMealsRepository`, verified the same way.
+  - `/api/products` and `/api/household` (+ `members`), completing all five features.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
   expanded `CLAUDE.md` (AshHome vision, interface modes, wall dashboard, device architecture,
   agent safety, handoff system).
 
 ## Work In Progress
 
-- **Backend/API architecture** — shopping, pantry and meals have route handlers; products and
-  household do not. `src/server/http.ts` (server) and `src/data/api/client.ts` (client) hold
-  the shared plumbing the remaining features should reuse.
-- **Persistent products / household** — repositories verified, no handlers, still localStorage
-  in the UI.
+None of the five features. What remains in Stage 2 is authentication, RLS, deployment and CI —
+not data plumbing.
 
 ## Files Changed
 
@@ -91,12 +90,14 @@ Recent and important:
   this is what changes; handlers ask for repositories, never for an id.
 - `src/server/http.ts` — `parseJson` (Zod-validated bodies), `notFound`, `failed`. Errors are
   logged server-side and returned generic, so no connection string reaches a browser.
-- `app/api/shopping/**`, `app/api/pantry/**`, `app/api/meals/**` — the route handlers. Note
+- `app/api/{shopping,pantry,meals,products,household}/**` — the route handlers. Note
   `/api/meals/plan` is matched before `/api/meals/[id]`: Next.js prefers static segments, so
   no meal id can shadow the plan.
 - `src/data/api/client.ts` — shared fetch plumbing: `request`, and `patch` whose 404 means
   `undefined` rather than an exception, matching the contracts.
-- `src/data/api/{shopping,pantry,meals}Repository.ts` — the contracts over HTTP.
+- `src/data/api/{shopping,pantry,meals,products,household}Repository.ts` — the contracts over
+  HTTP. `src/data/api/repositories.ts` exports `apiRepositories` (all five) and the flag check.
+- `src/components/layout/BottomNav.tsx` — the shopping badge now waits for `hydrated`.
 - `src/data/api/repositories.ts` — composes local + server repositories and reads the flag.
 - `src/providers/AgrocerProvider.tsx` — default repositories now come from the environment.
 
@@ -151,12 +152,12 @@ Last run 2026-08-27, all passing:
 - `npm run test:db` — 6 integration tests against the real Supabase database, all passing.
   Needs `.env.local`; skips itself when `DATABASE_URL` is absent, so CI stays green.
 - `npm run db:migrate` — runs clean and applies nothing, which is the expected state.
-- `npm run build` — clean. The three `/api/shopping` routes are dynamic; every screen is still
+- `npm run build` — clean. All twelve API routes are dynamic; every screen is still
   statically prerendered, and no server-only module leaked into a client bundle.
 - `npm run check` runs typecheck, lint and the unit tests.
-- Manual end-to-end check in Chrome against `localhost:3001/shopping`: items created through
-  the API rendered in the UI, and toggling one in the UI persisted to Supabase. Test rows were
-  deleted afterwards; the shopping list is empty.
+- Manual end-to-end checks in Chrome for all five features. Every write verified against
+  Supabase, and all test data removed afterwards: shopping 0, pantry 16, meals 8, products 16
+  (8 favourites), members 5, plan empty — exactly the seeded state.
 
 Confirmed after the integration run: every table is back to 0 rows. The tests create a
 throwaway household and delete it, and the foreign keys cascade.
@@ -164,10 +165,15 @@ throwaway household and delete it, and the foreign keys cascade.
 ## Known Problems
 
 - `products` has no repository method that creates rows — the contract exposes only `list`,
-  `update` and `toggleFavourite`. Stage 1 seeded products locally; nothing seeds them into
-  Postgres yet, so the products screen will be empty once the app is switched over.
-- `reset()` deliberately throws against the database. Any UI still calling it (the Settings
-  screen did in Stage 1) will need handling before the switch.
+  `update` and `toggleFavourite`. `npm run db:seed` is the only thing that puts products into
+  Postgres. Deliberately not papered over with a speculative POST; Stage 2 should decide.
+- `reset()` throws against the database by design. The Settings screen still offers it, so
+  with the server flag on that button will surface an error rather than restoring demo data.
+- **First paint shows Stage 1 demo data.** `AgrocerProvider` seeds `initialState` with the
+  demo fixtures, so until the load resolves every screen briefly renders someone else's
+  groceries. Screens gate on `hydrated`; the nav badge did not, and now does. The underlying
+  seeding of `initialState` is untouched and worth revisiting — it was invisible against
+  localStorage and is a visible flash over the network.
 - **RLS is disabled on all 7 tables.** Anyone holding the anon key can read or modify every
   row. The tables are empty, so nothing is exposed yet, but this must be closed before any
   real family data is entered. Enabling RLS without policies blocks all access, so it has to
@@ -187,15 +193,19 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Convert the last two features, which are both small:
+Authentication with Supabase Auth, then RLS policies on all seven tables, in that order and
+ideally in one pass — enabling RLS without policies blocks every query, so they belong
+together. This is the task that must land before any real family data is entered.
 
-- **Products** — `list`, `update`, `toggleFavourite` only. Note the catalogue has no create
-  method in the contract, so `npm run db:seed` is still the only thing that puts products in
-  Postgres. Worth deciding whether Stage 2 should add one.
-- **Household** — `get`, `addMember`, `updateMember`, `removeMember`, `updateSettings`.
-  Settings and members are one resource in the contract but read like two in the UI.
+Two things it should absorb, rather than leaving them for later:
 
-Then authentication plus RLS, which must land before any real family data is entered.
+- `src/server/repositories.ts` reads `AGROCER_HOUSEHOLD_ID` from the environment. That is the
+  single place a real session should replace, and it was built to be exactly that.
+- The seed script creates a household with no owner. Auth needs to decide how an existing
+  household gets claimed by its first real user.
+
+Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
+no optimistic UI. Both are more noticeable now that all five features cross the network.
 
 Two costs still deliberately unpaid, worth deciding before the last three features repeat them:
 

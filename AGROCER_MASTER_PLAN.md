@@ -352,12 +352,11 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
       `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
-- [~] backend/API architecture — `/api/shopping`, `/api/pantry` and `/api/meals` route
-      handlers done; products and household pending
+- [x] backend/API architecture — route handlers for all five features
 - [ ] authentication (Supabase Auth)
 - [ ] household/user permissions (RLS as defence in depth)
 - [x] persistent pantry — route handlers + HTTP repository, verified end to end
-- [~] persistent products — repository written, not yet wired or run against a database
+- [x] persistent products — route handlers + HTTP repository, verified end to end
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
 - [x] persistent meal plans — route handlers + HTTP repository, verified end to end
 - [ ] meal feedback history
@@ -606,6 +605,44 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-27 — Products and household converted; all five features now on Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The data migration is complete. Every feature reads and writes Supabase through route handlers.
+
+- `app/api/products` — read-only as a collection, because the contract has no create method.
+  A speculative POST would have hidden a real gap: `npm run db:seed` is still the only way
+  products reach Postgres, and Stage 2 should close that deliberately.
+- `app/api/products/[id]` — favouriting is a toggle rather than `{ favourite: boolean }`, for
+  the same reason the shopping check is: the repository owns the flip, so two taps cannot race.
+- `app/api/household` — settings, with members as a sub-collection. The contract treats them as
+  one aggregate, but they change for different reasons and on different screens.
+- Member initials are derived server-side from the name rather than accepted from the client,
+  so they cannot drift.
+- `src/data/api/repositories.ts` now exports `apiRepositories` — deliberately not
+  `serverRepositories`, which already names the Drizzle-backed set in `src/server/`.
+
+**A regression the conversion exposed**, found during browser verification and fixed: the
+shopping badge in the bottom nav was counting Stage 1 demo items. `AgrocerProvider` seeds
+`initialState` with the demo fixtures, and the screens gate on `hydrated` while the badge did
+not. Against localStorage that window was imperceptible; over the network it is long enough to
+show a badge for groceries the family does not have. The badge now waits for `hydrated`. The
+underlying seeding of `initialState` is untouched and recorded in `HANDOFF.md` — every screen
+still shows demo data for that first frame, which is worth revisiting.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, clean production build with
+all twelve API routes dynamic and every screen still prerendered. Both APIs were exercised
+directly — favourite toggled and restored, a 404 on an unknown product, settings patched and
+restored, a member created with derived initials, replaced, and deleted, plus 400s on an empty
+patch and an invalid colour. Then in Chrome: products rendered from Postgres with the "in
+pantry" cross-reference working across two server-backed features, starring a product
+persisted, and the household screen rendered its five members.
+
+The database was left exactly as seeded: shopping 0, pantry 16, meals 8, products 16 with 8
+favourites, 5 members, empty plan.
 
 ## 2026-08-27 — Meals and the weekly plan converted to Postgres (Claude Code)
 

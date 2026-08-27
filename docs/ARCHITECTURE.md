@@ -12,9 +12,9 @@ Last updated: 2026-08-27 (Stage 2 in progress).
 ## Shape
 
 A single Next.js 15 App Router application (React 19, TypeScript, Tailwind). One deployable,
-one codebase. Shopping, pantry and meals persist to Supabase Postgres through route handlers;
-products and household are still browser localStorage. All of it sits behind the same
-repository interfaces.
+one codebase. Every feature persists to Supabase Postgres through route handlers. The Stage 1
+localStorage implementation is retained and still runs when the server flag is off. Both sit
+behind the same repository interfaces.
 
 ```
 app/                    Next.js routes
@@ -27,11 +27,10 @@ src/
   data/
     repositories/       the contracts — PantryRepository, ShoppingRepository, MealsRepository,
                         ProductsRepository, HouseholdRepository, bundled as AgrocerRepositories
-    local/              localStorage implementation (pantry, meals, products, household)
+    local/              localStorage implementation (the no-database path)
     drizzle/            PostgreSQL implementation, behind the route handlers
-    api/                the same contracts over HTTP (shopping, pantry, meals), shared fetch
-                        plumbing, and the composition deciding which implementation each
-                        feature uses
+    api/                the same contracts over HTTP (all five features), shared fetch
+                        plumbing, and the flag deciding which implementation the app uses
     seed/               initial demo data
   db/                   Drizzle schema, migration client, row ↔ domain mappers
   server/               server-only: householdId resolution, shared route-handler plumbing
@@ -54,11 +53,10 @@ src/domain/services/     pure business logic — no I/O, fully unit-tested
         ↓
 src/data/repositories/   contracts (interfaces only)
         ↓
-   ┌────┴──────────────┬─────────────────────┐
-localStorage      HTTP → route handlers   Drizzle/PostgreSQL
-(products,        (shopping, pantry,      (behind the handlers,
- household)        meals)                  and used directly by
-                                           scripts and tests)
+   ┌────┴───────────────────────┐
+localStorage              HTTP → route handlers → Drizzle/PostgreSQL
+(when the flag is off)    (all five features; Drizzle is also used
+                           directly by scripts and integration tests)
 ```
 
 Route handlers validate every body with the same Zod schemas the forms use, and return generic
@@ -126,12 +124,12 @@ The dashboard reuses the same feature modules, API and data with a dedicated lay
 
 ## Backend/API
 
-Products and household get the same treatment, reusing `src/server/http.ts` and
-`src/data/api/client.ts`. Then Supabase Auth and household permissions with RLS as defence in
-depth. The repository contracts stay the seam.
+Supabase Auth and household permissions with RLS as defence in depth. `src/server/repositories.ts`
+resolves the household id from the environment today and is the single place a real session
+replaces. The repository contracts stay the seam.
 
 Products has no create method in its contract — `npm run db:seed` is currently the only way
-products reach Postgres, which Stage 2 should probably revisit.
+products reach Postgres, which Stage 2 should revisit.
 
 Two known costs of the current implementation, to revisit rather than replicate blindly: every
 write refetches the whole list, and there is no optimistic UI.

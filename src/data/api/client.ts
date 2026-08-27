@@ -27,8 +27,18 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
 
-/** A PATCH whose `404` is a legitimate answer rather than a failure. */
-export async function patch<T>(url: string, body: unknown): Promise<T | undefined> {
+/**
+ * A PATCH whose `404` is a legitimate answer rather than a failure.
+ *
+ * `key` names the field the handler wraps its resource in — `item`, `product`, `meal`. The
+ * envelope is per-resource rather than generic so that responses read as themselves in a
+ * network log, which is worth one argument here.
+ */
+export async function patch<T>(
+  url: string,
+  body: unknown,
+  key = 'item',
+): Promise<T | undefined> {
   const response = await fetch(url, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
@@ -38,6 +48,6 @@ export async function patch<T>(url: string, body: unknown): Promise<T | undefine
   if (response.status === 404) return undefined;
   if (!response.ok) throw new Error(`PATCH ${url} failed (${response.status})`);
 
-  const { item } = (await response.json()) as { item: T };
-  return item;
+  const payload = (await response.json()) as Record<string, T>;
+  return payload[key];
 }

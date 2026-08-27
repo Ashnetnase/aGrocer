@@ -52,20 +52,22 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] repositories proven against real Postgres — `npm run test:db`, 6 integration tests
       covering shopping round-trip and merge, pantry adjust, plan assign/clear, and the
       refusal of `reset()`. They run in a throwaway household and clean up after themselves
-- [~] backend/API architecture — `/api/shopping`, `/api/pantry` and `/api/meals` handlers,
-      plus shared plumbing in `src/server/http.ts` and `src/data/api/client.ts`; products and
-      household have no handlers yet
+- [x] backend/API architecture — route handlers for all five features, with shared plumbing
+      in `src/server/http.ts` (server) and `src/data/api/client.ts` (client)
 - [x] seed script — `npm run db:seed`, idempotent, one household from the Stage 1 demo data
 - [x] persistent shopping lists — route handlers, HTTP repository, and the UI verified
       end to end against Supabase behind `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"`
 - [x] persistent pantry — route handlers, HTTP repository, and the UI verified end to end;
       quantity steps are relative (`PATCH {adjust:n}`) so the server floors at zero
-- [~] persistent products — repository verified, but nothing seeds products into Postgres and
-      the contract has no create method, so the screen would be empty once switched over
+- [x] persistent products — route handlers and HTTP repository, verified end to end. The
+      contract still has no create method, so `npm run db:seed` remains the only way products
+      reach Postgres — a gap to close deliberately, not with a speculative POST
 - [x] persistent meal plans — route handlers and HTTP repository, verified end to end. Plan
       slots are addressable (`/api/meals/plan/[day]/[slot]`), and deleting a planned meal
       frees its slot through the foreign key rather than by hand
-- [ ] authentication (Supabase Auth)
+- [x] persistent household — settings and members, verified end to end. Initials are derived
+      server-side rather than accepted from the client, so they cannot drift from the name
+- [ ] authentication (Supabase Auth) — **the next task**, and it must land with RLS
 - [!] **RLS is disabled on all 7 tables** — anyone with the anon key can read or write every
       row. Tables are empty so nothing is exposed yet, but this must close before any real
       family data is entered. Enabling RLS without policies blocks all access, so it ships

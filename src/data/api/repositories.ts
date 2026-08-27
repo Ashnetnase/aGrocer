@@ -1,36 +1,49 @@
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { localRepositories } from '@/data/local/localRepositories';
+import { apiHouseholdRepository } from './householdRepository';
 import { apiMealsRepository } from './mealsRepository';
 import { apiPantryRepository } from './pantryRepository';
+import { apiProductsRepository } from './productsRepository';
 import { apiShoppingRepository } from './shoppingRepository';
 
 /**
- * Stage 2 migrates one feature at a time.
+ * Every feature over HTTP (ADR-003).
  *
- * Shopping, pantry and meals talk to Postgres through their route handlers; products and
- * household are still Stage 1 localStorage. Composing the two is possible only because both
- * sides implement the same contracts (ADR-003), and it keeps each feature's switch-over
- * independently reversible.
+ * Named for the client side of the wire, not the server: `serverRepositories()` in
+ * `src/server/repositories.ts` is the Drizzle-backed set these handlers call into.
  *
- * `reset()` stays local: it wipes localStorage, and the Drizzle implementation refuses it
- * outright, so nothing it does can reach the database.
+ * The localStorage implementation is deliberately kept rather than deleted — it is what runs
+ * when the flag is off, what the provider's tests use, and the fallback when the database is
+ * unreachable during development.
  */
-export const hybridRepositories: AgrocerRepositories = {
-  ...localRepositories,
-  shopping: apiShoppingRepository,
+export const apiRepositories: AgrocerRepositories = {
   pantry: apiPantryRepository,
+  shopping: apiShoppingRepository,
   meals: apiMealsRepository,
+  products: apiProductsRepository,
+  household: apiHouseholdRepository,
+
+  /**
+   * Stage 1's `reset()` restored the demo data in localStorage. Re-seeding the database is
+   * `npm run db:seed` — a deliberate script, never something a screen can call. The Drizzle
+   * implementation refuses it for the same reason.
+   */
+  async reset() {
+    throw new Error(
+      'reset() is not supported against the database. Use `npm run db:seed` instead.',
+    );
+  },
 };
 
 /**
- * Server-backed features are opt-in. Without the flag the app needs no database at all,
- * which keeps Stage 1 runnable — and keeps a broken connection from taking the app down.
+ * Server-backed data is opt-in. Without the flag the app needs no database at all, which
+ * keeps Stage 1 runnable — and keeps a broken connection from taking the app down.
  *
- * One flag covers every converted feature: a per-feature flag would multiply the states
- * that need testing without buying anything, since they share one database.
+ * One flag covers every feature: per-feature flags would multiply the combinations needing
+ * testing without buying anything, since they share a single database.
  */
 export function repositoriesForEnvironment(): AgrocerRepositories {
   return process.env.NEXT_PUBLIC_AGROCER_SERVER_DATA === '1'
-    ? hybridRepositories
+    ? apiRepositories
     : localRepositories;
 }
