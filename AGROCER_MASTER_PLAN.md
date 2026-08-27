@@ -350,7 +350,7 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 ### Planned scope
 
 - [ ] Supabase project provisioned (managed PostgreSQL — ADR-013)
-- [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_bouncy_shockwave.sql`
+- [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
 - [~] backend/API architecture — Drizzle repository implementation done; route handlers still to come
 - [ ] authentication (Supabase Auth)
 - [ ] household/user permissions (RLS as defence in depth)
@@ -605,6 +605,39 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-27 — Phase 0 documentation baseline and AshHome instructions (Claude Code)
+
+**Stage:** Stage 2 (documentation only — no application code changed)
+**Status:** In progress
+
+Established the persistent handoff system the instructions require but the repository lacked.
+
+Added:
+
+- `HANDOFF.md` — recovery checkpoint in the mandated format; records that the Drizzle
+  repositories are written but have never run against a database
+- `TASKS.md` — roadmap with `[ ] [~] [x] [!]` statuses, tracking the master plan's stages
+  and mapping the AshHome phases alongside
+- `docs/ARCHITECTURE.md` — current architecture (layering, repository seam, schema state)
+  kept explicitly separate from planned architecture
+
+Changed:
+
+- `CLAUDE.md` — expanded from Agrocer-only rules to the full AshHome instruction set:
+  long-term vision, three interface modes (mobile / standard app / wall dashboard at
+  `/dashboard`, one application), wall dashboard vision, device architecture, AI architecture
+  and provider abstraction, agent safety and confirmation-required actions, secrets and git
+  rules, the persistent handoff system, and AshHome Phases 0–14
+- this file — corrected the migration filename to `0000_mysterious_black_cat.sql`; two
+  references still cited `0000_bouncy_shockwave.sql`, which does not exist in the repository
+
+Open decision recorded, not resolved: the master plan's Stages 1–8 and the new AshHome
+Phases 0–14 cover overlapping ground with different numbering. `TASKS.md` tracks the stages,
+since `CLAUDE.md` names this file the source of truth, and notes the phase mapping. The user
+will decide whether to nest, replace, or keep them parallel.
+
+Verification: `npm run typecheck`, `npm run lint`, `npm run test` (112 tests, 8 files) all pass.
+
 ## 2026-08-23 — Drizzle repository implementation and local verification (Claude Code)
 
 **Stage:** Stage 2
@@ -664,7 +697,7 @@ Added:
 - `src/db/schema.ts` — 7 tables mirroring the Zod domain schemas, 7 Postgres enums kept
   byte-identical to the `z.enum` options
 - `drizzle.config.ts`, `.env.example`, and `db:generate` / `db:migrate` / `db:studio` scripts
-- `drizzle/0000_bouncy_shockwave.sql` — 108 lines, generated offline
+- `drizzle/0000_mysterious_black_cat.sql` — 108 lines, generated offline
 
 Dependencies: `drizzle-orm` ^0.45.2, `postgres` ^3.4.9, `drizzle-kit` ^0.31.10 (dev).
 
