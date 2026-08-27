@@ -52,12 +52,14 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] repositories proven against real Postgres — `npm run test:db`, 6 integration tests
       covering shopping round-trip and merge, pantry adjust, plan assign/clear, and the
       refusal of `reset()`. They run in a throwaway household and clean up after themselves
-- [~] backend/API architecture — `/api/shopping` handlers plus shared validation/error
-      plumbing in `src/server/http.ts`; the other features have no handlers yet
+- [~] backend/API architecture — `/api/shopping` and `/api/pantry` handlers, plus shared
+      plumbing in `src/server/http.ts` and `src/data/api/client.ts`; meals, products and
+      household have no handlers yet
 - [x] seed script — `npm run db:seed`, idempotent, one household from the Stage 1 demo data
 - [x] persistent shopping lists — route handlers, HTTP repository, and the UI verified
-      end to end against Supabase behind `NEXT_PUBLIC_AGROCER_SERVER_SHOPPING="1"`
-- [~] persistent pantry — repository verified; not wired to the UI
+      end to end against Supabase behind `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"`
+- [x] persistent pantry — route handlers, HTTP repository, and the UI verified end to end;
+      quantity steps are relative (`PATCH {adjust:n}`) so the server floors at zero
 - [~] persistent products — repository verified, but nothing seeds products into Postgres and
       the contract has no create method, so the screen would be empty once switched over
 - [~] persistent meal plans — repository verified; not wired to the UI

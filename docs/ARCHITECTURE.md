@@ -12,8 +12,9 @@ Last updated: 2026-08-27 (Stage 2 in progress).
 ## Shape
 
 A single Next.js 15 App Router application (React 19, TypeScript, Tailwind). One deployable,
-one codebase. The shopping list persists to Supabase Postgres through route handlers; every
-other feature is still browser localStorage. Both sit behind the same repository interfaces.
+one codebase. Shopping and pantry persist to Supabase Postgres through route handlers; meals,
+products and household are still browser localStorage. All of it sits behind the same
+repository interfaces.
 
 ```
 app/                    Next.js routes
@@ -28,8 +29,9 @@ src/
                         ProductsRepository, HouseholdRepository, bundled as AgrocerRepositories
     local/              localStorage implementation (pantry, meals, products, household)
     drizzle/            PostgreSQL implementation, behind the route handlers
-    api/                the same contracts over HTTP (shopping today), and the composition
-                        deciding which implementation each feature uses
+    api/                the same contracts over HTTP (shopping, pantry), shared fetch
+                        plumbing, and the composition deciding which implementation each
+                        feature uses
     seed/               initial demo data
   db/                   Drizzle schema, migration client, row ↔ domain mappers
   server/               server-only: householdId resolution, shared route-handler plumbing
@@ -53,10 +55,10 @@ src/domain/services/     pure business logic — no I/O, fully unit-tested
 src/data/repositories/   contracts (interfaces only)
         ↓
    ┌────┴──────────────┬─────────────────────┐
-localStorage      HTTP → /api/shopping    Drizzle/PostgreSQL
-(pantry, meals,   (shopping)              (behind the handlers,
- products,                                 and used directly by
- household)                                scripts and tests)
+localStorage      HTTP → route handlers   Drizzle/PostgreSQL
+(meals, products, (shopping, pantry)      (behind the handlers,
+ household)                                and used directly by
+                                           scripts and tests)
 ```
 
 Route handlers validate every body with the same Zod schemas the forms use, and return generic
@@ -64,7 +66,7 @@ error messages while logging the detail server-side. `householdId` comes from
 `AGROCER_HOUSEHOLD_ID` — a deliberate stand-in for authentication, resolved in exactly one
 place (`src/server/repositories.ts`) so that auth changes one file.
 
-Server-backed shopping is opt-in via `NEXT_PUBLIC_AGROCER_SERVER_SHOPPING`. Unset, the app
+Server-backed features are opt-in via `NEXT_PUBLIC_AGROCER_SERVER_DATA`. Unset, the app
 runs entirely on localStorage and needs no database — which keeps Stage 1 runnable and stops a
 broken connection from taking the app down.
 
@@ -124,12 +126,14 @@ The dashboard reuses the same feature modules, API and data with a dedicated lay
 
 ## Backend/API
 
-The remaining features (pantry, meals, products, household) get the same treatment as
-shopping, reusing `src/server/http.ts`. Then Supabase Auth and household permissions with RLS
-as defence in depth. The repository contracts stay the seam.
+The remaining features (meals, products, household) get the same treatment, reusing
+`src/server/http.ts` and `src/data/api/client.ts`. Meals is the awkward one: its repository
+covers both meals and the weekly plan, so the plan wants its own sub-resource. Then Supabase
+Auth and household permissions with RLS as defence in depth. The repository contracts stay
+the seam.
 
-Two known costs of the current shopping implementation, to revisit rather than replicate
-blindly: every write refetches the whole list, and there is no optimistic UI.
+Two known costs of the current implementation, to revisit rather than replicate blindly: every
+write refetches the whole list, and there is no optimistic UI.
 
 ## Device configuration
 

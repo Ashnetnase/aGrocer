@@ -352,10 +352,11 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
       `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
-- [~] backend/API architecture — `/api/shopping` route handlers done; other features pending
+- [~] backend/API architecture — `/api/shopping` and `/api/pantry` route handlers done;
+      meals, products and household pending
 - [ ] authentication (Supabase Auth)
 - [ ] household/user permissions (RLS as defence in depth)
-- [~] persistent pantry — repository written, not yet wired or run against a database
+- [x] persistent pantry — route handlers + HTTP repository, verified end to end
 - [~] persistent products — repository written, not yet wired or run against a database
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
 - [~] persistent meal plans — repository written, not yet wired or run against a database
@@ -605,6 +606,33 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-27 — Pantry converted to Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The pantry now follows the shopping list onto the database. Second of five features.
+
+- `app/api/pantry` and `app/api/pantry/[id]` — list/create, edit/adjust/remove. No batch add:
+  the pantry has no equivalent of adding a meal's ingredients at once, so a route taking an
+  array would have been speculative.
+- Quantity steps are **relative** — `PATCH { adjust: n }`, not an absolute quantity — so the
+  server floors at zero in one statement and two people looking at the same shelf cannot
+  clobber each other with read-modify-write. A zero adjustment is a 400.
+- `src/data/api/client.ts` — extracted the fetch plumbing the shopping repository had inline,
+  now shared by both. `patch()` returns `undefined` on a 404 because that is what the contracts
+  mean by "no such id"; only real failures throw.
+- Renamed the flag `NEXT_PUBLIC_AGROCER_SERVER_SHOPPING` to `NEXT_PUBLIC_AGROCER_SERVER_DATA`,
+  since it now governs two features and will govern five. One flag rather than one per feature:
+  per-feature flags would multiply the combinations needing testing without buying anything,
+  as they share a single database.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, clean production build with
+both API route groups dynamic. The pantry API was exercised directly — create, adjust down,
+the floor at zero, an edit, a 400 on a zero adjustment, a 404 on an unknown id, delete — and
+then in Chrome: all 16 seeded items rendered with their stock chips, and stepping Bananas up
+persisted to Supabase. The seeded quantity was restored and the test row deleted afterwards.
 
 ## 2026-08-27 — Shopping list vertical slice over Postgres (Claude Code)
 
