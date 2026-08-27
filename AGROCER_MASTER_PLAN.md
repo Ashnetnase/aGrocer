@@ -606,6 +606,36 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-27 — Database connected and repositories proven (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The Stage 2 repository layer now runs against the real Supabase database.
+
+- `.env.local` written by Ash with the session-pooler connection string; connection verified
+  from this repository (PostgreSQL 17.6, all seven tables visible).
+- Reconciled Drizzle's migration journal. The schema had been applied through the management
+  API, so `drizzle.__drizzle_migrations` did not exist and `db:migrate` would have re-applied
+  `0000`. Seeded it with the same sha256-of-file-contents hash and `when` value drizzle-orm
+  computes, and confirmed `npm run db:migrate` now applies nothing.
+- `drizzle.config.ts` reads `.env.local` directly. drizzle-kit runs outside Next.js, which is
+  what loads that file, and one value did not justify a dotenv dependency.
+- Added `src/data/drizzle/drizzleRepositories.integration.test.ts` and `npm run test:db`:
+  six tests against real Postgres covering the shopping round trip, the duplicate-name merge,
+  the pantry quantity floor, plan assign/clear including the dangling-id case, and the
+  deliberate refusal of `reset()`. They run inside a throwaway household and delete it, so the
+  family's data is never touched; every table was confirmed back at 0 rows afterwards.
+- Integration tests are excluded from `npm test` and skip themselves without `DATABASE_URL`,
+  so CI stays green without credentials.
+- Restored `.env.example`, which had been renamed rather than copied when `.env.local` was
+  created, and updated it to the newer `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`
+  naming Ash's project uses.
+
+The repositories are no longer unproven code. What remains for persistence is wiring: route
+handlers, where `householdId` comes from before auth, and how the provider holds server state
+that used to be synchronous localStorage.
+
 ## 2026-08-27 — Supabase provisioned and Stage 2 schema applied (Claude Code)
 
 **Stage:** Stage 2

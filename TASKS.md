@@ -46,16 +46,18 @@ Current state of the code lives in `HANDOFF.md`.
       user at 2 active projects across every org they own or administer
 - [x] migration applied and the 7 tables confirmed to exist (applied through the Supabase
       management API, not `drizzle-kit`)
-- [ ] `.env.local` written with the session-pooler `DATABASE_URL` — needs the database
-      password, which only the user can retrieve from the dashboard
-- [!] reconcile Drizzle's migration journal with this database — `npm run db:migrate` will
-      try to re-apply `0000` and fail. Blocks migration `0001`
-- [ ] first real query from the repository against Supabase (proves the repositories)
+- [x] `.env.local` written with the session-pooler `DATABASE_URL`; connection verified
+- [x] Drizzle's migration journal reconciled — `npm run db:migrate` is a clean no-op, so
+      migration `0001` can be generated normally
+- [x] repositories proven against real Postgres — `npm run test:db`, 6 integration tests
+      covering shopping round-trip and merge, pantry adjust, plan assign/clear, and the
+      refusal of `reset()`. They run in a throwaway household and clean up after themselves
 - [~] backend/API architecture — repositories done, route handlers still to come
-- [~] persistent shopping lists — written, not wired, never run against a database
-- [~] persistent pantry — written, not wired, never run against a database
-- [~] persistent products — written, not wired, never run against a database
-- [~] persistent meal plans — written, not wired, never run against a database
+- [~] persistent shopping lists — repository verified; no route handler, not wired to the UI
+- [~] persistent pantry — repository verified; not wired to the UI
+- [~] persistent products — repository verified, but nothing seeds products into Postgres and
+      the contract has no create method, so the screen would be empty once switched over
+- [~] persistent meal plans — repository verified; not wired to the UI
 - [ ] authentication (Supabase Auth)
 - [!] **RLS is disabled on all 7 tables** — anyone with the anon key can read or write every
       row. Tables are empty so nothing is exposed yet, but this must close before any real
