@@ -24,6 +24,10 @@ What actually runs today:
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
+- **The local Ollama connection is proven** — `npm run ai:check` reaches Ollama on
+  `127.0.0.1:11434`, confirms `qwen3:8b` is installed, sends a prompt and prints the answer.
+  This is a connectivity spike only: no AI service, provider abstraction or tool calling
+  exists, and nothing in the application imports it.
 - **The wall dashboard exists at `/dashboard`** (Phase 1). It has its own full-screen layout,
   not the phone shell, and reads the same repositories as every other view.
 - **Every feature reads and writes Postgres** through its route handlers when
@@ -93,6 +97,7 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
   - `/api/meals` (catalogue) and `/api/meals/plan/[day]/[slot]` (weekly plan), plus
     `apiMealsRepository`, verified the same way.
   - `/api/products` and `/api/household` (+ `members`), completing all five features.
+- Local Ollama connectivity check (`scripts/ollama-check.ts`).
 - Phase 1 wall dashboard: `/dashboard` with all seven cards reserved, its own kiosk layout,
   and shopping and tonight's meal already on real data.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
@@ -130,6 +135,7 @@ Recent and important:
 - `src/data/api/{shopping,pantry,meals,products,household}Repository.ts` — the contracts over
   HTTP. `src/data/api/repositories.ts` exports `apiRepositories` (all five) and the flag check.
 - `src/components/layout/BottomNav.tsx` — the shopping badge now waits for `hydrated`.
+- `scripts/ollama-check.ts` + `npm run ai:check` — the local Ollama connectivity spike.
 - `app/dashboard/**` — the wall dashboard route and its full-screen layout.
 - `src/features/dashboard/**` — `DashboardScreen` (layout and clock), `DashboardCard` (the
   shared frame, including the placeholder label), `ShoppingCard` and `TonightCard` (real data),
@@ -173,8 +179,14 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
   `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
   `SUPABASE_SERVICE_ROLE_KEY`.
 - Planned staging VM: `agrocer-stg01` (spec in master plan section 12). Not yet provisioned.
-- Ollama (Phase 7, not started): will run on a separate machine with an RTX 5070 12 GB,
-  reached over the LAN through a backend AI service. No variable defined yet.
+- Ollama: running natively on Windows on this workstation (RTX 5070 12 GB), listening on
+  `http://127.0.0.1:11434`. Version 0.33.1. Models installed: `qwen3:8b`, `qwen3:4b`.
+  Variables `OLLAMA_BASE_URL` and `OLLAMA_MODEL` are documented in `.env.example`; the defaults
+  in the script match, so `.env.local` needs no entry for the check to run.
+  **Ollama binds to localhost deliberately and must stay that way.** The check therefore only
+  works from this machine. Reaching it from the staging VM is a later, separate decision —
+  a tunnel or an authenticated proxy, not `OLLAMA_HOST=0.0.0.0`.
+  Open WebUI runs separately in Docker and is untouched by any of this.
 - Never record credentials in this file.
 
 ## Verification
@@ -191,6 +203,10 @@ Last run 2026-08-27, all passing:
 - `npm run build` — clean. All twelve API routes are dynamic; every screen is still
   statically prerendered, and no server-only module leaked into a client bundle.
 - `npm run check` runs typecheck, lint and the unit tests.
+- `npm run ai:check` — reached Ollama 0.33.1, confirmed `qwen3:8b`, and got an 849-token
+  answer to the New Zealand family-dinner prompt in 9.8s. Both failure paths were exercised
+  too: a wrong port prints the connection guidance, an uninstalled model lists what is
+  installed and the `ollama pull` command, and both exit 1.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -232,7 +248,10 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Authentication with Supabase Auth, then RLS policies on all seven tables, in that order and
+**Do not continue into the AI phases from here.** The Ollama check is a spike, and the task
+that follows it is unchanged:
+
+authentication with Supabase Auth, then RLS policies on all seven tables, in that order and
 ideally in one pass — enabling RLS without policies blocks every query, so they belong
 together. This is the task that must land before any real family data is entered, and the wall
 dashboard makes it more urgent rather than less: a tablet on the kitchen wall is a permanently

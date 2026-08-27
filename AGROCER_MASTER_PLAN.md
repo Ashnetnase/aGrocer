@@ -606,6 +606,40 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-27 — Local Ollama connectivity proven (Claude Code)
+
+**Stage:** a spike ahead of the AI phases, explicitly scoped by Ash to connectivity only
+**Status:** Complete; no follow-on work started
+
+Added `scripts/ollama-check.ts` and `npm run ai:check`. It reads `OLLAMA_BASE_URL` and
+`OLLAMA_MODEL` (documented in `.env.example`, defaults `http://127.0.0.1:11434` and
+`qwen3:8b`), checks `/api/version`, confirms the model is installed via `/api/tags`, sends one
+prompt to `/api/chat`, and prints the answer.
+
+Result: Ollama 0.33.1 reachable, `qwen3:8b` present alongside `qwen3:4b`, and an 849-token
+answer to "three budget-friendly dinner ideas for a family of five using common New Zealand
+supermarket ingredients" returned in 9.8 seconds on the RTX 5070.
+
+Choices worth recording:
+
+- `stream: false` — this proves reachability, and a streaming reader is more moving parts to
+  misread. Streaming belongs with the real service.
+- `think: false` — qwen3 is a reasoning model and its scratchpad tripled the wait for nothing
+  here. Ollama returns it in a separate `thinking` field, which the schema tolerates.
+- Errors name their likely cause. `fetch` reports every network failure as an identical opaque
+  "fetch failed", so the script spells out the possibilities rather than leaving the reader to
+  guess. Both failure paths were exercised: a wrong port, and an uninstalled model.
+- It follows the `seed.ts` pattern of reading `.env.local` directly rather than adding dotenv,
+  and validates responses with Zod like the rest of the codebase.
+
+**Ollama stays bound to localhost.** That was Ash's explicit instruction and it is the right
+default. It does mean the check only works from this workstation, and that reaching Ollama from
+the staging VM is a separate decision later — a tunnel or an authenticated proxy, never
+`OLLAMA_HOST=0.0.0.0`.
+
+Nothing in the application imports this script. No provider abstraction, tool calling, cloud
+provider, vector store or agent framework was added, per the scope restriction.
+
 ## 2026-08-27 — Kids/school roadmap recorded and the Phase 1 wall dashboard built (Claude Code)
 
 **Stage:** Stage 2 for the data; the dashboard is AshHome Phase 1

@@ -25,7 +25,8 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] Phase 5 — pantry/freezer inventory
 - [ ] Phase 6 — recipe providers and family recipes
 - [~] Phase 7 — meals, meal planning and grocery budgeting *(planning done, budgeting not)*
-- [ ] Phase 8 — local Ollama AI service
+- [~] Phase 8 — local Ollama AI service *(connectivity proven by `npm run ai:check`; no
+      service, provider abstraction or tool calling exists)*
 - [ ] Phase 9 — controlled AI tool/action system
 - [ ] Phase 10 — pantry-aware AI meal planning
 - [ ] Phase 11 — reminders, scheduler and notifications
