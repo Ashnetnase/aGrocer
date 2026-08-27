@@ -24,6 +24,8 @@ What actually runs today:
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
+- **The wall dashboard exists at `/dashboard`** (Phase 1). It has its own full-screen layout,
+  not the phone shell, and reads the same repositories as every other view.
 - **Every feature reads and writes Postgres** through its route handlers when
   `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"` — shopping, pantry, meals, products, household. Each
   verified in the browser against Supabase: toggling a shopping item, stepping a pantry
@@ -38,6 +40,34 @@ What is written but **not yet running**:
 - The localStorage implementation is intact and still runs when the flag is off. It is not
   dead code: it is the no-database path, what the provider's tests use, and the fallback when
   the database is unreachable in development.
+
+## Dashboard, Kids and school status
+
+Required by `CLAUDE.md`, and the first thing to update when any of it changes.
+
+| Dashboard card    | Data                                                              |
+| ----------------- | ----------------------------------------------------------------- |
+| Kids / Today      | **Partly real** — the household's actual children. No events yet. |
+| Family schedule   | **Mock** — one example row. Needs Phase 12.                        |
+| Reminders         | **Mock** — one example row. Needs Phase 11.                        |
+| Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
+| Tonight's meal    | **Real** — the weekly plan, with image, time and serves.           |
+| Chores            | **Mock** — one example row. Needs Phase 12.                        |
+| Ask AshHome       | **Mock** — a described area, no input. Needs Phases 8–9.           |
+
+Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
+example chore for a real one.
+
+- **Kids/School module:** not started. No child profiles, activities or school data exist. The
+  Kids card reads `household_members` where `role = 'Child'`.
+- **Hero integration:** not started. No Hero credentials, tokens or endpoints exist anywhere in
+  this repository, and none may be added — see the hard rules in `CLAUDE.md`.
+- **Notification ingestion:** not started. No email ingestion, no `SchoolNotification` type.
+- **Calendar integration:** not started. No calendar feed, import or family calendar model.
+
+Cost note: `Tonight's meal` deliberately omits approximate cost and the missing-ingredient
+warning. Both need ingredient-level matching against products and pantry, which belongs with
+the recipe work. A wrong number on the kitchen wall is worse than no number.
 
 ## Completed
 
@@ -63,6 +93,8 @@ What is written but **not yet running**:
   - `/api/meals` (catalogue) and `/api/meals/plan/[day]/[slot]` (weekly plan), plus
     `apiMealsRepository`, verified the same way.
   - `/api/products` and `/api/household` (+ `members`), completing all five features.
+- Phase 1 wall dashboard: `/dashboard` with all seven cards reserved, its own kiosk layout,
+  and shopping and tonight's meal already on real data.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
   expanded `CLAUDE.md` (AshHome vision, interface modes, wall dashboard, device architecture,
   agent safety, handoff system).
@@ -98,6 +130,10 @@ Recent and important:
 - `src/data/api/{shopping,pantry,meals,products,household}Repository.ts` — the contracts over
   HTTP. `src/data/api/repositories.ts` exports `apiRepositories` (all five) and the flag check.
 - `src/components/layout/BottomNav.tsx` — the shopping badge now waits for `hydrated`.
+- `app/dashboard/**` — the wall dashboard route and its full-screen layout.
+- `src/features/dashboard/**` — `DashboardScreen` (layout and clock), `DashboardCard` (the
+  shared frame, including the placeholder label), `ShoppingCard` and `TonightCard` (real data),
+  and `PlaceholderCards` (the five reserved areas).
 - `src/data/api/repositories.ts` — composes local + server repositories and reads the flag.
 - `src/providers/AgrocerProvider.tsx` — default repositories now come from the environment.
 
@@ -155,6 +191,9 @@ Last run 2026-08-27, all passing:
 - `npm run build` — clean. All twelve API routes are dynamic; every screen is still
   statically prerendered, and no server-only module leaked into a client bundle.
 - `npm run check` runs typecheck, lint and the unit tests.
+- Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
+  scroll, no card clips its content, and checking an item off on the dashboard persisted to
+  Supabase — the same row the phone view reads.
 - Manual end-to-end checks in Chrome for all five features. Every write verified against
   Supabase, and all test data removed afterwards: shopping 0, pantry 16, meals 8, products 16
   (8 favourites), members 5, plan empty — exactly the seeded state.
@@ -195,7 +234,10 @@ throwaway household and delete it, and the foreign keys cascade.
 
 Authentication with Supabase Auth, then RLS policies on all seven tables, in that order and
 ideally in one pass — enabling RLS without policies blocks every query, so they belong
-together. This is the task that must land before any real family data is entered.
+together. This is the task that must land before any real family data is entered, and the wall
+dashboard makes it more urgent rather than less: a tablet on the kitchen wall is a permanently
+logged-in screen in a shared room, so device identity and session length are part of the
+design, not an afterthought.
 
 Two things it should absorb, rather than leaving them for later:
 

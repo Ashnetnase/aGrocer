@@ -606,6 +606,45 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-27 — Kids/school roadmap recorded and the Phase 1 wall dashboard built (Claude Code)
+
+**Stage:** Stage 2 for the data; the dashboard is AshHome Phase 1
+**Status:** In progress
+
+Ash supplied a large scope addition: a first-class Kids/School module, Hero school integration,
+a school-notification abstraction, a family calendar, detailed wall-dashboard requirements, and
+a replacement roadmap of Phases 0–17. All of it is now recorded in `CLAUDE.md`, including the
+hard rules for Hero — no scraping authenticated pages, no stored credentials, no working around
+its security controls — and the least-data principle for children's information.
+
+Built the Phase 1 dashboard at `/dashboard`:
+
+- Its own full-screen layout rather than the `(app)` shell, which is a phone-width column with a
+  bottom nav — exactly wrong on a wall-mounted tablet.
+- Seven cards in the required information hierarchy. Shopping and Tonight's meal use real data;
+  Kids shows the household's actual children; Family schedule, Reminders, Chores and Ask
+  AshHome are labelled placeholders. Every placeholder says so in the UI, because an unlabelled
+  example chore on a kitchen wall is indistinguishable from a real one.
+- Shopping items are checkable directly from the wall, through the same repository the phone
+  uses. Verified: a tap on the dashboard changed the row in Supabase.
+- Quick-add opens the full shopping screen rather than putting a half-working keyboard on the
+  wall. The card's own add control belongs here eventually.
+
+Layout work worth recording, since it is the part that took the iterations: at 1280×800 — a real
+kiosk viewport — the page must not scroll, and cards must not clip. Equal-height rows clipped
+the shopping list; letting rows size to content gave mock chores more of the wall than the real
+list. The answer was proportional rows, with the shopping row roughly twice the height of the
+placeholder rows, cards that scroll inside their own frame, and trimming explanatory prose from
+the placeholder cards. Confirmed: no page scroll, no clipped card.
+
+Deliberately not built: approximate cost and the missing-ingredient warning on Tonight's meal.
+Both need ingredient-level matching against products and pantry, which belongs with the recipe
+work. A wrong number on the kitchen wall is worse than no number.
+
+Verification: typecheck, lint, 112 unit tests, clean production build with `/dashboard`
+prerendered at 3.05 kB. Demo data used for the screenshots was removed afterwards; the database
+is back to its seeded state.
+
 ## 2026-08-27 — Products and household converted; all five features now on Postgres (Claude Code)
 
 **Stage:** Stage 2

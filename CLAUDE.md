@@ -108,6 +108,7 @@ Major modules will eventually include:
 * Grocery budgeting
 * Family reminders
 * Chores/tasks
+* Kids and school (see below)
 * Family calendar
 * Household maintenance
 * Family notifications
@@ -226,6 +227,154 @@ Do not build an unnecessarily complex device-management system during the early 
 
 ---
 
+# Kids and school
+
+AshHome must include a first-class **Kids / School** module. The wall dashboard combines
+household information, groceries, meals, reminders and children's schedules into one shared
+family command centre.
+
+Each child should eventually have a family profile holding:
+
+* name
+* avatar/profile image
+* colour/theme identifier
+* school
+* relevant family calendar events
+* activities
+* reminders
+* chores
+* school notices
+* upcoming school events
+* permission/action deadlines
+
+**Least-data principle.** Do not store unnecessary sensitive school or educational
+information. Store what the family needs on the dashboard, nothing more.
+
+## Hero school integration
+
+The family uses the Hero school platform (https://our-hero.com/). Hero information may include
+school notices, calendar events, term dates, excursion information, permission requests,
+reminders, interview bookings and other caregiver notifications.
+
+Integration must be **provider-based and optional**. Hard rules:
+
+* Do NOT scrape authenticated Hero pages.
+* Do NOT store the user's Hero username or password.
+* Do NOT automate around Hero security controls.
+
+Preferred integration order:
+
+1. Hero notification email ingestion
+2. supported calendar feeds/imports where available
+3. an officially supported Hero API, if access is ever provided
+4. links/deep-links back to Hero for actions that should stay inside Hero
+
+## School notification architecture
+
+Build a generic abstraction so the Kids module never depends on Hero specifically:
+
+```
+SchoolProvider
+├─ HeroEmailProvider
+├─ CalendarProvider
+└─ HeroApiProvider   (planned/optional)
+```
+
+A normalized school notification may carry: `id`, `childId`, `provider`, `externalReference`,
+`title`, `summary`, `receivedAt`, `eventDate`, `dueDate`, `actionRequired`, `actionType`,
+`sourceLink`, `read`, `dismissed`.
+
+Design the real schema during the relevant backend/database phase. Do not implement this exact
+shape blindly.
+
+## Hero email processing
+
+A future ingestion service may: receive a Hero notification email, confirm it is an approved
+Hero source, extract the relevant text, determine which child it applies to where possible,
+identify dates/deadlines/events, create a normalized `SchoolNotification`, optionally use the
+local AI to write a concise family-friendly summary, surface it on the dashboard, and retain a
+link back to the original source.
+
+**The AI must not invent missing dates, requirements or school information.** Where extraction
+confidence is low, mark the item for user confirmation rather than guessing.
+
+Do not implement email integration until its phase.
+
+## Family calendar
+
+A combined calendar drawing on manual family events, children's activities, school events,
+Hero-derived events, household reminders, appointments, birthdays and recurring activities.
+
+The dashboard shows a simplified **Today / Tomorrow** view, not the full calendar interface.
+
+---
+
+# Wall dashboard requirements
+
+`/dashboard` is the shared family command centre. Plan these cards:
+
+**Kids / School** — each child's next event, today's and tomorrow's activities, unread school
+notifications, permission/action deadlines, important reminders. Plus an "Open Kids" action.
+
+**Shopping** — unlike a simple summary, this card shows *actual current items*: interactive
+checkboxes, quantity and category where useful, estimated total, remaining count, a quick-add
+control, and an open-full-list action. The family should be able to check items off and add
+items directly from the tablet. The full Agrocer shopping interface stays available separately.
+
+```
+Shopping
+☑ Milk      ☐ Bread      ☐ Bananas
+☐ Chicken   ☐ Dog food
+17 items • Estimated $184
+[+ Add Item]  [Open List]
+```
+
+**Tonight's Meal** — meal name, optional image, cooking time, approximate cost where available,
+a recipe action, and a missing-ingredient warning where relevant.
+
+**Family Schedule** — today's and upcoming events, school activities, appointments, family
+events. Use child/profile identifiers so it is immediately clear who an event belongs to.
+
+**Chores** — outstanding chores, who they are assigned to, completion state. Simple touch
+completion where permissions allow.
+
+**Reminders** — prioritised: due today, due tomorrow, overdue, school action required.
+
+**Ask AshHome** — a prominent AI area. Eventually: "Add milk to shopping", "What are the kids
+doing tomorrow?", "Do we need anything for school tomorrow?", "What are we having for dinner?",
+"Create the shopping list for this week's meals", "Remind us tomorrow night about swimming."
+Voice input comes later.
+
+## Information hierarchy
+
+Roughly in this order:
+
+1. urgent family/school actions
+2. today's family schedule
+3. shopping
+4. tonight's meal
+5. kids/school information
+6. reminders
+7. chores
+8. household information
+9. AI assistant
+10. smart-home controls (later)
+
+**Do not overcrowd the wall dashboard.** Detailed editing belongs in the normal application
+views. The wall tablet is for glanceable information, quick family actions, simple touch
+interactions and AI commands.
+
+## Dashboard data behaviour
+
+Dashboard cards read the same AshHome backend as the mobile and desktop views. **One source of
+truth** — never a separate copy of shopping, calendar or reminder state for the tablet.
+
+Where practical, use real-time updates or efficient polling so that checking off shopping on a
+phone updates the tablet, and likewise for adding an event, receiving a school notification, or
+changing tonight's meal.
+
+---
+
 # AI architecture
 
 The initial local AI target will be Ollama running on another machine containing an NVIDIA RTX 5070 12 GB GPU.
@@ -313,39 +462,57 @@ Do not implement Home Assistant integration until its roadmap phase.
 
 # AshHome roadmap (phases)
 
-This is the AshHome-wide roadmap. `AGROCER_MASTER_PLAN.md` remains the source of truth for Agrocer stage boundaries and Definitions of Done; where the two disagree, ask before proceeding rather than picking one.
+This is the AshHome-wide roadmap. `AGROCER_MASTER_PLAN.md` remains the source of truth for
+Agrocer stage boundaries and Definitions of Done; where the two disagree, ask before
+proceeding.
 
-Phase 0 — Repository baseline, documentation and persistent handoff
+Phase 0 — repository baseline, documentation and persistent handoff
 
-Phase 1 — AshHome application shell, responsive navigation and wall-tablet dashboard foundation
+Phase 1 — AshHome shell, responsive navigation and wall-dashboard foundation
 
-Phase 2 — Backend/API foundation
+Phase 2 — backend/API foundation
 
 Phase 3 — PostgreSQL family data model
 
-Phase 4 — Agrocer shopping lists, favourites and shopping history
+Phase 4 — Agrocer shopping lists, favourites and history
 
-Phase 5 — Pantry/freezer inventory
+Phase 5 — pantry/freezer inventory
 
-Phase 6 — Meals and grocery budgeting
+Phase 6 — recipe providers and family recipes
 
-Phase 7 — Local Ollama AI service
+Phase 7 — meals, meal planning and grocery budgeting
 
-Phase 8 — Controlled AI tool/action system
+Phase 8 — local Ollama AI service
 
-Phase 9 — Reminders, scheduler and notifications
+Phase 9 — controlled AI tool/action system
 
-Phase 10 — Chores, family calendar and household modules
+Phase 10 — pantry-aware AI meal planning
 
-Phase 11 — Wall-dashboard enhancements, kiosk/device configuration and shared-family UX
+Phase 11 — reminders, scheduler and notifications
 
-Phase 12 — Homelab deployment, monitoring and backups
+Phase 12 — kids, chores, family calendar and school-data foundation
 
-Phase 13 — Home Assistant integration
+Phase 13 — Hero/email/calendar school integration
 
-Phase 14 — Voice assistant and external integrations
+Phase 14 — wall-dashboard enhancements, kiosk/device configuration and shared-family UX
+
+Phase 15 — homelab deployment, monitoring and backups
+
+Phase 16 — Home Assistant integration
+
+Phase 17 — voice assistant and additional external integrations
 
 Do NOT automatically advance through phases. Work on one requested phase/task at a time.
+
+## The Phase 1 dashboard
+
+The initial dashboard should already visually reserve areas for: Kids / Today, Shopping List,
+Tonight's Meal, Family Schedule, Chores, Reminders, and Ask AshHome.
+
+These may use placeholder or mock data during Phase 1.
+
+Do NOT prematurely implement PostgreSQL, Hero integration, Ollama or backend services simply to
+populate the dashboard. As later phases land, replace placeholder data with real services.
 
 ---
 
@@ -363,6 +530,9 @@ Never commit:
 * other secrets
 
 Use environment variables and maintain `.env.example`.
+
+Never place Hero credentials, child-sensitive data or email credentials in `HANDOFF.md`,
+`TASKS.md`, `CLAUDE.md`, git, or any source-controlled configuration.
 
 ---
 
@@ -473,6 +643,16 @@ Anything fragile or deliberately deferred.
 ## Last Updated
 Date/time if easily available.
 ```
+
+`HANDOFF.md` must also always document:
+
+* which dashboard cards exist
+* whether each card uses mock or real data
+* Kids/School integration status
+* Hero integration status
+* notification ingestion status
+* calendar integration status
+* the exact NEXT TASK
 
 ---
 

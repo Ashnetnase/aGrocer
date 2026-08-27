@@ -19,10 +19,12 @@ behind the same repository interfaces.
 ```
 app/                    Next.js routes
   (app)/                shopping · shopping/mode · pantry · meals · products · household · settings
+  dashboard/            the wall dashboard — its own full-screen layout, not the phone shell
   offline/              offline fallback page
 src/
   components/           shared UI (agrocer/, agrocer/form/, layout/)
-  features/             per-feature UI: home, shopping, pantry, meals, products, household, settings
+  features/             per-feature UI: home, shopping, pantry, meals, products, household,
+                        settings, dashboard
   domain/               types, Zod schemas, pure services (dates, shopping, pantry, meals, household)
   data/
     repositories/       the contracts — PantryRepository, ShoppingRepository, MealsRepository,
@@ -113,14 +115,20 @@ Not built. Listed so current choices do not foreclose them.
 
 ## Interface modes
 
-AshHome serves three modes from **one application**, never a separate tablet app:
+Mobile and the standard app exist. The **wall dashboard** now exists too, at `/dashboard`
+(Phase 1): its own full-screen layout, seven cards, of which shopping and tonight's meal carry
+real data and five are labelled placeholders. It reads the same repositories as every other
+view — one source of truth, never a tablet-specific copy.
+
+Still planned:
 
 - **Mobile** — quick shopping additions, reminders, tasks, AI assistant.
 - **Standard app** — desktop/laptop/tablet; administration, detailed editing, configuration.
 - **Wall dashboard** — a dedicated 10–11" Android tablet in kiosk mode at `/dashboard`; large
   touch targets, glanceable, readable from several metres, always open.
 
-The dashboard reuses the same feature modules, API and data with a dedicated layout.
+Kiosk/device configuration, real-time updates so a phone change appears on the tablet without a
+reload, and dashboard quick-add all remain unbuilt.
 
 ## Backend/API
 

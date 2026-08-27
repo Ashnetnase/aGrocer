@@ -5,15 +5,68 @@ Statuses: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]` blo
 Detail, Definitions of Done and rationale live in `AGROCER_MASTER_PLAN.md`.
 Current state of the code lives in `HANDOFF.md`.
 
-> **Roadmap reconciliation — open decision.**
-> `AGROCER_MASTER_PLAN.md` defines Agrocer **Stages 1–8**; `CLAUDE.md` defines AshHome
-> **Phases 0–14**. They cover overlapping ground with different numbering. This file tracks the
-> master plan's stages, since `CLAUDE.md` names it the source of truth, and maps the phases
-> alongside. Where the two disagree, ask before proceeding.
+> **Roadmap reconciliation — still open.**
+> `AGROCER_MASTER_PLAN.md` defines Agrocer **Stages 1–8**; `CLAUDE.md` now defines AshHome
+> **Phases 0–17**. They cover overlapping ground with different numbering, and the phases reach
+> well beyond Agrocer into kids, school and household modules. This file tracks both: the
+> AshHome phases first, then the Agrocer stages that carry the Definitions of Done.
+> Where the two disagree, ask before proceeding.
 
 ---
 
-## Phase 0 — Repository baseline, documentation and persistent handoff
+## AshHome phases
+
+- [x] Phase 0 — repository baseline, documentation and persistent handoff
+- [~] Phase 1 — AshHome shell, responsive navigation and wall-dashboard foundation
+      (`/dashboard` exists with all seven cards; navigation shell and kiosk config pending)
+- [x] Phase 2 — backend/API foundation
+- [x] Phase 3 — PostgreSQL family data model *(the Agrocer half; kids/school not modelled)*
+- [x] Phase 4 — Agrocer shopping lists, favourites and history
+- [x] Phase 5 — pantry/freezer inventory
+- [ ] Phase 6 — recipe providers and family recipes
+- [~] Phase 7 — meals, meal planning and grocery budgeting *(planning done, budgeting not)*
+- [ ] Phase 8 — local Ollama AI service
+- [ ] Phase 9 — controlled AI tool/action system
+- [ ] Phase 10 — pantry-aware AI meal planning
+- [ ] Phase 11 — reminders, scheduler and notifications
+- [ ] Phase 12 — kids, chores, family calendar and school-data foundation
+- [ ] Phase 13 — Hero/email/calendar school integration
+- [ ] Phase 14 — wall-dashboard enhancements, kiosk/device configuration and shared-family UX
+- [ ] Phase 15 — homelab deployment, monitoring and backups
+- [ ] Phase 16 — Home Assistant integration
+- [ ] Phase 17 — voice assistant and additional external integrations
+
+Phases 2–5 and much of 7 landed inside Agrocer Stage 2, which is why the numbering needs
+reconciling: the phase list assumes work that the stage list already completed.
+
+### Phase 1 dashboard cards
+
+- [x] `/dashboard` route with its own full-screen kiosk layout
+- [x] Kids / Today — real children, no events yet
+- [x] Family schedule — placeholder
+- [x] Reminders — placeholder
+- [x] Shopping — real, interactive, checkable from the wall
+- [x] Tonight's meal — real
+- [x] Chores — placeholder
+- [x] Ask AshHome — placeholder
+- [ ] quick-add shopping directly on the dashboard (currently opens the full list)
+- [ ] real-time or polled updates so a phone change appears on the tablet without a reload
+- [ ] kiosk/device configuration (Phase 14)
+
+### Kids and school
+
+- [ ] child profiles beyond household members
+- [ ] `SchoolProvider` abstraction
+- [ ] Hero email ingestion — **not started, and bound by the rules in `CLAUDE.md`**: no
+      scraping, no stored credentials, no working around Hero security
+- [ ] calendar feed import
+- [ ] family calendar model
+
+---
+
+## Agrocer stages
+
+### Phase 0 — Repository baseline, documentation and persistent handoff
 
 - [x] `CLAUDE.md` expanded to full AshHome instructions (vision, interface modes, wall
       dashboard, device architecture, AI architecture, agent safety, git/secrets rules)
