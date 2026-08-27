@@ -8,7 +8,7 @@ import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/sche
 import type { Product } from '@/domain/schemas/product';
 import type { ShoppingItem, ShoppingItemDraft, ShoppingItemPatch } from '@/domain/schemas/shopping';
 import type { AgrocerRepositories } from '@/data/repositories/types';
-import { localRepositories } from '@/data/local/localRepositories';
+import { repositoriesForEnvironment } from '@/data/api/repositories';
 import { householdSeed } from '@/data/seed/household';
 import { mealsSeed, planSeed } from '@/data/seed/meals';
 import { pantrySeed } from '@/data/seed/pantry';
@@ -79,11 +79,19 @@ const initialState: AgrocerState = {
 
 interface ProviderProps {
   children: React.ReactNode;
-  /** Injectable for tests and for the Stage 2 API implementation. */
+  /**
+   * Injectable for tests. Left unset, the choice comes from the environment: Stage 1
+   * localStorage by default, or server-backed shopping when the flag is on. Both branches
+   * return module-level singletons, so the identity stays stable across renders and the
+   * load effect does not re-fire.
+   */
   repositories?: AgrocerRepositories;
 }
 
-export function AgrocerProvider({ children, repositories = localRepositories }: ProviderProps) {
+export function AgrocerProvider({
+  children,
+  repositories = repositoriesForEnvironment(),
+}: ProviderProps) {
   const [state, setState] = useState<AgrocerState>(initialState);
 
   const loadAll = useCallback(async () => {

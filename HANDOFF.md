@@ -24,16 +24,18 @@ What actually runs today:
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
-- All persistence is **localStorage**, behind the Stage 1 repository contracts.
-  `AgrocerProvider` defaults to `localRepositories` — see `src/providers/AgrocerProvider.tsx:86`.
+- **Shopping reads and writes Postgres** through `/api/shopping` when
+  `NEXT_PUBLIC_AGROCER_SERVER_SHOPPING="1"`. Verified in the browser: toggling an item in the
+  UI persists to Supabase. Every other feature is still localStorage.
+- Without that flag the whole app runs on localStorage and needs no database at all.
+  `AgrocerProvider` picks via `repositoriesForEnvironment()`.
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
 - A Docker image builds and has been smoke-tested; a staging runbook exists at `docs/staging.md`.
 
 What is written but **not yet running**:
 
-- The Drizzle repository implementation (`src/data/drizzle/drizzleRepositories.ts`) is now
-  **verified against real Postgres** — see `npm run test:db` — but it is not yet wired into
-  `AgrocerProvider`, and no route handler exposes it. The running app is still localStorage.
+- Pantry, meals, products and household still run on localStorage. Their Drizzle repositories
+  are verified (`npm run test:db`) but no route handlers expose them yet.
 
 ## Completed
 
@@ -51,16 +53,21 @@ What is written but **not yet running**:
   - `.env.local` written and the connection verified from this repository.
   - Drizzle's migration journal reconciled; `npm run db:migrate` is a clean no-op.
   - Integration test suite proving the repositories against real Postgres (`npm run test:db`).
+  - `npm run db:seed` — idempotent seed of one household from the Stage 1 demo data.
+  - `/api/shopping` route handlers (list, add, batch add, edit, toggle, remove, clear checked).
+  - `apiShoppingRepository` — the same contract over HTTP — and the shopping vertical slice
+    verified end to end in the browser against Supabase.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
   expanded `CLAUDE.md` (AshHome vision, interface modes, wall dashboard, device architecture,
   agent safety, handoff system).
 
 ## Work In Progress
 
-- **Backend/API architecture** — the Drizzle repository layer works against the real database;
-  Next.js route handlers or server actions to expose it do not exist yet.
-- **Persistent pantry / products / shopping lists / meal plans** — repositories verified, but
-  not wired into `AgrocerProvider`, so the app still reads and writes localStorage.
+- **Backend/API architecture** — shopping has route handlers; pantry, meals, products and
+  household do not. `src/server/http.ts` holds the shared validation and error plumbing that
+  the remaining features should reuse.
+- **Persistent pantry / products / meal plans** — repositories verified, no handlers, still
+  localStorage in the UI.
 
 ## Files Changed
 
@@ -73,7 +80,17 @@ Recent and important:
 - `src/data/drizzle/drizzleRepositories.ts` — Drizzle implementation of the repository contracts.
 - `src/data/repositories/types.ts` — the contracts both implementations satisfy. Do not change
   these casually; both the local and Drizzle repositories depend on them.
-- `.env.example` — Supabase variables.
+- `.env.example` — Supabase variables, `AGROCER_HOUSEHOLD_ID`, the server-shopping flag.
+- `scripts/seed.ts` + `npm run db:seed` — seeds one household, its members, products, pantry
+  and meals. Idempotent by household name.
+- `src/server/repositories.ts` — the single place `householdId` is resolved. When auth lands,
+  this is what changes; handlers ask for repositories, never for an id.
+- `src/server/http.ts` — `parseJson` (Zod-validated bodies), `notFound`, `failed`. Errors are
+  logged server-side and returned generic, so no connection string reaches a browser.
+- `app/api/shopping/**` — the three route handlers.
+- `src/data/api/shoppingRepository.ts` — the contract over HTTP.
+- `src/data/api/repositories.ts` — composes local + server repositories and reads the flag.
+- `src/providers/AgrocerProvider.tsx` — default repositories now come from the environment.
 
 ## Architecture Decisions
 
@@ -126,7 +143,12 @@ Last run 2026-08-27, all passing:
 - `npm run test:db` — 6 integration tests against the real Supabase database, all passing.
   Needs `.env.local`; skips itself when `DATABASE_URL` is absent, so CI stays green.
 - `npm run db:migrate` — runs clean and applies nothing, which is the expected state.
+- `npm run build` — clean. The three `/api/shopping` routes are dynamic; every screen is still
+  statically prerendered, and no server-only module leaked into a client bundle.
 - `npm run check` runs typecheck, lint and the unit tests.
+- Manual end-to-end check in Chrome against `localhost:3001/shopping`: items created through
+  the API rendered in the UI, and toggling one in the UI persisted to Supabase. Test rows were
+  deleted afterwards; the shopping list is empty.
 
 Confirmed after the integration run: every table is back to 0 rows. The tests create a
 throwaway household and delete it, and the foreign keys cascade.
@@ -157,17 +179,19 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Expose the shopping list through Next.js route handlers backed by `createDrizzleRepositories`,
-and switch only the shopping screen over to them — one vertical slice, end to end. The
-repositories are proven, so the open questions are all in the wiring: where `householdId` comes
-from before authentication exists, and how the provider holds server state that used to be
-synchronous localStorage.
+Extend the same pattern to the pantry: `app/api/pantry` route handlers over
+`serverRepositories().pantry`, an `apiPantryRepository`, and add it to `hybridRepositories`.
+Reuse `src/server/http.ts` rather than writing new validation plumbing. The shopping slice in
+`app/api/shopping/**` is the worked example to copy.
 
-Do not convert pantry, meals or products in the same pass, and do not delete the localStorage
-repositories — the provider takes repositories as a prop precisely so both can coexist.
+Two things the shopping slice deliberately left undone, worth deciding before repeating the
+pattern five more times:
 
-RLS plus authentication is the task after that. It must land before any real family data is
-entered.
+- **Every write refetches the whole list.** That was free against localStorage and is a round
+  trip to Sydney now. Acceptable for a family-sized list; revisit before the pantry grows.
+- **No optimistic UI.** A toggle waits for the server, so it feels slower than Stage 1 did.
+
+Authentication plus RLS remains the task that must land before any real family data is entered.
 
 ## Do Not Accidentally Change
 

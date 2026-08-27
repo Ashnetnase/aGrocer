@@ -352,12 +352,12 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
       `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
-- [~] backend/API architecture — Drizzle repository implementation done; route handlers still to come
+- [~] backend/API architecture — `/api/shopping` route handlers done; other features pending
 - [ ] authentication (Supabase Auth)
 - [ ] household/user permissions (RLS as defence in depth)
 - [~] persistent pantry — repository written, not yet wired or run against a database
 - [~] persistent products — repository written, not yet wired or run against a database
-- [~] persistent shopping lists — repository written, not yet wired or run against a database
+- [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
 - [~] persistent meal plans — repository written, not yet wired or run against a database
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
@@ -605,6 +605,56 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-27 — Shopping list vertical slice over Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The shopping list now reads and writes Supabase through route handlers. One feature, end to
+end, rather than a half-converted app.
+
+Added:
+
+- `scripts/seed.ts` and `npm run db:seed` — seeds one household, its members, products, pantry
+  and meals from the Stage 1 demo data. Idempotent by household name. It exists as a script
+  because `reset()` is refused against a shared database, and because the products contract has
+  no create method. The weekly plan is not seeded: `planSeed` references Stage 1 meal ids that
+  do not survive the insert, and an empty planner is more honest than a broken one.
+- `src/server/repositories.ts` — resolves `householdId` from `AGROCER_HOUSEHOLD_ID`. A
+  deliberate stand-in for authentication, and the single place that changes when auth lands.
+- `src/server/http.ts` — `parseJson` validates bodies with the same Zod schemas the forms use,
+  because a route handler is a public edge. Failures log server-side and return a generic
+  message, so a connection string or household id never reaches a browser.
+- `app/api/shopping/**` — list/add/batch-add, edit/toggle/remove, and clear-checked. Toggle is
+  a `PATCH { toggle: true }` rather than its own route: same resource, and the repository owns
+  what "toggled" means.
+- `src/data/api/shoppingRepository.ts` — the same contract over HTTP. The server is
+  authoritative on every write, which is what keeps the quantity merge honest.
+- `src/data/api/repositories.ts` — composes server-backed shopping with localStorage for
+  everything else. Possible only because both sides satisfy ADR-003, and it makes each
+  feature's switch-over independently reversible.
+
+Changed:
+
+- `AgrocerProvider` takes its default repositories from the environment. No other provider
+  change was needed — it was already async with refresh-after-write, so ADR-003 paid off
+  exactly as intended.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, and a clean production
+build with all three API routes dynamic and every screen still prerendered. The API was
+exercised directly (including the merge, a 400 on an invalid body, a 404 on an unknown id) and
+then in Chrome: items created through the API rendered on the shopping screen, and toggling one
+in the UI persisted to Supabase. Test rows were deleted afterwards.
+
+Two deliberate omissions, recorded before the pattern is repeated five more times: every write
+refetches the whole list, which was free against localStorage and is now a round trip to
+Sydney; and there is no optimistic UI, so a toggle feels slower than Stage 1 did.
+
+New dependency: `tsx` (dev-only), to run TypeScript scripts that use the `@/` path alias.
+`node --experimental-strip-types` cannot resolve that alias, and hand-rolling a resolver hook
+is more fragile than the standard runner. Seeding, backup/restore and later data migrations all
+need it.
 
 ## 2026-08-27 — Database connected and repositories proven (Claude Code)
 

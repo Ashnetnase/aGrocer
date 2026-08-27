@@ -12,7 +12,8 @@ Last updated: 2026-08-27 (Stage 2 in progress).
 ## Shape
 
 A single Next.js 15 App Router application (React 19, TypeScript, Tailwind). One deployable,
-one codebase. All persistence today is browser localStorage behind repository interfaces.
+one codebase. The shopping list persists to Supabase Postgres through route handlers; every
+other feature is still browser localStorage. Both sit behind the same repository interfaces.
 
 ```
 app/                    Next.js routes
@@ -25,12 +26,16 @@ src/
   data/
     repositories/       the contracts — PantryRepository, ShoppingRepository, MealsRepository,
                         ProductsRepository, HouseholdRepository, bundled as AgrocerRepositories
-    local/              localStorage implementation (the one in use)
-    drizzle/            PostgreSQL implementation (written, not yet wired)
+    local/              localStorage implementation (pantry, meals, products, household)
+    drizzle/            PostgreSQL implementation, behind the route handlers
+    api/                the same contracts over HTTP (shopping today), and the composition
+                        deciding which implementation each feature uses
     seed/               initial demo data
   db/                   Drizzle schema, migration client, row ↔ domain mappers
+  server/               server-only: householdId resolution, shared route-handler plumbing
   providers/            AgrocerProvider — app state, takes repositories as a prop
   lib/                  formatting and utility helpers
+scripts/                seed.ts — deliberate, idempotent database seeding
 drizzle/                generated SQL migrations
 legacy/                 the original Vite/React Router implementation, kept for reference
 docs/                   this file, staging.md
@@ -47,24 +52,39 @@ src/domain/services/     pure business logic — no I/O, fully unit-tested
         ↓
 src/data/repositories/   contracts (interfaces only)
         ↓
-   ┌────┴────┐
-localStorage   Drizzle/PostgreSQL
- (in use)       (written, unwired)
+   ┌────┴──────────────┬─────────────────────┐
+localStorage      HTTP → /api/shopping    Drizzle/PostgreSQL
+(pantry, meals,   (shopping)              (behind the handlers,
+ products,                                 and used directly by
+ household)                                scripts and tests)
 ```
 
+Route handlers validate every body with the same Zod schemas the forms use, and return generic
+error messages while logging the detail server-side. `householdId` comes from
+`AGROCER_HOUSEHOLD_ID` — a deliberate stand-in for authentication, resolved in exactly one
+place (`src/server/repositories.ts`) so that auth changes one file.
+
+Server-backed shopping is opt-in via `NEXT_PUBLIC_AGROCER_SERVER_SHOPPING`. Unset, the app
+runs entirely on localStorage and needs no database — which keeps Stage 1 runnable and stops a
+broken connection from taking the app down.
+
 The repository boundary (ADR-003) is the key seam: swapping storage must not touch feature code.
-`AgrocerProvider` accepts repositories as a prop and defaults to `localRepositories`, so both
-implementations can coexist — see `src/providers/AgrocerProvider.tsx:86`.
+`AgrocerProvider` accepts repositories as a prop and otherwise takes them from
+`repositoriesForEnvironment()`, so all three implementations can coexist and each feature moves
+independently.
 
 Domain services are pure functions. They take data and return data, never perform I/O, and carry
 the bulk of the test suite.
 
-## Database (schema exists, not yet running)
+## Database
 
-Drizzle ORM over postgres-js, targeting Supabase managed PostgreSQL (ADR-013).
-Seven tables in `src/db/schema.ts`: `households`, `household_members`, `pantry_items`,
-`products`, `shopping_items`, `meals`, `plan_entries`. Migration:
-`drizzle/0000_mysterious_black_cat.sql` — generated, never applied.
+Drizzle ORM over postgres-js on Supabase managed PostgreSQL (ADR-013), project `agrocer` in
+ap-southeast-2. Seven tables in `src/db/schema.ts`: `households`, `household_members`,
+`pantry_items`, `products`, `shopping_items`, `meals`, `plan_entries`. Migration
+`drizzle/0000_mysterious_black_cat.sql` is applied, and `npm run db:seed` creates one household.
+
+**RLS is not yet enabled** — see `TASKS.md`. It ships with authentication, because enabling it
+without policies blocks all access.
 
 `src/db/client.ts` is server-only. It throws when `DATABASE_URL` is absent, caches the client on
 `globalThis` so hot reloads do not exhaust the pool, and sets `prepare: false` because Supabase's
@@ -80,7 +100,9 @@ route rather than a flag (ADR-010). A hand-written service worker provides offli
 ## Tooling
 
 `npm run dev` · `build` · `start` · `lint` · `typecheck` · `test` · `check` (all three).
-Database: `db:generate` · `db:migrate` · `db:studio`. Tests are Vitest, 112 across 8 files.
+Database: `db:generate` · `db:migrate` · `db:studio` · `db:seed`.
+`npm run test:db` runs the integration suite against the real database. Tests are Vitest:
+112 unit tests across 8 files, plus 6 integration tests excluded from the default run.
 Docker image builds; staging runbook in `docs/staging.md`.
 
 ---
@@ -102,8 +124,12 @@ The dashboard reuses the same feature modules, API and data with a dedicated lay
 
 ## Backend/API
 
-Route handlers or server actions in front of the Drizzle repositories, then Supabase Auth and
-household permissions with RLS as defence in depth. The repository contracts stay the seam.
+The remaining features (pantry, meals, products, household) get the same treatment as
+shopping, reusing `src/server/http.ts`. Then Supabase Auth and household permissions with RLS
+as defence in depth. The repository contracts stay the seam.
+
+Two known costs of the current shopping implementation, to revisit rather than replicate
+blindly: every write refetches the whole list, and there is no optimistic UI.
 
 ## Device configuration
 
