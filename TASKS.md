@@ -52,8 +52,8 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] repositories proven against real Postgres — `npm run test:db`, 6 integration tests
       covering shopping round-trip and merge, pantry adjust, plan assign/clear, and the
       refusal of `reset()`. They run in a throwaway household and clean up after themselves
-- [~] backend/API architecture — `/api/shopping` and `/api/pantry` handlers, plus shared
-      plumbing in `src/server/http.ts` and `src/data/api/client.ts`; meals, products and
+- [~] backend/API architecture — `/api/shopping`, `/api/pantry` and `/api/meals` handlers,
+      plus shared plumbing in `src/server/http.ts` and `src/data/api/client.ts`; products and
       household have no handlers yet
 - [x] seed script — `npm run db:seed`, idempotent, one household from the Stage 1 demo data
 - [x] persistent shopping lists — route handlers, HTTP repository, and the UI verified
@@ -62,7 +62,9 @@ Current state of the code lives in `HANDOFF.md`.
       quantity steps are relative (`PATCH {adjust:n}`) so the server floors at zero
 - [~] persistent products — repository verified, but nothing seeds products into Postgres and
       the contract has no create method, so the screen would be empty once switched over
-- [~] persistent meal plans — repository verified; not wired to the UI
+- [x] persistent meal plans — route handlers and HTTP repository, verified end to end. Plan
+      slots are addressable (`/api/meals/plan/[day]/[slot]`), and deleting a planned meal
+      frees its slot through the foreign key rather than by hand
 - [ ] authentication (Supabase Auth)
 - [!] **RLS is disabled on all 7 tables** — anyone with the anon key can read or write every
       row. Tables are empty so nothing is exposed yet, but this must close before any real

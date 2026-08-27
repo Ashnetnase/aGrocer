@@ -24,10 +24,10 @@ What actually runs today:
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
-- **Shopping and pantry read and write Postgres** through `/api/shopping` and `/api/pantry`
-  when `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"`. Both verified in the browser against Supabase:
-  toggling a shopping item and stepping a pantry quantity persist. Meals, products and
-  household are still localStorage.
+- **Shopping, pantry and meals read and write Postgres** through their route handlers when
+  `NEXT_PUBLIC_AGROCER_SERVER_DATA="1"`. All three verified in the browser against Supabase:
+  toggling a shopping item, stepping a pantry quantity, and planning a dinner all persist.
+  Products and household are still localStorage.
 - Without that flag the whole app runs on localStorage and needs no database at all.
   `AgrocerProvider` picks via `repositoriesForEnvironment()`.
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
@@ -35,8 +35,8 @@ What actually runs today:
 
 What is written but **not yet running**:
 
-- Meals, products and household still run on localStorage. Their Drizzle repositories are
-  verified (`npm run test:db`) but no route handlers expose them yet.
+- Products and household still run on localStorage. Their Drizzle repositories are verified
+  (`npm run test:db`) but no route handlers expose them yet.
 
 ## Completed
 
@@ -59,17 +59,19 @@ What is written but **not yet running**:
   - `apiShoppingRepository` — the same contract over HTTP — and the shopping vertical slice
     verified end to end in the browser against Supabase.
   - `/api/pantry` route handlers and `apiPantryRepository`, verified the same way.
+  - `/api/meals` (catalogue) and `/api/meals/plan/[day]/[slot]` (weekly plan), plus
+    `apiMealsRepository`, verified the same way.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
   expanded `CLAUDE.md` (AshHome vision, interface modes, wall dashboard, device architecture,
   agent safety, handoff system).
 
 ## Work In Progress
 
-- **Backend/API architecture** — shopping and pantry have route handlers; meals, products and
+- **Backend/API architecture** — shopping, pantry and meals have route handlers; products and
   household do not. `src/server/http.ts` (server) and `src/data/api/client.ts` (client) hold
   the shared plumbing the remaining features should reuse.
-- **Persistent products / meal plans / household** — repositories verified, no handlers, still
-  localStorage in the UI.
+- **Persistent products / household** — repositories verified, no handlers, still localStorage
+  in the UI.
 
 ## Files Changed
 
@@ -89,11 +91,12 @@ Recent and important:
   this is what changes; handlers ask for repositories, never for an id.
 - `src/server/http.ts` — `parseJson` (Zod-validated bodies), `notFound`, `failed`. Errors are
   logged server-side and returned generic, so no connection string reaches a browser.
-- `app/api/shopping/**`, `app/api/pantry/**` — the route handlers.
+- `app/api/shopping/**`, `app/api/pantry/**`, `app/api/meals/**` — the route handlers. Note
+  `/api/meals/plan` is matched before `/api/meals/[id]`: Next.js prefers static segments, so
+  no meal id can shadow the plan.
 - `src/data/api/client.ts` — shared fetch plumbing: `request`, and `patch` whose 404 means
   `undefined` rather than an exception, matching the contracts.
-- `src/data/api/shoppingRepository.ts`, `src/data/api/pantryRepository.ts` — the contracts
-  over HTTP.
+- `src/data/api/{shopping,pantry,meals}Repository.ts` — the contracts over HTTP.
 - `src/data/api/repositories.ts` — composes local + server repositories and reads the flag.
 - `src/providers/AgrocerProvider.tsx` — default repositories now come from the environment.
 
@@ -184,14 +187,15 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Convert meals to the same pattern: `app/api/meals` handlers over `serverRepositories().meals`,
-an `apiMealsRepository`, and add it to `hybridRepositories`. Meals is the awkward one — the
-repository covers both meals and the weekly plan (`getPlan`, `assign`, `clear`), so the plan
-wants its own sub-resource, something like `/api/meals/plan`. Reuse `src/server/http.ts` and
-`src/data/api/client.ts`; `app/api/pantry/**` is the cleanest worked example.
+Convert the last two features, which are both small:
 
-Then products and household, which are small. Then authentication plus RLS, which must land
-before any real family data is entered.
+- **Products** — `list`, `update`, `toggleFavourite` only. Note the catalogue has no create
+  method in the contract, so `npm run db:seed` is still the only thing that puts products in
+  Postgres. Worth deciding whether Stage 2 should add one.
+- **Household** — `get`, `addMember`, `updateMember`, `removeMember`, `updateSettings`.
+  Settings and members are one resource in the contract but read like two in the UI.
+
+Then authentication plus RLS, which must land before any real family data is entered.
 
 Two costs still deliberately unpaid, worth deciding before the last three features repeat them:
 

@@ -1,12 +1,13 @@
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { localRepositories } from '@/data/local/localRepositories';
+import { apiMealsRepository } from './mealsRepository';
 import { apiPantryRepository } from './pantryRepository';
 import { apiShoppingRepository } from './shoppingRepository';
 
 /**
  * Stage 2 migrates one feature at a time.
  *
- * Shopping and pantry talk to Postgres through their route handlers; meals, products and
+ * Shopping, pantry and meals talk to Postgres through their route handlers; products and
  * household are still Stage 1 localStorage. Composing the two is possible only because both
  * sides implement the same contracts (ADR-003), and it keeps each feature's switch-over
  * independently reversible.
@@ -18,6 +19,7 @@ export const hybridRepositories: AgrocerRepositories = {
   ...localRepositories,
   shopping: apiShoppingRepository,
   pantry: apiPantryRepository,
+  meals: apiMealsRepository,
 };
 
 /**

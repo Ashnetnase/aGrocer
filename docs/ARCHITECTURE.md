@@ -12,7 +12,7 @@ Last updated: 2026-08-27 (Stage 2 in progress).
 ## Shape
 
 A single Next.js 15 App Router application (React 19, TypeScript, Tailwind). One deployable,
-one codebase. Shopping and pantry persist to Supabase Postgres through route handlers; meals,
+one codebase. Shopping, pantry and meals persist to Supabase Postgres through route handlers;
 products and household are still browser localStorage. All of it sits behind the same
 repository interfaces.
 
@@ -29,7 +29,7 @@ src/
                         ProductsRepository, HouseholdRepository, bundled as AgrocerRepositories
     local/              localStorage implementation (pantry, meals, products, household)
     drizzle/            PostgreSQL implementation, behind the route handlers
-    api/                the same contracts over HTTP (shopping, pantry), shared fetch
+    api/                the same contracts over HTTP (shopping, pantry, meals), shared fetch
                         plumbing, and the composition deciding which implementation each
                         feature uses
     seed/               initial demo data
@@ -56,8 +56,8 @@ src/data/repositories/   contracts (interfaces only)
         ↓
    ┌────┴──────────────┬─────────────────────┐
 localStorage      HTTP → route handlers   Drizzle/PostgreSQL
-(meals, products, (shopping, pantry)      (behind the handlers,
- household)                                and used directly by
+(products,        (shopping, pantry,      (behind the handlers,
+ household)        meals)                  and used directly by
                                            scripts and tests)
 ```
 
@@ -126,11 +126,12 @@ The dashboard reuses the same feature modules, API and data with a dedicated lay
 
 ## Backend/API
 
-The remaining features (meals, products, household) get the same treatment, reusing
-`src/server/http.ts` and `src/data/api/client.ts`. Meals is the awkward one: its repository
-covers both meals and the weekly plan, so the plan wants its own sub-resource. Then Supabase
-Auth and household permissions with RLS as defence in depth. The repository contracts stay
-the seam.
+Products and household get the same treatment, reusing `src/server/http.ts` and
+`src/data/api/client.ts`. Then Supabase Auth and household permissions with RLS as defence in
+depth. The repository contracts stay the seam.
+
+Products has no create method in its contract — `npm run db:seed` is currently the only way
+products reach Postgres, which Stage 2 should probably revisit.
 
 Two known costs of the current implementation, to revisit rather than replicate blindly: every
 write refetches the whole list, and there is no optimistic UI.

@@ -352,14 +352,14 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
       `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
-- [~] backend/API architecture — `/api/shopping` and `/api/pantry` route handlers done;
-      meals, products and household pending
+- [~] backend/API architecture — `/api/shopping`, `/api/pantry` and `/api/meals` route
+      handlers done; products and household pending
 - [ ] authentication (Supabase Auth)
 - [ ] household/user permissions (RLS as defence in depth)
 - [x] persistent pantry — route handlers + HTTP repository, verified end to end
 - [~] persistent products — repository written, not yet wired or run against a database
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
-- [~] persistent meal plans — repository written, not yet wired or run against a database
+- [x] persistent meal plans — route handlers + HTTP repository, verified end to end
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
 - [ ] migrations
@@ -606,6 +606,41 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-27 — Meals and the weekly plan converted to Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Third of five features. Meals was the awkward one: a single repository covers both the meal
+catalogue and the weekly plan, which are different resources.
+
+- `app/api/meals` — the catalogue. `PUT` rather than `PATCH` on `[id]`, because the contract
+  replaces a whole draft: the meal form edits every field at once, so a partial update would
+  be a shape the UI never sends.
+- `app/api/meals/plan` and `app/api/meals/plan/[day]/[slot]` — the plan, with each slot
+  addressable. A slot is a real place: Wednesday dinner exists whether or not anything is
+  planned for it. Both verbs return the whole plan, which is what the contract promises and
+  what the planner re-renders. `/api/meals/plan` cannot be shadowed by a meal id, because
+  Next.js matches static segments before dynamic ones.
+- `day` and `slot` arrive in the URL and are validated as strictly as any body, so an unknown
+  day is a 400 rather than a query that quietly matches nothing.
+- `clear` returns the updated plan rather than a 204: the caller needs it, and a second round
+  trip to fetch what the server just computed would be waste.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, clean production build with
+all four meals routes dynamic. The API was exercised directly — create, replace, a 400 on an
+invalid meal, a 404 on an unknown id, assign, clear, and 400s on an unknown day and an unknown
+slot. The cascade was confirmed the same way: a meal assigned to Thursday dinner and then
+deleted left the plan empty, with no orphaned slot. Then in Chrome: the planner rendered the
+week with today marked, the picker listed the eight seeded meals, and choosing one for
+Wednesday persisted to Supabase.
+
+Test residue was cleaned up afterwards; the household is back to its seeded state. One row was
+found on the shopping list that had not been created deliberately — the Home and Products
+screens both have one-tap "add to shopping" actions, so a stray click during an earlier browser
+check is the likely cause. It was deleted. Worth remembering that browser verification against
+the real database can write through those shortcuts.
 
 ## 2026-08-27 — Pantry converted to Postgres (Claude Code)
 
