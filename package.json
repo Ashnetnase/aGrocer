@@ -16,7 +16,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
-    "ai:check": "tsx scripts/ollama-check.ts"
+    "ai:check": "tsx scripts/ollama-check.ts",
+    "ai:chat": "tsx scripts/ai-chat.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
