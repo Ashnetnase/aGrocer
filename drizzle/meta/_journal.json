@@ -15,6 +15,20 @@
       "when": 1787955895905,
       "tag": "0001_exotic_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787956343374,
+      "tag": "0002_silly_living_lightning",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787956344374,
+      "tag": "0003_household_rls_policies",
+      "breakpoints": true
     }
   ]
 }

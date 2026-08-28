@@ -20,7 +20,7 @@ const postBodySchema = z.union([
 
 export async function GET() {
   try {
-    const items = await serverRepositories().shopping.list();
+    const items = await (await serverRepositories()).shopping.list();
     return NextResponse.json({ items });
   } catch (error) {
     return failed(error);
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const body = await parseJson(request, postBodySchema);
     if (!body.ok) return body.response;
 
-    const shopping = serverRepositories().shopping;
+    const shopping = (await serverRepositories()).shopping;
     const items =
       'items' in body.data
         ? await shopping.addMany(body.data.items)

@@ -130,10 +130,17 @@ reconciling: the phase list assumes work that the stage list already completed.
       unaffected because it connects as `postgres`, which owns the tables and bypasses RLS —
       so this did *not* have to ship with auth, contrary to what this file used to say.
       Verify any time with `npm run db:rls`
-- [ ] authentication (Supabase Auth) — **the next task.** Needs a decision from Ash first on
-      how the wall tablet stays signed in (see `HANDOFF.md` NEXT TASK)
-- [ ] RLS *policies* granting the `authenticated` role its own household — meaningful only
-      once there is a user to grant to, so it ships with auth
+- [x] **authentication (Supabase Auth, ADR-017)** — email + password, session in cookies,
+      household resolved from `household_members.user_id`. Every route handler refuses without
+      one (401), and an account with no member row is refused too (403). Auth is ON unless
+      `AGROCER_AUTH="off"`, so it fails closed
+- [x] RLS *policies* granting `authenticated` its own household
+      (`drizzle/0003_household_rls_policies.sql`) — defence in depth, since the app bypasses
+      RLS as `postgres`
+- [ ] **Ash: create the first account** — Supabase dashboard → Authentication → Users, then
+      `npm run db:claim -- <email> "Ash"`. This agent does not create accounts
+- [ ] client-side 401 handling — a session that expires with a screen open shows a generic
+      failure instead of sending you to sign in. Most likely on the wall tablet
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
 - [ ] backup/restore plan

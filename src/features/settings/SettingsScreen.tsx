@@ -11,6 +11,7 @@ import { useAgrocer } from '@/providers/AgrocerProvider';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { FormTextField, FormToggleCard } from '@/components/agrocer/form/FormFields';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
+import { SignOutButton } from '@/features/auth/SignOutButton';
 
 export function SettingsScreen() {
   const { household, updateSettings, resetDemoData } = useAgrocer();
@@ -119,6 +120,22 @@ export function SettingsScreen() {
             >
               <RotateCcwIcon className="h-4 w-4" /> Reset to demo data
             </button>
+          </div>
+        </section>
+
+        <section aria-labelledby="account" className="mt-8">
+          <h2
+            id="account"
+            className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted"
+          >
+            Account
+          </h2>
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <p className="text-sm leading-relaxed text-muted">
+              Signing out returns this device to the sign-in screen. On the kitchen wall tablet
+              you will normally want to stay signed in.
+            </p>
+            <SignOutButton />
           </div>
         </section>
       </main>

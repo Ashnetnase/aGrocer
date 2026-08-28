@@ -35,7 +35,7 @@ export async function PUT(request: Request, context: Context) {
     const body = await parseJson(request, bodySchema);
     if (!body.ok) return body.response;
 
-    const plan = await serverRepositories().meals.assign(
+    const plan = await (await serverRepositories()).meals.assign(
       target.day,
       target.slot,
       body.data.mealId,
@@ -51,7 +51,7 @@ export async function DELETE(_request: Request, context: Context) {
     const target = await slotFrom(context);
     if (!target) return NextResponse.json({ error: 'Unknown day or slot' }, { status: 400 });
 
-    const plan = await serverRepositories().meals.clear(target.day, target.slot);
+    const plan = await (await serverRepositories()).meals.clear(target.day, target.slot);
     return NextResponse.json({ plan });
   } catch (error) {
     return failed(error);

@@ -18,7 +18,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "ai:check": "tsx scripts/ollama-check.ts",
     "ai:chat": "tsx scripts/ai-chat.ts",
-    "db:rls": "tsx scripts/rls-check.ts"
+    "db:rls": "tsx scripts/rls-check.ts",
+    "db:claim": "tsx scripts/claim.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -26,6 +27,8 @@
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-switch": "^1.1.2",
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",

@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: Context) {
     const body = await parseJson(request, patchBodySchema);
     if (!body.ok) return body.response;
 
-    const pantry = serverRepositories().pantry;
+    const pantry = (await serverRepositories()).pantry;
     const item =
       'adjust' in body.data
         ? await pantry.adjustQuantity(id, body.data.adjust)
@@ -45,7 +45,7 @@ export async function PATCH(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   try {
     const { id } = await params;
-    await serverRepositories().pantry.remove(id);
+    await (await serverRepositories()).pantry.remove(id);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return failed(error);

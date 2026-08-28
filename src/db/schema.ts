@@ -106,6 +106,19 @@ export const householdMembers = pgTable(
     initials: text('initials').notNull(),
     role: memberRoleEnum('role').notNull(),
     colour: memberColourEnum('colour').notNull(),
+    /**
+     * The Supabase Auth user this family member signs in as, if any (ADR-017).
+     *
+     * Nullable because most members never sign in — the children have profiles on the
+     * dashboard, not logins — and unique because one login is one person. This column is
+     * how a request becomes a household: session user → member row → `household_id`.
+     *
+     * Deliberately NOT a foreign key to `auth.users`. That table lives in Supabase's own
+     * schema, and pointing Drizzle's migrations at it couples this schema to Supabase's
+     * internals for no gain; the link is enforced by `npm run db:claim`, which checks the
+     * user exists before writing.
+     */
+    userId: uuid('user_id').unique(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

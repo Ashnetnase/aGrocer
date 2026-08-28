@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const products = await serverRepositories().products.list();
+    const products = await (await serverRepositories()).products.list();
     return NextResponse.json({ products });
   } catch (error) {
     return failed(error);

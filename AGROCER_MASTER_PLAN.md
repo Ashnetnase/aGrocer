@@ -354,10 +354,12 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`,
       plus `0001_exotic_the_liberteens.sql` (RLS)
 - [x] backend/API architecture — route handlers for all five features
-- [ ] authentication (Supabase Auth) — **the next task**
+- [x] authentication (Supabase Auth, ADR-017) — email + password, session in cookies,
+      household from `household_members.user_id`, every route handler refuses without one
 - [x] RLS enabled on all 7 tables, deny-all (ADR-016). Closes the publishable-key exposure;
       verified with `npm run db:rls`. Policies wait for auth, which is when they mean something
-- [ ] household/user permissions — the policies themselves, once there is a user to grant to
+- [x] household/user permissions — RLS policies granting `authenticated` its own household
+      (`drizzle/0003_household_rls_policies.sql`). Defence in depth; the app still bypasses RLS
 - [x] persistent pantry — route handlers + HTTP repository, verified end to end
 - [x] persistent products — route handlers + HTTP repository, verified end to end
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
@@ -614,6 +616,60 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Supabase Auth: the household now comes from the signed-in user (Claude Code)
+
+**Stage:** Stage 2 — the last blocker
+**Status:** Complete and verified, with one part Ash must finish (creating the first account)
+
+Ash asked for continued progress without further questions, so the design decisions below were
+made rather than asked. Each is cheap to overrule; ADR-017 has the reasoning.
+
+| Decision | Choice |
+| -------- | ------ |
+| Method | Email + password (magic links need email delivery) |
+| User ↔ household | `user_id` on `household_members` — the profile *is* the person |
+| Joining a household | `npm run db:claim`, a deliberate act. Signing up grants nothing |
+| Default | Auth **on** unless `AGROCER_AUTH="off"` — fails closed |
+
+**The seam held.** `src/server/repositories.ts` was built in Stage 2 as the single place a
+household id is resolved, with handlers asking for repositories and never for an id. Auth
+replaced the body of that one function; no handler needed to learn about sessions. The only
+mechanical change was that `serverRepositories()` became async, so its fifteen call sites now
+await it.
+
+**Verified — the security half, thoroughly.** With no session, every route refuses:
+
+```
+/api/shopping /api/pantry /api/meals /api/products /api/household  → 401
+POST /api/shopping (a write)                                       → 401
+POST /api/ai/ask  (the assistant, and its tools)                   → 401
+```
+
+`/` and `/dashboard` redirect to `/sign-in?next=…` so the tablet returns where it was.
+`/sign-in`, `/sw.js` and `/manifest.webmanifest` stay reachable signed out — the last two
+matter, because a service worker that cannot register takes the PWA install with it (ADR-011).
+The sign-in screen renders in the Magic Patterns language and a wrong password gives
+"That email and password do not match." with the password cleared. 169 unit tests (up from
+165), the 6 integration tests still pass, and the build is clean.
+
+**Verified — the escape hatch.** With `AGROCER_AUTH=off` the API answers 200 again, pages stop
+redirecting, and every request logs a warning. That path exists so the integration tests and
+local work against a database do not need a session.
+
+**What Ash must do**, and why it is not done here: creating an account means creating an
+account, which this agent does not do. So:
+
+1. Supabase dashboard → Authentication → Users → add a user with your email and password.
+2. `npm run db:claim -- you@example.com "Ash"` — it lists the five members if you run it bare.
+3. Sign in at `/sign-in`.
+
+Until step 2, that account gets 403 from every route, which is the design working.
+
+**Known rough edge.** If a session expires while a screen is open, the client repositories get
+a 401 and the screen shows a generic failure rather than sending you to sign in. The middleware
+refreshes on navigation, so this needs a stale tab and an expired refresh token — but a wall
+tablet is exactly the device that sits still for weeks. Worth a client-side 401 handler.
 
 ## 2026-08-29 — Read-only AI tools: the assistant can see the household data (Claude Code)
 
@@ -1730,6 +1786,54 @@ not caught by the database. That is the cost of the arrangement and it is accept
 alternative — running application queries as the authenticated user, with `set local role` and
 JWT claims per transaction — is a real option, and the right time to weigh it is when
 authentication lands, not before.
+
+
+## ADR-017 — Supabase Auth, with the household resolved from the signed-in user
+
+**Status:** Accepted (2026-08-29)
+
+Stage 2's last blocker. ADR-013 chose Supabase partly for Auth, so the question was not
+*whether* but *what shape*.
+
+**Email and password.** Magic links need email delivery configured; this works on the home
+network today. Revisit when the notification work (Phase 11) brings email anyway.
+
+**A request becomes a household through `household_members.user_id`.** The seam was already
+there: `src/server/repositories.ts` has always been the single place a household id is
+resolved, and handlers ask for repositories rather than an id. Auth replaced the body of that
+function and nothing else. The link lives on the member row rather than in a new join table
+because a family member profile *is* the person — it carries their name, colour and
+Adult/Child role, all of which a session wants.
+
+That column is deliberately **not** a foreign key to `auth.users`: that table belongs to
+Supabase's own schema, and pointing Drizzle's migrations at it would couple this schema to
+Supabase's internals for no gain. `npm run db:claim` checks the user exists before writing.
+
+**Signing up grants nothing.** An account with no member row is refused with 403. Joining a
+household is `npm run db:claim`, a deliberate act by someone with database access — the same
+reasoning as `seed.ts`, which exists because re-seeding must be explicit. Self-claim ("the
+first user to sign up takes the household") was rejected: it is a hole the moment the app is
+reachable by anyone else, and it buys convenience exactly once.
+
+**Auth fails closed.** `authEnabled()` is true unless `AGROCER_AUTH` is exactly `"off"`. A
+security control that defaults to off is how the RLS gap happened (ADR-016) — misconfiguration
+should lock you out, which is loud and recoverable, not let the household through to anyone
+who can reach the port. The escape hatch warns on every request so it cannot be left on.
+
+**The middleware is a convenience, not the boundary.** It refreshes the session — necessary,
+because a wall tablet left open for weeks never navigates and would otherwise fall out of its
+session — and redirects signed-out visitors. But the boundary is `currentHouseholdId()`, which
+every route handler passes through, because middleware is trivially bypassed by calling the
+API directly and route handlers are not. API routes answer 401 rather than redirecting, so a
+`fetch` gets a status code instead of an HTML page it cannot parse.
+
+**`getUser()`, never `getSession()`.** `getSession()` returns whatever the cookie claims
+without verifying it, which on a server is worth nothing.
+
+**RLS policies now exist** (`drizzle/0003_household_rls_policies.sql`) granting `authenticated`
+its own household. They remain defence in depth, not the enforcement — the app still connects
+as `postgres` and bypasses them (ADR-016). They matter if a signed-in token ever reaches
+PostgREST directly.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

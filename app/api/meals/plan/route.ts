@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const plan = await serverRepositories().meals.getPlan();
+    const plan = await (await serverRepositories()).meals.getPlan();
     return NextResponse.json({ plan });
   } catch (error) {
     return failed(error);

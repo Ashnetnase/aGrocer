@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const body = await parseJson(request, postBodySchema);
     if (!body.ok) return body.response;
 
-    const answer = await askAssistant(body.data.question, serverRepositories());
+    const answer = await askAssistant(body.data.question, await serverRepositories());
 
     return NextResponse.json({
       reply: answer.reply,

@@ -29,7 +29,7 @@ export async function PATCH(request: Request, { params }: Context) {
     const body = await parseJson(request, patchBodySchema);
     if (!body.ok) return body.response;
 
-    const products = serverRepositories().products;
+    const products = (await serverRepositories()).products;
     const product =
       'toggleFavourite' in body.data
         ? await products.toggleFavourite(id)

@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const items = await serverRepositories().pantry.list();
+    const items = await (await serverRepositories()).pantry.list();
     return NextResponse.json({ items });
   } catch (error) {
     return failed(error);
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const body = await parseJson(request, pantryItemDraftSchema);
     if (!body.ok) return body.response;
 
-    const item = await serverRepositories().pantry.create(body.data);
+    const item = await (await serverRepositories()).pantry.create(body.data);
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     return failed(error);

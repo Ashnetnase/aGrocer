@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const body = await parseJson(request, householdMemberDraftSchema);
     if (!body.ok) return body.response;
 
-    const member = await serverRepositories().household.addMember(body.data);
+    const member = await (await serverRepositories()).household.addMember(body.data);
     return NextResponse.json({ member }, { status: 201 });
   } catch (error) {
     return failed(error);

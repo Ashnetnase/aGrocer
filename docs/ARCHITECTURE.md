@@ -97,21 +97,41 @@ component.
 
 Current, as of 2026-08-29 (ADR-016).
 
-**RLS is enabled on all seven tables, with no policies** — a deliberate deny-all. It does not
-affect the application: route handlers reach Postgres through Drizzle as `postgres`, which owns
-the tables and has `rolbypassrls`. RLS is the wall around the **publishable key**, which is
-public by design and which Supabase otherwise exposes every table to through PostgREST.
+**Authentication** is Supabase Auth, email and password, with the session in cookies via
+`@supabase/ssr` (ADR-017). A request becomes a household like this:
+
+```
+cookie → middleware.ts        refreshes the token every request (a wall tablet
+                              never navigates, so nothing else would)
+       → currentUser()        getUser(), which verifies — never getSession()
+       → household_members    the row whose user_id is that user
+       → household_id         what every repository is scoped to
+```
+
+`src/server/repositories.ts` is where that happens, and it is the only place. Handlers ask for
+repositories, never for an id. **The middleware is a convenience, not the boundary** — it
+redirects signed-out visitors, but it is bypassed by calling the API directly, so the boundary
+is `currentHouseholdId()`, which every handler goes through. API routes answer 401, never a
+redirect.
+
+Signing up grants nothing: an account with no member row gets 403. Linking is
+`npm run db:claim`, a deliberate act. Auth is enforced unless `AGROCER_AUTH="off"`, which
+fails closed by design.
+
+**RLS is enabled on all seven tables**, with policies granting `authenticated` its own
+household and `anon` nothing. It does not affect the application: route handlers reach Postgres
+as `postgres`, which owns the tables and has `rolbypassrls`. RLS is the wall around the
+**publishable key**, which is public by design and which Supabase otherwise exposes every table
+to through PostgREST.
 
 So enforcement lives in two places on purpose:
 
 | Concern | Enforced by |
 | ------- | ----------- |
-| One family's data stays separate | The application — `src/server/repositories.ts`, the single place a household id is resolved |
-| The public key reads and writes nothing | The database — RLS deny-all |
-
-Policies wait for authentication, because a policy needs a user to grant to and a schema that
-links users to households. Nothing in the repository imports `supabase-js`; it is not a
-dependency, so the key has no legitimate code path.
+| One family's data stays separate | The application — `src/server/repositories.ts` |
+| A request has a household at all | The application — 401/403 from every route handler |
+| The public key reads and writes nothing | The database — RLS, no grant to `anon` |
+| A signed-in token hitting PostgREST directly sees only its own household | The database — the `authenticated` policies |
 
 `npm run db:rls` verifies both halves: it reports the connecting role and per-table RLS state,
 then *tries* the publishable key against every table and fails if any read succeeds. It only

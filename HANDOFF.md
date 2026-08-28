@@ -17,9 +17,9 @@ and the read-only tools), taken 2026-08-28/29 at Ash's request to bring the AI i
 
 Stage 1 closed as a dev-complete milestone (ADR-012). Staging deployment moved into Stage 2.
 
-**RLS landed 2026-08-29** and the publishable-key exposure is closed (ADR-016). Stage 2's
-remaining blocker is **authentication**, which now needs a decision from Ash before it can be
-built — see NEXT TASK.
+**RLS and authentication both landed 2026-08-29** (ADR-016, ADR-017). Stage 2 has no blocker
+left; what remains in it is deployment, CI and a few data extras. **One step needs Ash, not
+another agent:** creating the first Supabase account and linking it — see NEXT TASK.
 
 Branch: `stage-2/database-schema`. Main branch: `main`.
 
@@ -27,6 +27,11 @@ Branch: `stage-2/database-schema`. Main branch: `main`.
 
 What actually runs today:
 
+- **Authentication is enforced** (ADR-017). Email and password via Supabase Auth, session in
+  cookies. Every route handler refuses without one (401), and an account not linked to a
+  household member is refused too (403). `/sign-in` is the screen; sign-out is on Settings.
+  **No account exists yet** — until Ash creates one and runs `npm run db:claim`, the app is
+  usable only with `AGROCER_AUTH=off`.
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
@@ -82,7 +87,9 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
 
-- **RLS:** enabled on all 7 tables, deny-all, since 2026-08-29 (ADR-016). No policies yet.
+- **RLS:** enabled on all 7 tables since 2026-08-29 (ADR-016), with `authenticated` policies
+  added alongside auth (ADR-017). `anon` is granted nothing.
+- **Authentication:** enforced (ADR-017). No account created yet — that step is Ash's.
 - **Kids/School module:** not started. No child profiles, activities or school data exist. The
   Kids card reads `household_members` where `role = 'Child'`.
 - **Hero integration:** not started. No Hero credentials, tokens or endpoints exist anywhere in
@@ -121,6 +128,9 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
 - **RLS on all 7 tables** (migration `0001_exotic_the_liberteens.sql`, ADR-016), generated
   from `.enableRLS()` in `src/db/schema.ts`. Plus `npm run db:rls`, which verifies the state
   *and* probes the publishable key against every table.
+- **Supabase Auth** (ADR-017): `src/auth/` (config, server and browser clients),
+  `middleware.ts`, `/sign-in`, sign-out on Settings, `household_members.user_id` (migration
+  `0002`), `authenticated` RLS policies (migration `0003`), and `npm run db:claim`.
 - Local Ollama connectivity check (`scripts/ollama-check.ts`).
 - **AI slice 8a** — `AiProvider` abstraction, `OllamaProvider`, `getAiProvider()`,
   `/api/ai/chat` (health + chat), 12 unit tests, and `npm run ai:chat` for the end-to-end
@@ -187,6 +197,19 @@ Recent and important:
   nothing else.
 - `scripts/rls-check.ts` + `npm run db:rls` — the verification. Checking `pg_class` alone is
   the weaker test, so it also tries the key the way an attacker would.
+- `src/server/repositories.ts` — **rewritten for auth.** Still the single place a request
+  becomes a household; now it resolves it from the session. `serverRepositories()` is async,
+  which is why all fifteen route handlers now await it.
+- `src/server/http.ts` — `failed()` maps `AuthError` to 401 (not signed in) or 403 (signed in,
+  no household), so no handler has to remember to.
+- `src/auth/config.ts` — `authEnabled()` is **true unless `AGROCER_AUTH="off"`**. The direction
+  is the point: a security control that defaults to off is how the RLS gap happened.
+- `src/auth/server.ts` — `getUser()`, never `getSession()`; the latter trusts the cookie.
+- `middleware.ts` — refreshes the session and redirects. **Not the security boundary.** Its
+  matcher deliberately excludes `sw.js` and `manifest.webmanifest`, or the PWA breaks.
+- `src/features/auth/` — `SignInScreen`, `SignOutButton`, and `describeSignInError`, whose
+  tests pin that a wrong password and an unknown email read identically.
+- `scripts/claim.ts` + `npm run db:claim` — links an account to a member. Never creates one.
 - `src/features/ask/askAshHome.ts` — `askAshHome()`, `describeAskFailure()` and
   `describeToolsUsed()`. The system prompt used to live here; 9a moved it server-side to
   `src/ai/assistant.ts`, because a prompt that names tools has to live where the tools do.
@@ -233,6 +256,9 @@ Full list with rationale lives in `AGROCER_MASTER_PLAN.md` (ADR section). Must-p
 - **ADR-014** — AI reaches AshHome only through a server-side provider abstraction. Features
   depend on `AiProvider`, never on Ollama; the implementation is chosen in one place; nothing
   under `src/ai/` may be imported by a client component.
+- **ADR-017** — Supabase Auth; the household comes from `household_members.user_id`; signing
+  up grants nothing; auth fails closed; the middleware is a convenience and
+  `currentHouseholdId()` is the boundary.
 - **ADR-015** — the AI reaches household data only through a fixed, read-only tool allow-list.
   Exact-name lookup, zero-argument tools, repositories from `serverRepositories()`, and read
   tools separated from write tools by construction rather than convention.
@@ -343,6 +369,25 @@ Added 2026-08-29 for RLS (ADR-016), all passing:
   the AI assistant still called `getShoppingList` and saw the real row. Test row removed; the
   shopping table is back to empty.
 - `npm run check` — 165 tests, unchanged. `npm run db:migrate` applied `0001` cleanly.
+
+Added 2026-08-29 for authentication (ADR-017), all passing:
+
+- **Unauthenticated requests are refused.** `/api/shopping`, `/api/pantry`, `/api/meals`,
+  `/api/products`, `/api/household` all 401; a `POST` write 401; `POST /api/ai/ask` 401, so the
+  assistant and its tools are behind auth too.
+- `/` and `/dashboard` redirect to `/sign-in?next=…`. `/sign-in`, `/sw.js` and
+  `/manifest.webmanifest` stay 200 signed out — the last two matter for the PWA (ADR-011).
+- The sign-in screen renders in the Magic Patterns language; a wrong password shows "That email
+  and password do not match.", clears the password and keeps the email.
+- `AGROCER_AUTH=off`: API back to 200, pages stop redirecting, and a warning is logged per
+  request.
+- `npm run db:claim` lists the five members; it refuses an unknown email and an unknown member
+  name with usable messages.
+- `npm run check` — 169 tests across 13 files. `npm run test:db` — 6 integration tests still
+  pass. `npm run build` clean. `npm run db:rls` — RLS on, 1 policy per table, `anon` reads
+  nothing.
+- **Not verified: a successful sign-in.** That needs an account, and this agent does not create
+  accounts. See NEXT TASK.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -373,9 +418,14 @@ throwaway household and delete it, and the foreign keys cascade.
   bypasses RLS, a bug in `src/server/repositories.ts` would not be caught by Postgres. Accepted
   for now; the alternative (running queries as the authenticated user) is worth weighing when
   auth lands.
-- **No route handler is authenticated.** Anyone who can reach the app can read and write the
-  household through `/api/*`. On the home LAN behind Tailscale that is a smaller problem than
-  the public key was, but it is the thing authentication has to fix.
+- ~~No route handler is authenticated.~~ **Closed 2026-08-29** (ADR-017). Verified: every
+  route, including `/api/ai/ask`, answers 401 with no session.
+- **A session that expires with a screen open shows a generic failure**, not a redirect to
+  sign-in. The client repositories treat 401 like any other error. The middleware refreshes on
+  navigation, so this needs a stale tab and an expired refresh token — which is exactly what a
+  wall tablet is. Worth a client-side 401 handler.
+- **`AGROCER_AUTH="off"` disables all of it.** It warns on every request, and exists for local
+  work and the integration tests. Never set it where the app is reachable.
 - `.env.example` had been renamed rather than copied when `.env.local` was created, so it was
   briefly missing from the repository. Restored, and updated to the newer Supabase key names
   (`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`).
@@ -401,35 +451,37 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-**Authentication (Supabase Auth).** It is the last thing standing between Stage 2 and done, and
-the AI ladder's next rung (slice 9b, the first write tool) waits behind it.
+**Ash does this first — it cannot be done by an agent.** Authentication is built and enforced,
+but no account exists, so the app currently only opens with `AGROCER_AUTH=off`:
 
-RLS already landed on 2026-08-29, so the picture has changed since earlier entries said these
-had to ship together. What is left is genuinely the auth half:
+1. Supabase dashboard → Authentication → Users → **Add user**, with your email and a password.
+2. `npm run db:claim -- you@example.com "Ash"` (run it bare first to list the five members).
+3. `npm run dev`, open `/sign-in`, and sign in.
 
-1. **Sign-in**, in the Magic Patterns visual language. Do not redesign the app around it.
-2. **Replace `AGROCER_HOUSEHOLD_ID`.** `src/server/repositories.ts` is the single place a
-   household id is resolved, and it was built to be exactly this seam. Handlers ask for
-   repositories, never for an id — keep it that way.
-3. **Protect the route handlers.** None of them check anything today. This is the real
-   remaining exposure now that the public key is walled off.
-4. **Claim the existing household.** `npm run db:seed` creates one with no owner. Decide how
-   the first real user takes ownership of it.
-5. **RLS policies** granting the `authenticated` role its own household. Note these are
-   *defence in depth*, not the enforcement — the app bypasses RLS as `postgres` (ADR-016). Now
-   is the moment to decide whether to keep it that way or run queries as the authenticated
-   user with `set local role`.
+Until step 2 that account gets 403 from every route. That is the design working, not a bug:
+signing up must not grant access to a household by itself.
 
-**Ask Ash this before building the sign-in flow**, because it changes the design rather than
-the code style: *how should the kitchen wall tablet stay signed in?* It is a permanently
-logged-in shared screen in a family room, which is the opposite of what a normal session
-policy assumes. The plausible answers — a long-lived device session for a trusted device, a
-shared household account for the wall with personal accounts on phones, or a PIN on the tablet
-— lead to materially different work, and `CLAUDE.md`'s device-architecture section
-(kitchen tablet / personal phone / admin PC) is the context for it.
+**Then, the next build task — pick one:**
+
+**(a) Client-side 401 handling.** The one rough edge auth left. A session that expires with a
+screen open surfaces a generic failure instead of sending the user to sign in. The wall tablet
+is exactly the device this bites. `src/data/api/client.ts` is where a 401 should become a
+redirect to `/sign-in?next=…` rather than a thrown error.
+
+**(b) AI slice 9b — the first write tool.** Now unblocked: `addShoppingItem` behind a
+confirmation gate, per `CLAUDE.md`'s rule that sensitive actions need confirmation. Note this
+is the first tool that changes data, so `READ_ONLY_TOOLS` gains a sibling rather than a member
+(ADR-015 — the separation is by construction, not convention). The card's footnote and system
+prompt both currently promise the assistant cannot change anything; they change with it.
+
+**(c) Finish Stage 2's remainder:** CI checks, Docker Compose deployment, the staging VM, and
+the HTTPS decision that still blocks PWA install (`docs/staging.md`; Tailscale recommended).
+
+My recommendation is (a) then (b): (a) is small and stops auth having made the tablet worse in
+one specific way, and (b) is the thing the AI ladder has been building toward.
 
 Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
-no optimistic UI. Both are more noticeable now that all five features cross the network.
+no optimistic UI.
 
 Two costs still deliberately unpaid:
 
@@ -448,6 +500,11 @@ Two costs still deliberately unpaid:
   ships a different default component.
 - The hand-written service worker (ADR-011).
 - `legacy/` — the original Vite implementation, kept for reference.
+- **`authEnabled()` returns true unless `AGROCER_AUTH === "off"`.** Do not flip that to an
+  opt-in flag. Failing closed is the whole point (ADR-017).
+- **`middleware.ts` must stay in the project root**, and its matcher must keep excluding
+  `sw.js` and `manifest.webmanifest`, or the service worker cannot register (ADR-011).
+- **`getUser()`, not `getSession()`**, anywhere a server decides who is asking.
 - **RLS stays enabled on all seven tables.** Deny-all is the intended state until auth brings a
   user to grant to (ADR-016). Do not disable it to "fix" a query — the app bypasses RLS
   already, so an RLS error means something is connecting as the wrong role, which is the bug.

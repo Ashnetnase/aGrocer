@@ -20,7 +20,7 @@ export async function PUT(request: Request, { params }: Context) {
     const body = await parseJson(request, householdMemberDraftSchema);
     if (!body.ok) return body.response;
 
-    const member = await serverRepositories().household.updateMember(id, body.data);
+    const member = await (await serverRepositories()).household.updateMember(id, body.data);
     return member ? NextResponse.json({ member }) : notFound('Member');
   } catch (error) {
     return failed(error);
@@ -30,7 +30,7 @@ export async function PUT(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   try {
     const { id } = await params;
-    await serverRepositories().household.removeMember(id);
+    await (await serverRepositories()).household.removeMember(id);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return failed(error);

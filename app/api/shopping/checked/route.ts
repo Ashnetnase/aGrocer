@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export async function DELETE() {
   try {
-    await serverRepositories().shopping.clearChecked();
+    await (await serverRepositories()).shopping.clearChecked();
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return failed(error);

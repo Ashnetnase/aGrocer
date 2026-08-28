@@ -19,7 +19,7 @@ const settingsPatchSchema = settingsSchema
 
 export async function GET() {
   try {
-    const household = await serverRepositories().household.get();
+    const household = await (await serverRepositories()).household.get();
     return NextResponse.json({ household });
   } catch (error) {
     return failed(error);
@@ -31,7 +31,7 @@ export async function PATCH(request: Request) {
     const body = await parseJson(request, settingsPatchSchema);
     if (!body.ok) return body.response;
 
-    const settings = await serverRepositories().household.updateSettings(body.data);
+    const settings = await (await serverRepositories()).household.updateSettings(body.data);
     return NextResponse.json({ settings });
   } catch (error) {
     return failed(error);

@@ -29,7 +29,7 @@ export async function PATCH(request: Request, { params }: Context) {
     const body = await parseJson(request, patchBodySchema);
     if (!body.ok) return body.response;
 
-    const shopping = serverRepositories().shopping;
+    const shopping = (await serverRepositories()).shopping;
     const item =
       'toggle' in body.data
         ? await shopping.toggle(id)
@@ -44,7 +44,7 @@ export async function PATCH(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   try {
     const { id } = await params;
-    await serverRepositories().shopping.remove(id);
+    await (await serverRepositories()).shopping.remove(id);
     // Remove is idempotent in the contract, so a missing id is still a success.
     return new NextResponse(null, { status: 204 });
   } catch (error) {
