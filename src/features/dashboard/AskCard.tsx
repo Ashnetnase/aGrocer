@@ -2,38 +2,41 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SendHorizonalIcon, SparklesIcon } from 'lucide-react';
-import { askAshHome, type AskFailure } from '@/features/ask/askAshHome';
+import { askAshHome, describeToolsUsed, type AskFailure } from '@/features/ask/askAshHome';
 import { cn } from '@/lib/utils';
 import { DashboardCard } from './DashboardCard';
 
 /**
- * "Ask AshHome" on the wall dashboard (Phase 8, slice 8b).
+ * "Ask AshHome" on the wall dashboard (Phase 9, slice 9a).
  *
- * Real now: the question goes to `/api/ai/chat`, which reaches the local Ollama on the home
- * PC. Still limited: the model has no tools, so it cannot see the shopping list, pantry, meal
- * plan or calendar, and it cannot change anything. The prompt tells it to say so, and the
- * footnote tells the family the same thing — an assistant on a kitchen wall that appears to
- * know what is in the freezer, and is guessing, is worse than no assistant.
+ * The question goes to `/api/ai/ask`, which runs the local Ollama with the read-only tool
+ * allow-list. The assistant can now look up the shopping list, the pantry and the meal plan,
+ * so the examples below are the ones from the master plan that this slice makes true.
+ *
+ * Still limited, and the footnote still says so: it cannot change anything, and it cannot see
+ * the calendar, chores, reminders or school information, because none of that exists as data
+ * yet. An assistant on a kitchen wall that appears to know something and is guessing is worse
+ * than one that admits it cannot look.
+ *
+ * When an answer came from a tool, the card says which — "Checked your pantry". A family
+ * should be able to tell at a glance whether they are reading their own data or the model's
+ * general knowledge.
  *
  * Deliberately no conversation history. Each question stands alone: a shared tablet in a
  * family room should not accumulate a transcript nobody chose to keep, and the application,
  * not the model, owns anything worth remembering.
- *
- * The examples are the ones this slice can honestly answer. The list-and-calendar examples
- * from the master plan arrive with the Phase 9 tools, and putting them here now would invite
- * exactly the question the model has to refuse.
  */
 
 const EXAMPLES = [
-  'What can I make with mince and rice?',
-  'How long do I roast a whole chicken?',
-  'Quick dinner for five, under half an hour?',
+  'What are we having for dinner?',
+  'What is still on the shopping list?',
+  'What can I make with what we have?',
 ];
 
 type State =
   | { status: 'idle' }
   | { status: 'asking'; question: string }
-  | { status: 'answered'; question: string; reply: string }
+  | { status: 'answered'; question: string; reply: string; toolsUsed: string[] }
   | { status: 'failed'; question: string; failure: AskFailure };
 
 export function AskCard({ className }: { className?: string }) {
@@ -61,7 +64,12 @@ export function AskCard({ className }: { className?: string }) {
     setState({ status: 'asking', question: trimmed });
     try {
       const answer = await askAshHome(trimmed, controller.signal);
-      setState({ status: 'answered', question: trimmed, reply: answer.reply });
+      setState({
+        status: 'answered',
+        question: trimmed,
+        reply: answer.reply,
+        toolsUsed: answer.toolsUsed,
+      });
       setQuestion('');
     } catch (error) {
       // An abort means a newer question replaced this one, or the card went away.
@@ -77,7 +85,7 @@ export function AskCard({ className }: { className?: string }) {
       className={className}
       title="Ask AshHome"
       meta={busy ? 'Thinking…' : undefined}
-      note="Answers general questions. It cannot see your list, pantry or calendar yet, and cannot change anything — that arrives with Phase 9."
+      note="Can read your shopping list, pantry and meal plan. It cannot change anything, and cannot see the calendar, chores or school yet."
     >
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div ref={answerRef} className="min-h-0 flex-1 overflow-y-auto">
@@ -97,7 +105,19 @@ export function AskCard({ className }: { className?: string }) {
             </ul>
           ) : (
             <div>
-              <p className="text-sm font-bold text-muted">{state.question}</p>
+              {/*
+                The question and what was consulted share a row. Putting the provenance under
+                a 60-word answer buried it below the fold on a short card — and a line saying
+                "this came from your pantry" is worthless if you have to scroll to find it.
+              */}
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="truncate text-sm font-bold text-muted">{state.question}</p>
+                {state.status === 'answered' && describeToolsUsed(state.toolsUsed) ? (
+                  <p className="shrink-0 text-sm font-semibold text-moss-700">
+                    {describeToolsUsed(state.toolsUsed)}
+                  </p>
+                ) : null}
+              </div>
 
               {state.status === 'asking' ? (
                 <p className="mt-2 flex items-center gap-2 text-lg text-muted">

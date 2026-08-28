@@ -12,8 +12,8 @@ Agent instructions: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex and others).
 ## Current Stage
 
 **Stage 2 — Real backend and household data** (IN PROGRESS, started 2026-08-23), plus the
-first two slices of **Stage 3 / AshHome Phase 8** (the AI service and the "Ask AshHome" card),
-taken 2026-08-28 at Ash's request to bring the AI in "in stages".
+first three slices of **Stage 3 / AshHome Phases 8–9** (the AI service, the "Ask AshHome" card
+and the read-only tools), taken 2026-08-28/29 at Ash's request to bring the AI in "in stages".
 
 Stage 1 closed as a dev-complete milestone (ADR-012). Staging deployment moved into Stage 2.
 
@@ -35,11 +35,15 @@ What actually runs today:
   (`src/ai/provider.ts`), implemented for Ollama (`src/ai/ollamaProvider.ts`).
   **It has no tools, injects no system prompt and persists nothing** — the model cannot read
   or write a single row of household data. That is Phase 9.
-- **"Ask AshHome" on the wall dashboard is real** (slice 8b). Type a question, get an answer
-  from the local qwen3:8b. Because there are still no tools, the system prompt
-  (`src/features/ask/askAshHome.ts`) tells the model to say plainly that it cannot see the
-  family's data rather than guess, and the card repeats the limit in a footnote. Verified
-  live: asked to list and add to the shopping list, it refuses and points at the app.
+- **"Ask AshHome" on the wall dashboard is real, and reads real household data** (slices 8b
+  and 9a). `POST /api/ai/ask` runs the local qwen3:8b with three read-only tools —
+  `getShoppingList`, `getPantry`, `getMealPlan` — behind an explicit allow-list (ADR-015). The
+  card labels which data an answer came from ("Checked your pantry").
+  It still **cannot change anything**, and cannot see the calendar, chores, reminders or
+  school information. The system prompt (`src/ai/assistant.ts`) tells it to answer only from
+  what a tool returned and never to invent; the card repeats the limits in a footnote.
+  Verified against the real database: sixteen pantry rows returned correctly grouped, an
+  empty shopping list reported as empty, a request to add items declined.
 - Two AI scripts, easy to confuse: `npm run ai:check` talks straight to Ollama (the original
   connectivity spike); `npm run ai:chat` goes through `/api/ai/chat` and proves the whole
   path, so it needs `npm run dev` running.
@@ -72,7 +76,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
 | Tonight's meal    | **Real** — the weekly plan, with image, time and serves.           |
 | Chores            | **Mock** — one example row. Needs Phase 12.                        |
-| Ask AshHome       | **Real** — asks the local Ollama. No tools, so it cannot see any of the above. |
+| Ask AshHome       | **Real** — reads the shopping list, pantry and meal plan. Cannot write. |
 
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
@@ -116,9 +120,13 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
 - **AI slice 8a** — `AiProvider` abstraction, `OllamaProvider`, `getAiProvider()`,
   `/api/ai/chat` (health + chat), 12 unit tests, and `npm run ai:chat` for the end-to-end
   check. Verified against real Ollama and against a dead port. ADR-014 records the shape.
-- **AI slice 8b** — the "Ask AshHome" card: `src/features/ask/askAshHome.ts` (system prompt,
-  failure wording) with 12 tests, and `src/features/dashboard/AskCard.tsx`. Verified in Chrome
-  at a 1280×800 kiosk viewport, including the offline path.
+- **AI slice 8b** — the "Ask AshHome" card: `src/features/ask/askAshHome.ts` and
+  `src/features/dashboard/AskCard.tsx`. Verified in Chrome at a 1280×800 kiosk viewport,
+  including the offline path.
+- **AI slice 9a** — read-only tools: `src/ai/tools/registry.ts` (the allow-list boundary),
+  `src/ai/tools/readOnly.ts` (the three tools), `src/ai/assistant.ts` (the loop) and
+  `app/api/ai/ask`. Verified against the real Supabase data, not fixtures. ADR-015 records
+  the shape and what was rejected.
 - Phase 1 wall dashboard: `/dashboard` with all seven cards reserved, its own kiosk layout,
   and shopping and tonight's meal already on real data.
 - Phase 0 documentation baseline: this file, `TASKS.md`, `docs/ARCHITECTURE.md`, and the
@@ -168,12 +176,21 @@ Recent and important:
 - `app/api/ai/chat/route.ts` — the AI edge. Bounded at 20 messages of 4,000 characters.
 - `scripts/ai-chat.ts` + `npm run ai:chat` — end-to-end check over the route.
 - `.env.example` — adds `AI_PROVIDER`; notes the Ollama variables are server-only.
-- `src/features/ask/askAshHome.ts` — `ASK_SYSTEM_PROMPT`, `askAshHome()` and
-  `describeAskFailure()`. **The prompt is where the model is told it cannot see the household
-  data and must not guess.** Revisit it when Phase 9 tools land, not before.
-- `src/features/ask/askAshHome.test.ts` — 12 tests: the prompt's guarantees, that no
-  conversation history is sent, and that every failure arrives as a readable sentence with no
-  status code or address in it.
+- `src/features/ask/askAshHome.ts` — `askAshHome()`, `describeAskFailure()` and
+  `describeToolsUsed()`. The system prompt used to live here; 9a moved it server-side to
+  `src/ai/assistant.ts`, because a prompt that names tools has to live where the tools do.
+- `src/features/ask/askAshHome.test.ts` — that no conversation history is sent, and that every
+  failure arrives as a readable sentence with no status code or address in it.
+- `src/ai/tools/registry.ts` — **the security boundary.** Exact-name lookup against a fixed
+  record; there is no dynamic dispatch onto the repositories. A refused tool is returned to
+  the model as a tool result, not thrown, so it explains the limit itself.
+- `src/ai/tools/readOnly.ts` — the three tools and the `READ_ONLY_TOOLS` allow-list. Adding
+  anything here grants the model access to it. They return prose, not JSON, and withhold ids
+  and per-item prices.
+- `src/ai/assistant.ts` — `ASSISTANT_SYSTEM_PROMPT` and the loop. Caps at 3 tool rounds and
+  withholds the tools on the last one, which is what forces an answer.
+- `app/api/ai/ask/route.ts` — the assistant route, and the only path by which a model reaches
+  household data. `/api/ai/chat` stays a transport with no prompt, no tools and no data.
 - `src/features/dashboard/AskCard.tsx` — the card. Moved out of `PlaceholderCards.tsx`, which
   is where it lived while it was one.
 - `src/features/dashboard/DashboardCard.tsx` — gained a `note` prop, for a card that is real
@@ -205,8 +222,11 @@ Full list with rationale lives in `AGROCER_MASTER_PLAN.md` (ADR section). Must-p
 - **ADR-014** — AI reaches AshHome only through a server-side provider abstraction. Features
   depend on `AiProvider`, never on Ollama; the implementation is chosen in one place; nothing
   under `src/ai/` may be imported by a client component.
-- The system prompt belongs to the **calling feature**, not to `/api/ai/chat`. The route stays
-  a transport so each caller owns its own framing.
+- **ADR-015** — the AI reaches household data only through a fixed, read-only tool allow-list.
+  Exact-name lookup, zero-argument tools, repositories from `serverRepositories()`, and read
+  tools separated from write tools by construction rather than convention.
+- `/api/ai/chat` stays a transport with no prompt, no tools and no data. The assistant lives at
+  `/api/ai/ask`, so there is exactly one path to household data with a model attached.
 
 Also binding, from `CLAUDE.md`: AshHome serves mobile, standard app and wall dashboard
 (`/dashboard`) from **one** application — never a separate tablet app. The application, not the
@@ -283,7 +303,23 @@ Added 2026-08-28 for the "Ask AshHome" card (slice 8b), all passing:
   runs on the home PC — check that is on." and a Try again button.
 - **Not verified:** the Ask card at a phone-width viewport. The browser tooling would not resize
   below desktop width this session. Low risk — a wrapping example list above a flex row — but
-  unchecked.
+  unchecked. Still unchecked after 9a.
+
+Added 2026-08-29 for the read-only tools (slice 9a), all passing:
+
+- `npm run check` — 165 tests across 12 files (was 136/10).
+- `npm run build` — clean. `/api/ai/ask` is dynamic; `/dashboard` is 4.83 kB.
+- **Against the real Supabase data, not fixtures.** "What is in our pantry?" called `getPantry`
+  and returned all sixteen rows correctly grouped — eight `good`, six `low`/`soon`, two `out` —
+  matching the table exactly, with nothing invented. "What can I cook tonight?" called
+  `getPantry` and `getMealPlan` and suggested only things actually in stock.
+- Honest empty cases: an empty shopping list is reported as empty, and an empty week as nothing
+  planned. Neither is filled in.
+- Refusals: asked to add bread and milk it declined and pointed at the app; asked about the
+  kids' plans tomorrow it said it cannot see the calendar. Both without calling a tool.
+- Latency 0.2–1.3s per question on the RTX 5070.
+- Chrome at 1280×800: the card answered from the pantry and showed "Checked your pantry" beside
+  the question. No console errors, no hydration warnings.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -335,41 +371,39 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Ash asked on 2026-08-28 to bring the AI in "in stages". Slices 8a and 8b are done and verified.
-The agreed ladder, so a later session does not have to re-derive it:
+Ash asked on 2026-08-28 to bring the AI in "in stages". Slices 8a, 8b and 9a are done and
+verified. The agreed ladder:
 
 | Slice | Scope | Status |
 | ----- | ----- | ------ |
 | 8a | provider abstraction + `/api/ai/chat`, no tools, no writes | **done** |
 | 8b | "Ask AshHome" card is a real input, text answers only | **done** |
-| 9a | read-only tools: `getShoppingList`, `getPantry`, `getMealPlan` | next |
+| 9a | read-only tools: `getShoppingList`, `getPantry`, `getMealPlan` | **done** |
 | 9b | first write tool `addShoppingItem`, behind a confirmation gate | **needs Auth + RLS first** |
 | 10 | pantry-aware meal planning | after 9b |
 
-**Ask Ash which of these two to do next — do not assume:**
+**Do authentication and RLS next.** This is no longer a choice between two reasonable options
+the way it was at 8b. The ladder's next rung is a write tool, and a write tool on an
+unauthenticated route, against tables with RLS disabled, on a permanently logged-in kitchen
+tablet, is the wrong order to build things in. Everything cheap and safe to do before auth has
+now been done.
 
-**(a) Slice 9a — read-only AI tools.** This is what makes the assistant actually useful: it
-could answer "what is on the list?" and "what is for dinner?" from real Postgres data instead
-of refusing. Shape it as `CLAUDE.md` requires — an explicit allow-list of application
-functions, never system access — as a tool-calling loop in `src/ai/`, with the tool
-implementations reading through `serverRepositories()` so they are scoped to the household the
-same way every route handler is. Read-only, so it is safe before auth. When it lands, revisit
-`ASK_SYSTEM_PROMPT` and the card's footnote and example chips: all three currently promise the
-assistant *cannot* see the data, and all three become wrong on the same day.
+So: **Supabase Auth, then RLS policies on all seven tables**, in that order and ideally in one
+pass — enabling RLS without policies blocks every query, so they belong together. A tablet on
+the kitchen wall is a permanently logged-in screen in a shared room, so device identity and
+session length are part of the design, not an afterthought.
 
-**(b) Authentication with Supabase Auth, then RLS policies on all seven tables** — the
-long-standing Stage 2 blocker, unchanged by the AI work. In that order and ideally one pass:
-enabling RLS without policies blocks every query, so they belong together. This must land
-before any real family data is entered, and the wall dashboard makes it more urgent, not less
-— a tablet on the kitchen wall is a permanently logged-in screen in a shared room, so device
-identity and session length are part of the design.
-
-Two things (b) should absorb rather than defer:
+Two things it should absorb rather than defer:
 
 - `src/server/repositories.ts` reads `AGROCER_HOUSEHOLD_ID` from the environment. That is the
   single place a real session should replace, and it was built to be exactly that.
 - The seed script creates a household with no owner. Auth needs to decide how an existing
   household gets claimed by its first real user.
+
+**If Ash would rather keep going on the AI**, the honest options that do not need auth are:
+more *read* tools where they earn their keep (household preferences, meal history, a budget
+summary once budgeting exists), or Phase 10's pantry-aware meal planning built as a read-only
+suggestion the family then applies by hand. Neither is as valuable as closing the RLS gap.
 
 Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
 no optimistic UI. Both are more noticeable now that all five features cross the network.
@@ -393,16 +427,21 @@ Two costs still deliberately unpaid:
 - `legacy/` — the original Vite implementation, kept for reference.
 - `src/ai/types.ts` — the `AiProvider` contract (ADR-014). A second provider satisfies it; it
   does not get changed to suit one model.
-- **`/api/ai/chat` has no tools and injects no system prompt, on purpose.** Tools are Phase 9
-  and arrive as an explicit allow-list of application functions. Do not let the model reach
-  household data by adding a convenience here.
-- **The three places that promise the assistant cannot see the family's data** —
-  `ASK_SYSTEM_PROMPT`, the Ask card's `note`, and its example chips. They are consistent on
-  purpose. Change all three together when Phase 9 tools make them wrong, and never leave one
-  claiming access the model does not have.
+- **`/api/ai/chat` has no tools and injects no system prompt, on purpose.** The assistant lives
+  at `/api/ai/ask`. Keeping them apart is what makes "one path to household data with a model
+  attached" a checkable statement. Do not add tools or a prompt to the transport route.
+- **`READ_ONLY_TOOLS` contains only read tools.** A write tool is slice 9b, needs Auth + RLS
+  and a confirmation gate, and does not join that record. The separation is by construction,
+  not by convention — keep it that way.
+- **The registry's exact-name lookup.** Do not replace it with anything that maps model output
+  onto a repository method, however convenient. See ADR-015 for what was rejected and why.
+- **The three places that describe what the assistant can and cannot do** —
+  `ASSISTANT_SYSTEM_PROMPT`, the Ask card's `note`, and its example chips. They are consistent
+  on purpose, and they were all rewritten together when 9a changed what was true. Change all
+  three together, and never leave one claiming access the model does not have.
 - **Ollama stays bound to `127.0.0.1`.** Ash's standing instruction. Reaching it from the
   staging VM is a tunnel or an authenticated proxy, never `OLLAMA_HOST=0.0.0.0`.
 
 ## Last Updated
 
-2026-08-28
+2026-08-29

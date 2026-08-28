@@ -387,9 +387,10 @@ No supermarket automation or autonomous AI agents unless the stage is explicitly
 
 ## Stage 3 — AI meal and grocery assistant
 
-**STATUS: IN PROGRESS** — slices 8a and 8b landed 2026-08-28 (the provider abstraction, the
-AI service route, and the wall dashboard's "Ask AshHome" card). Deliberately sliced: see the
-progress log entries for the ladder and where it stops before Auth/RLS.
+**STATUS: IN PROGRESS** — slices 8a, 8b and 9a landed 2026-08-28/29 (the provider abstraction,
+the AI service route, the wall dashboard's "Ask AshHome" card, and the read-only tool system).
+Deliberately sliced: see the progress log entries for the ladder. The next rung, 9b's first
+write tool, is gated on Auth + RLS.
 
 ### Goal
 
@@ -401,13 +402,15 @@ Add a controlled AI assistant that uses tools over Agrocer's structured data.
 - [ ] cloud AI fallback — the seam exists (`AI_PROVIDER`), no implementation
 - [x] optional local AI when RTX desktop is on — `src/ai/ollamaProvider.ts`, `/api/ai/chat`
 - [x] a family-facing entry point — "Ask AshHome" on the wall dashboard (slice 8b)
-- [ ] tool calling
-- [ ] get pantry
+- [x] tool calling — an orchestrator with an explicit allow-list (slice 9a)
+- [x] get pantry — `getPantry`
+- [x] get the shopping list — `getShoppingList`
+- [x] get the meal plan — `getMealPlan`
 - [ ] get household preferences
 - [ ] get meal history
 - [ ] get recipes
 - [ ] get budget
-- [ ] build/update shopping list
+- [ ] build/update shopping list — **slice 9b, and it needs Auth + RLS first**
 - [ ] meal suggestions
 - [ ] weekly plan suggestions
 - [ ] family feedback learning
@@ -608,6 +611,69 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Read-only AI tools: the assistant can see the household data (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 9, slice 9a
+**Status:** Complete and verified; slice 9b (the first write tool) not started, and gated
+
+Third rung of the ladder. The assistant that had to refuse every question about the family's
+own data can now answer three of them from Postgres.
+
+**Shape, and why.** `CLAUDE.md` requires that the LLM never get unrestricted access and act
+only through explicitly defined application functions. So:
+
+- `src/ai/tools/registry.ts` is the boundary. Lookup is by exact name against a fixed record —
+  no dynamic dispatch, nothing that maps a model-supplied string onto a repository method. A
+  name that is not in the record is refused.
+- `src/ai/tools/readOnly.ts` holds the three tools and the `READ_ONLY_TOOLS` allow-list.
+- `src/ai/assistant.ts` is the loop: one orchestrator with tools, which is the architecture
+  principle this stage already committed to, not a swarm of agents.
+- `app/api/ai/ask` is the only route that reaches household data with a model attached.
+  `/api/ai/chat` stays what it was: a transport with no prompt, no tools and no data.
+
+**Three decisions that carry most of the safety.**
+
+1. **Every tool takes no arguments.** Nothing the model emits can widen what a tool reads, so
+   there is nothing to validate beyond the name. When a tool eventually needs arguments it
+   validates them with Zod in the registry before the implementation sees them.
+2. **Tools return prose, not JSON.** Fewer tokens, and a small local model reads it more
+   reliably — it does not have to infer that `checked: true` means already in the trolley.
+   Ids, per-item prices and notes are withheld: the model is answering a question, not
+   reconstructing the database, and every field handed over is a field it can garble.
+3. **A refusal goes back to the model as an ordinary tool result, not an exception.** The
+   model then explains the limit to the family in its own words instead of the whole question
+   failing with an error card. It is still logged.
+
+The loop caps at three tool rounds and withholds the tools on the final round, which is what
+forces an answer — a model still offered tools it cannot use will keep asking for them.
+Temperature is 0.2: these are household facts, not creative writing.
+
+**Verified against the real database**, not fixtures. Asked "what is in our pantry?", the
+assistant called `getPantry` and returned all sixteen rows correctly grouped — the eight
+`good` items, the six `low`/`soon` items and the two `out` items matched the table exactly,
+with nothing invented. "What can I cook tonight?" called `getPantry` and `getMealPlan` and
+suggested only things actually in stock. The empty cases are honest too: an empty shopping
+list is reported as empty rather than filled in. Asked to add bread and milk, it declined and
+pointed at the app. Asked about the kids' plans tomorrow, it said it cannot see the calendar.
+Answers took 0.2–1.3s.
+
+**The card changed with it.** The example chips are now the master-plan questions that 9a
+makes true, and the footnote says what is true today: it can read the list, pantry and meal
+plan; it cannot change anything, and cannot see the calendar, chores or school. An answer that
+came from a tool is labelled — "Checked your pantry" — so a family can tell their own data
+from the model's general knowledge at a glance. That label was first placed under the answer
+and moved to sit beside the question: under a 60-word answer on a short card it fell below the
+fold, and a provenance line you have to scroll to find is not one.
+
+**Where the honesty rules moved.** Slice 8b kept the system prompt on the client. It now names
+tools that only exist server-side, so it moved to `src/ai/assistant.ts` — a prompt that
+describes tools has to live where the tools do, or the two drift apart.
+
+**Verified.** `npm run check` — 165 tests across 12 files (was 136/10). The new ones cover the
+allow-list refusing an unknown tool, a failing tool not leaking its connection string, each
+tool's output including its empty case, a planned meal that no longer exists being dropped
+rather than named, and the loop's round cap. `npm run build` clean.
 
 ## 2026-08-28 — "Ask AshHome" becomes a real input on the wall dashboard (Claude Code)
 
@@ -1583,6 +1649,41 @@ implementation is chosen in exactly one place.
 The alternative — calling Ollama directly from a feature, or from the browser — was rejected
 on both counts: it would bind AshHome to one model, and it would publish a private network
 address to every device on the wall.
+
+
+## ADR-015 — The AI reaches household data only through a fixed, read-only tool allow-list
+
+**Status:** Accepted (2026-08-29)
+
+`CLAUDE.md` requires that the LLM never receive unrestricted access and act only through
+explicitly defined application tools. This records the shape that satisfies it, because the
+tempting shortcuts are all worse.
+
+**Lookup is by exact name against a fixed record** (`src/ai/tools/registry.ts`). The rejected
+alternative was a generic bridge — letting the model name a repository and a method, or
+passing a query through. That is the same class of mistake as string-concatenated SQL: it
+turns model output into control flow. A name not in the record is refused, and the refusal is
+returned to the model as a tool result so it can explain the limit rather than the request
+failing outright.
+
+**Every 9a tool takes no arguments.** No argument can widen what a tool reads. A tool that
+later needs one validates it with Zod in the registry before the implementation sees it.
+
+**Tools receive the repositories from `serverRepositories()`**, so they inherit household
+scoping — a tool cannot read another family's data any more than a route handler can. This is
+also why the tool layer is server-side and stays there.
+
+**Read tools and write tools are separated by construction, not by convention.**
+`READ_ONLY_TOOLS` contains only tools that call `list()` / `getPlan()`. A write tool is slice
+9b, arrives with a confirmation gate, and does not join that record.
+
+**Tools return prose rather than JSON**, withholding ids, per-item prices and notes. Partly
+tokens, mostly reliability: a small local model reads a sentence more dependably than an
+object graph, and every field handed over is a field it can garble back at the family.
+
+`/api/ai/ask` owns this loop. `/api/ai/chat` stays a transport with no prompt, no tools and no
+data, so there remains one path to household data with a model attached, and it is the one
+with the allow-list on it.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

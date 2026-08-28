@@ -5,6 +5,7 @@ import {
   type AiChatResult,
   type AiHealth,
   type AiProvider,
+  type AiToolCall,
 } from './types';
 
 /**
@@ -34,6 +35,21 @@ const chatSchema = z.object({
     content: z.string(),
     /** qwen3 is a reasoning model; Ollama returns its scratchpad here, and we discard it. */
     thinking: z.string().optional(),
+    /**
+     * Present only when the model asked for a tool. Ollama gives arguments as an object
+     * already; a model that emits something else fails this schema rather than reaching
+     * the tool layer as a surprise.
+     */
+    tool_calls: z
+      .array(
+        z.object({
+          function: z.object({
+            name: z.string(),
+            arguments: z.record(z.unknown()).default({}),
+          }),
+        }),
+      )
+      .optional(),
   }),
   eval_count: z.number().optional(),
 });
@@ -130,7 +146,24 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model,
-          messages: request.messages,
+          messages: request.messages.map((message) =>
+            // Ollama names the tool that produced a `tool` message with `name`.
+            message.toolName
+              ? { role: message.role, content: message.content, name: message.toolName }
+              : { role: message.role, content: message.content },
+          ),
+          ...(request.tools?.length
+            ? {
+                tools: request.tools.map((tool) => ({
+                  type: 'function',
+                  function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters,
+                  },
+                })),
+              }
+            : {}),
           // One complete answer. Streaming is a later phase, and a partial answer on a
           // kitchen wall is worse than a slightly slower whole one.
           stream: false,
@@ -157,8 +190,14 @@ export function createOllamaProvider(options: OllamaProviderOptions): AiProvider
       );
     }
 
+    const toolCalls: AiToolCall[] = (parsed.data.message.tool_calls ?? []).map((call) => ({
+      name: call.function.name,
+      arguments: call.function.arguments,
+    }));
+
     return {
       content: parsed.data.message.content.trim(),
+      toolCalls,
       model: parsed.data.model,
       tokens: parsed.data.eval_count,
       durationMs: Date.now() - startedAt,

@@ -31,6 +31,7 @@ describe('chat', () => {
     expect(result.content).toBe('Sausage pasta.');
     expect(result.model).toBe('qwen3:8b');
     expect(result.tokens).toBe(42);
+    expect(result.toolCalls).toEqual([]);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
@@ -129,6 +130,78 @@ describe('chat', () => {
 
     expect((error as AiError).kind).toBe('config');
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe('tool calling', () => {
+  const specs = [
+    {
+      name: 'getPantry',
+      description: 'Read the pantry.',
+      parameters: { type: 'object' as const, properties: {} },
+    },
+  ];
+
+  it('sends tools in the shape Ollama expects, and only when there are some', async () => {
+    const fetchImpl = vi.fn(async () => json(chatBody()));
+    const subject = provider(fetchImpl as unknown as typeof fetch);
+
+    await subject.chat(ask);
+    expect(
+      JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body)),
+    ).not.toHaveProperty('tools');
+
+    await subject.chat({ ...ask, tools: specs });
+    const sent = JSON.parse(
+      String((fetchImpl.mock.calls[1] as unknown as [string, RequestInit])[1].body),
+    ) as { tools: unknown[] };
+    expect(sent.tools).toEqual([
+      {
+        type: 'function',
+        function: { name: 'getPantry', description: 'Read the pantry.', parameters: { type: 'object', properties: {} } },
+      },
+    ]);
+  });
+
+  it('reports the tools the model asked for without executing anything', async () => {
+    const fetchImpl = vi.fn(async () =>
+      json(
+        chatBody({
+          message: {
+            content: '',
+            tool_calls: [{ function: { name: 'getPantry', arguments: {} } }],
+          },
+        }),
+      ),
+    );
+
+    const result = await provider(fetchImpl as unknown as typeof fetch).chat({
+      ...ask,
+      tools: specs,
+    });
+
+    expect(result.toolCalls).toEqual([{ name: 'getPantry', arguments: {} }]);
+    expect(result.content).toBe('');
+  });
+
+  it('passes a tool result back with the name Ollama expects', async () => {
+    const fetchImpl = vi.fn(async () => json(chatBody()));
+
+    await provider(fetchImpl as unknown as typeof fetch).chat({
+      messages: [
+        { role: 'user', content: 'What is in the pantry?' },
+        { role: 'tool', content: 'Rice, mince.', toolName: 'getPantry' },
+      ],
+    });
+
+    const sent = JSON.parse(
+      String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body),
+    ) as { messages: Record<string, string>[] };
+    expect(sent.messages[1]).toEqual({
+      role: 'tool',
+      content: 'Rice, mince.',
+      name: 'getPantry',
+    });
   });
 });
 

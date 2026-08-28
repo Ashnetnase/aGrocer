@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ASK_SYSTEM_PROMPT, askAshHome, describeAskFailure } from './askAshHome';
+import { askAshHome, describeAskFailure, describeToolsUsed } from './askAshHome';
 
 /**
  * What matters here is what a family member ends up reading. Every failure the route can
@@ -20,36 +20,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('ASK_SYSTEM_PROMPT', () => {
-  it('tells the model it cannot see the household data and must not guess', () => {
-    expect(ASK_SYSTEM_PROMPT).toMatch(/cannot see/i);
-    expect(ASK_SYSTEM_PROMPT).toMatch(/never guess/i);
-    expect(ASK_SYSTEM_PROMPT).toMatch(/never invent/i);
-  });
-
-  it('asks for something readable from across a room', () => {
-    expect(ASK_SYSTEM_PROMPT).toMatch(/60 words/);
-    expect(ASK_SYSTEM_PROMPT).toMatch(/no markdown/i);
-  });
-});
-
 describe('askAshHome', () => {
-  it('sends the system prompt ahead of the question and returns the trimmed reply', async () => {
+  it('posts the question to the assistant route and returns the trimmed reply', async () => {
     const fetchSpy = mockFetch(async () =>
-      json({ reply: '  Sausage pasta.  ', model: 'qwen3:8b', durationMs: 1200 }),
+      json({
+        reply: '  Sausage pasta.  ',
+        toolsUsed: ['getMealPlan'],
+        model: 'qwen3:8b',
+        durationMs: 1200,
+      }),
     );
 
     const answer = await askAshHome('What should we eat?');
 
-    expect(answer).toEqual({ reply: 'Sausage pasta.', model: 'qwen3:8b', durationMs: 1200 });
+    expect(answer).toEqual({
+      reply: 'Sausage pasta.',
+      toolsUsed: ['getMealPlan'],
+      model: 'qwen3:8b',
+      durationMs: 1200,
+    });
 
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('/api/ai/chat');
-    const sent = JSON.parse(String(init.body)) as { messages: { role: string; content: string }[] };
-    expect(sent.messages).toEqual([
-      { role: 'system', content: ASK_SYSTEM_PROMPT },
-      { role: 'user', content: 'What should we eat?' },
-    ]);
+    // The assistant route, not the raw transport: the prompt and the tools live server-side.
+    expect(url).toBe('/api/ai/ask');
+    expect(JSON.parse(String(init.body))).toEqual({ question: 'What should we eat?' });
   });
 
   it('sends no conversation history — each question stands alone', async () => {
@@ -58,11 +52,16 @@ describe('askAshHome', () => {
     await askAshHome('First question');
     await askAshHome('Second question');
 
-    const second = JSON.parse(
-      String((fetchSpy.mock.calls[1] as unknown as [string, RequestInit])[1].body),
-    ) as { messages: unknown[] };
-    expect(second.messages).toHaveLength(2);
-    expect(JSON.stringify(second)).not.toContain('First question');
+    const second = String((fetchSpy.mock.calls[1] as unknown as [string, RequestInit])[1].body);
+    expect(second).not.toContain('First question');
+  });
+
+  it('copes with a response that carries no tools', async () => {
+    mockFetch(async () => json({ reply: 'Roast it 90 minutes.' }));
+
+    const answer = await askAshHome('How long for a chicken?');
+
+    expect(answer.toolsUsed).toEqual([]);
   });
 
   it('reports an offline home PC as something a person can act on', async () => {
@@ -119,6 +118,8 @@ describe('askAshHome', () => {
 describe('describeAskFailure', () => {
   it('does not offer a retry for problems retrying cannot fix', () => {
     expect(describeAskFailure(400)).toMatchObject({ retryable: false });
+    // 500 is the database, not the model. Asking again will not reach it either.
+    expect(describeAskFailure(500)).toMatchObject({ retryable: false });
     expect(describeAskFailure(503, 'config')).toMatchObject({ retryable: false });
     expect(describeAskFailure(503, 'modelMissing')).toMatchObject({ retryable: false });
   });
@@ -130,8 +131,25 @@ describe('describeAskFailure', () => {
   });
 
   it('falls back to a readable sentence for a kind it has never seen', () => {
-    const failure = describeAskFailure(500, 'something-new');
+    const failure = describeAskFailure(502, 'something-new');
     expect(failure.message).toMatch(/could not answer/i);
     expect(failure.retryable).toBe(true);
+  });
+});
+
+describe('describeToolsUsed', () => {
+  it('names the data in words a family uses, not the tool names', () => {
+    expect(describeToolsUsed(['getPantry'])).toBe('Checked your pantry');
+    expect(describeToolsUsed(['getShoppingList', 'getMealPlan'])).toBe(
+      'Checked your shopping list and meal plan',
+    );
+  });
+
+  it('does not repeat a tool the assistant called twice', () => {
+    expect(describeToolsUsed(['getPantry', 'getPantry'])).toBe('Checked your pantry');
+  });
+
+  it('says nothing when the answer came from the model alone', () => {
+    expect(describeToolsUsed([])).toBeUndefined();
   });
 });

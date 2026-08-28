@@ -1,35 +1,14 @@
 /**
- * "Ask AshHome" — the browser side of the AI service (AshHome Phase 8, slice 8b).
+ * "Ask AshHome" — the browser side of the assistant (AshHome Phase 9, slice 9a).
  *
- * `/api/ai/chat` is deliberately a transport: it injects no system prompt, so the framing
- * lives here, with the feature that owns the conversation.
+ * This posts to `/api/ai/ask`, which owns the system prompt and the tool loop. Slice 8b kept
+ * the prompt here, on the client; slice 9a moved it to `src/ai/assistant.ts` because it now
+ * has to describe tools that only exist server-side, and a prompt that names tools has to
+ * live where the tools do or the two drift apart.
  *
- * The honest constraint of this slice: the model has **no tools**, so it cannot see the
- * family's shopping list, pantry, meal plan or calendar. The prompt says so, and the card
- * says so, because an assistant on a kitchen wall that confidently invents what is in the
- * freezer is worse than one that admits it cannot look.
+ * What is left here is the browser's job: making the request, and turning a failure into a
+ * sentence worth reading from across a kitchen.
  */
-
-/**
- * Short, plain, and explicit about what it cannot see.
- *
- * Not a secret — it ships in the client bundle, and the route accepts arbitrary messages
- * anyway. It is framing, not a security boundary; the security boundary is that there are
- * no tools.
- */
-export const ASK_SYSTEM_PROMPT = [
-  'You are AshHome, a helpful assistant on a New Zealand family’s kitchen wall tablet.',
-  'You are shown on a screen read from across the room, so answer in at most 60 words,',
-  'in plain sentences. No markdown, no headings, no bullet points, no emoji.',
-  '',
-  'You currently have NO access to this family’s data. You cannot see their shopping list,',
-  'pantry, freezer, meal plan, calendar, chores or reminders. If you are asked about any of',
-  'those, say plainly that you cannot see them yet and suggest they open the Agrocer app.',
-  'Never guess, and never invent an item, a date or an event. You also cannot add, change',
-  'or delete anything; say so if asked to.',
-  '',
-  'General cooking, food and household questions you can answer normally.',
-].join('\n');
 
 /** What the card shows a family member. Never a status code or a hostname. */
 export interface AskFailure {
@@ -50,6 +29,12 @@ export function describeAskFailure(status: number, kind?: string): AskFailure {
     return { message: 'That question was too long. Try a shorter one.', retryable: false };
   }
 
+  // 500 is the repository failing rather than the model: the database is unreachable, or the
+  // server is misconfigured. Retrying the same question will not fix either.
+  if (status === 500) {
+    return { message: 'AshHome could not reach the household data.', retryable: false };
+  }
+
   switch (kind) {
     case 'unreachable':
       return {
@@ -68,6 +53,8 @@ export function describeAskFailure(status: number, kind?: string): AskFailure {
 
 export interface AskAnswer {
   reply: string;
+  /** Which tools the assistant used, so the card can show where the answer came from. */
+  toolsUsed: string[];
   model: string;
   durationMs: number;
 }
@@ -83,16 +70,11 @@ export interface AskAnswer {
 export async function askAshHome(question: string, signal?: AbortSignal): Promise<AskAnswer> {
   let response: Response;
   try {
-    response = await fetch('/api/ai/chat', {
+    response = await fetch('/api/ai/ask', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal,
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: ASK_SYSTEM_PROMPT },
-          { role: 'user', content: question },
-        ],
-      }),
+      body: JSON.stringify({ question }),
     });
   } catch (error) {
     // An aborted request is the card being unmounted or the question being replaced. It is
@@ -104,7 +86,7 @@ export async function askAshHome(question: string, signal?: AbortSignal): Promis
     } satisfies AskFailure;
   }
 
-  const body = (await response.json().catch(() => null)) as { reply?: unknown; kind?: unknown } | null;
+  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
 
   if (!response.ok) {
     throw describeAskFailure(
@@ -120,10 +102,24 @@ export async function askAshHome(question: string, signal?: AbortSignal): Promis
     } satisfies AskFailure;
   }
 
-  const payload = body as unknown as { reply: string; model?: string; durationMs?: number };
   return {
-    reply: payload.reply.trim(),
-    model: payload.model ?? 'unknown',
-    durationMs: payload.durationMs ?? 0,
+    reply: body.reply.trim(),
+    toolsUsed: Array.isArray(body.toolsUsed) ? (body.toolsUsed as string[]) : [],
+    model: typeof body.model === 'string' ? body.model : 'unknown',
+    durationMs: typeof body.durationMs === 'number' ? body.durationMs : 0,
   };
+}
+
+/** Tool names are internal; the card shows the family what was actually consulted. */
+const TOOL_LABELS: Record<string, string> = {
+  getShoppingList: 'shopping list',
+  getPantry: 'pantry',
+  getMealPlan: 'meal plan',
+};
+
+export function describeToolsUsed(toolsUsed: string[]): string | undefined {
+  const labels = [...new Set(toolsUsed)].map((name) => TOOL_LABELS[name] ?? name);
+  if (labels.length === 0) return undefined;
+  if (labels.length === 1) return `Checked your ${labels[0]}`;
+  return `Checked your ${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }

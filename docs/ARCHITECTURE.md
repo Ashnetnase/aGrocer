@@ -101,26 +101,43 @@ route rather than a flag (ADR-010). A hand-written service worker provides offli
 
 ## AI service
 
-Current, as of 2026-08-28 (ADR-014). Provider abstraction, one route, and one family-facing
-entry point; no tools, no writes.
+Current, as of 2026-08-29 (ADR-014, ADR-015). Provider abstraction, two routes, and read-only
+tools. No writes.
 
 ```
 src/features/dashboard/      "Ask AshHome" card on the wall dashboard
   AskCard.tsx
         ↓
-src/features/ask/            the system prompt and the failure wording
+src/features/ask/            the request, and failure → readable sentence
   askAshHome.ts
         ↓
-app/api/ai/chat/route.ts     GET health · POST one answer (Zod-validated, bounded)
+app/api/ai/ask/route.ts      POST a question → one answer (the assistant)
+        ↓
+src/ai/assistant.ts          the system prompt and the tool loop (max 3 rounds)
+        ├──────────────────→ src/ai/tools/registry.ts   the allow-list boundary
+        │                    src/ai/tools/readOnly.ts   getShoppingList · getPantry
+        │                          ↓                    getMealPlan
+        │                    serverRepositories() → Drizzle → PostgreSQL
         ↓
 src/ai/provider.ts           getAiProvider() — the ONLY place a provider is chosen
         ↓
-src/ai/types.ts              AiProvider, AiMessage, AiChatResult, AiHealth, AiError
+src/ai/types.ts              AiProvider, AiMessage, AiChatResult, AiToolSpec, AiError
         ↓
 src/ai/ollamaProvider.ts     the only Ollama-shaped code in the repository
         ↓
 Ollama on 127.0.0.1:11434    qwen3:8b (RTX 5070)
 ```
+
+Two routes, deliberately distinct. `/api/ai/ask` is the assistant: it owns the prompt, runs the
+tool loop, and is the only path by which a model reaches household data. `/api/ai/chat` is the
+raw transport: no prompt, no tools, no data.
+
+**Tools are an allow-list, not a bridge** (ADR-015). Lookup is by exact name against a fixed
+record; nothing maps model output onto a repository method. Every 9a tool takes no arguments,
+so nothing the model emits can widen what it reads. Tools get their repositories from
+`serverRepositories()`, so they inherit household scoping. They return prose, withholding ids
+and per-item prices — a small local model reads a sentence more reliably than an object graph,
+and every field handed over is one it can garble.
 
 The same seam as the repositories (ADR-003), applied to inference: features depend on
 `AiProvider`, and swapping qwen3 for gemma — or Ollama for a cloud provider — changes
@@ -138,20 +155,24 @@ Ollama binds to localhost deliberately, so this works only on the workstation ru
 the staging VM the route returns 503 `unreachable` until a tunnel or authenticated proxy is
 decided — never `OLLAMA_HOST=0.0.0.0`.
 
-**The system prompt belongs to the feature, not the route.** `/api/ai/chat` injects nothing, so
-each caller owns its own framing; `ASK_SYSTEM_PROMPT` is the dashboard card's. It is not a secret
-and not a security boundary — it ships in the client bundle and the route accepts arbitrary
-messages. The security boundary is that there are no tools.
+**The system prompt lives with the tools**, in `src/ai/assistant.ts`. It named nothing but the
+model's limits while there were no tools, and lived on the client; once it had to describe tools
+it moved server-side, because a prompt that describes tools and the tools themselves drift apart
+if they live in different places. It is not a secret and not a security boundary — the allow-list
+is the security boundary.
 
-Because there are none, the model cannot see the shopping list, pantry, meal plan or calendar,
-and cannot change anything. The prompt tells it to say so rather than guess, and the card repeats
-the limit in a footnote. On a kitchen wall, an assistant that appears to know what is in the
-freezer and is guessing is worse than one that admits it cannot look.
+The assistant can read the shopping list, pantry and meal plan. It **cannot** change anything,
+and cannot see the family calendar, chores, reminders or school information, because none of
+that exists as data yet. The prompt tells it to answer only from what a tool returned and never
+to invent an item, a quantity or a date; the card repeats the limits in a footnote and labels
+which data an answer came from. On a kitchen wall, an assistant that appears to know what is in
+the freezer and is guessing is worse than one that admits it cannot look.
 
 No conversation history is kept, here or anywhere else: each question stands alone.
 
-Deliberately absent, each belonging to a named later phase: tool calling (Phase 9), conversation
-persistence (the application owns state, not the model), and streaming.
+Deliberately absent, each belonging to a named later phase: write tools with a confirmation gate
+(slice 9b, gated on Auth + RLS), conversation persistence (the application owns state, not the
+model), and streaming.
 
 Two scripts, easy to confuse: `npm run ai:check` talks straight to Ollama and proves the machine
 can reach it; `npm run ai:chat` goes through `/api/ai/chat` and proves the whole path, so it needs
@@ -208,9 +229,10 @@ early, but not to be architecturally excluded either.
 
 ## AI
 
-The provider abstraction, the local Ollama service and the "Ask AshHome" card are **Current** —
-see the AI service section above. What remains planned: the cloud fallback implementation (the
-`AI_PROVIDER` seam exists, the provider does not), tool calling, and streaming.
+The provider abstraction, the local Ollama service, the "Ask AshHome" card and the read-only
+tools are **Current** — see the AI service section above. What remains planned: the cloud
+fallback implementation (the `AI_PROVIDER` seam exists, the provider does not), write tools with
+a confirmation gate, and streaming.
 
 The governing principle:
 
