@@ -17,7 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "ai:check": "tsx scripts/ollama-check.ts",
-    "ai:chat": "tsx scripts/ai-chat.ts"
+    "ai:chat": "tsx scripts/ai-chat.ts",
+    "db:rls": "tsx scripts/rls-check.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

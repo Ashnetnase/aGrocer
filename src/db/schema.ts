@@ -16,6 +16,13 @@ import {
 /**
  * Stage 2 database schema (ADR-013).
  *
+ * **Every table has RLS enabled and no policies** (ADR-016). That is a deliberate deny-all,
+ * not an unfinished state: the application's own queries run as `postgres`, which owns these
+ * tables and bypasses RLS, so the wall is around the publishable key — a credential that is
+ * public by design and would otherwise read and write every row through Supabase's REST API.
+ * Policies arrive with authentication, to grant the `authenticated` role access to its own
+ * household. Until then, granting nothing is exactly right.
+ *
  * Every table mirrors a Zod schema in `src/domain/schemas`. The Zod schemas remain
  * the source of truth for validation (section 5); this file is the source of truth
  * for storage. Where the two disagree the repository layer maps between them —
@@ -85,7 +92,7 @@ export const households = pgTable('households', {
   showBreakfastAndLunch: boolean('show_breakfast_and_lunch').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}).enableRLS();
 
 export const householdMembers = pgTable(
   'household_members',
@@ -104,7 +111,7 @@ export const householdMembers = pgTable(
   (table) => ({
     householdIdx: index('household_members_household_idx').on(table.householdId),
   }),
-);
+).enableRLS();
 
 /* -------------------------------------------------------------------------- */
 /* Pantry                                                                      */
@@ -131,7 +138,7 @@ export const pantryItems = pgTable(
     /** Covers both the tenant filter and the list's created-at ordering. */
     householdIdx: index('pantry_items_household_idx').on(table.householdId, table.createdAt),
   }),
-);
+).enableRLS();
 
 /* -------------------------------------------------------------------------- */
 /* Products                                                                    */
@@ -165,7 +172,7 @@ export const products = pgTable(
   (table) => ({
     householdIdx: index('products_household_idx').on(table.householdId, table.createdAt),
   }),
-);
+).enableRLS();
 
 /* -------------------------------------------------------------------------- */
 /* Shopping                                                                    */
@@ -193,7 +200,7 @@ export const shoppingItems = pgTable(
   (table) => ({
     householdIdx: index('shopping_items_household_idx').on(table.householdId, table.createdAt),
   }),
-);
+).enableRLS();
 
 /* -------------------------------------------------------------------------- */
 /* Meals and the weekly plan                                                   */
@@ -225,7 +232,7 @@ export const meals = pgTable(
   (table) => ({
     householdIdx: index('meals_household_idx').on(table.householdId, table.createdAt),
   }),
-);
+).enableRLS();
 
 /**
  * The Stage 1 `Plan` is a nested record of day -> slot -> mealId. Stored as rows,
@@ -253,4 +260,4 @@ export const planEntries = pgTable(
     /** Makes the cascade from `meals` cheap, and answers "where is this meal planned?". */
     mealIdx: index('plan_entries_meal_idx').on(table.mealId),
   }),
-);
+).enableRLS();

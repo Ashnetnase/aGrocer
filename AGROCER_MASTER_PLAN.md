@@ -351,10 +351,13 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 
 - [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
       `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
-- [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`
+- [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`,
+      plus `0001_exotic_the_liberteens.sql` (RLS)
 - [x] backend/API architecture — route handlers for all five features
-- [ ] authentication (Supabase Auth)
-- [ ] household/user permissions (RLS as defence in depth)
+- [ ] authentication (Supabase Auth) — **the next task**
+- [x] RLS enabled on all 7 tables, deny-all (ADR-016). Closes the publishable-key exposure;
+      verified with `npm run db:rls`. Policies wait for auth, which is when they mean something
+- [ ] household/user permissions — the policies themselves, once there is a user to grant to
 - [x] persistent pantry — route handlers + HTTP repository, verified end to end
 - [x] persistent products — route handlers + HTTP repository, verified end to end
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
@@ -1684,6 +1687,49 @@ object graph, and every field handed over is a field it can garble back at the f
 `/api/ai/ask` owns this loop. `/api/ai/chat` stays a transport with no prompt, no tools and no
 data, so there remains one path to household data with a model attached, and it is the one
 with the allow-list on it.
+
+
+## ADR-016 — RLS is enabled with no policies, and the application enforces household scoping
+
+**Status:** Accepted (2026-08-29)
+
+`HANDOFF.md` had long recorded that RLS could not be enabled until authentication landed,
+because "enabling RLS without policies blocks all access". That is true of a typical Supabase
+app and false of this one, and the difference is worth writing down so nobody re-derives the
+wrong conclusion later.
+
+**Why it is false here.** The route handlers reach Postgres through Drizzle over
+`DATABASE_URL`, which connects as `postgres`. That role owns all seven tables and has
+`rolbypassrls`. Enabling RLS therefore has no effect whatsoever on the application's queries —
+measured, not assumed: `npm run db:rls` prints the connecting role and its bypass flag.
+
+**What RLS is actually protecting.** The publishable key. It is public by design — it is meant
+to ship in browser bundles — and Supabase exposes every table through PostgREST to whoever
+holds it. Before this change that key could read the household, the children's names, the
+pantry, the products and the meals, and could insert rows. Both were demonstrated before the
+migration and re-tested after: reads now return empty, and an insert is refused with
+`42501 new row violates row-level security policy`.
+
+**So enforcement lives in two different places, deliberately.**
+
+- *Household scoping* is enforced by the application, in `src/server/repositories.ts`, which is
+  the single place a household id is resolved. This is unchanged, and it is what actually keeps
+  one family's data separate from another's.
+- *RLS* is the wall around the public key: a deny-all that grants nothing to `anon` or
+  `authenticated`.
+
+**Deny-all is the finished state for now, not an unfinished one.** With no code using the
+publishable key — nothing in the repository imports `supabase-js`, and it is not a dependency —
+granting nothing is exactly correct. Policies become meaningful when authentication introduces
+a real `authenticated` role that needs its own household, and they should be written then,
+against a schema that links users to households. Writing speculative policies now would mean
+guessing at that link.
+
+**The risk this leaves.** Because the application bypasses RLS, a bug in household scoping is
+not caught by the database. That is the cost of the arrangement and it is accepted: the
+alternative — running application queries as the authenticated user, with `set local role` and
+JWT claims per transaction — is a real option, and the right time to weigh it is when
+authentication lands, not before.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

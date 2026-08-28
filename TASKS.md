@@ -124,11 +124,16 @@ reconciling: the phase list assumes work that the stage list already completed.
       frees its slot through the foreign key rather than by hand
 - [x] persistent household — settings and members, verified end to end. Initials are derived
       server-side rather than accepted from the client, so they cannot drift from the name
-- [ ] authentication (Supabase Auth) — **the next task**, and it must land with RLS
-- [!] **RLS is disabled on all 7 tables** — anyone with the anon key can read or write every
-      row. Tables are empty so nothing is exposed yet, but this must close before any real
-      family data is entered. Enabling RLS without policies blocks all access, so it ships
-      with authentication, not before
+- [x] **RLS enabled on all 7 tables, deny-all** (ADR-016), migration `0001`. The publishable
+      key could read the household, the children's names, the pantry, the products and the
+      meals, and could insert rows; it now reads nothing and is refused on write. The app is
+      unaffected because it connects as `postgres`, which owns the tables and bypasses RLS —
+      so this did *not* have to ship with auth, contrary to what this file used to say.
+      Verify any time with `npm run db:rls`
+- [ ] authentication (Supabase Auth) — **the next task.** Needs a decision from Ash first on
+      how the wall tablet stays signed in (see `HANDOFF.md` NEXT TASK)
+- [ ] RLS *policies* granting the `authenticated` role its own household — meaningful only
+      once there is a user to grant to, so it ships with auth
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
 - [ ] backup/restore plan

@@ -17,8 +17,9 @@ and the read-only tools), taken 2026-08-28/29 at Ash's request to bring the AI i
 
 Stage 1 closed as a dev-complete milestone (ADR-012). Staging deployment moved into Stage 2.
 
-**Stage 2's blocking item is still Auth + RLS.** The AI slices were chosen so they do not
-depend on it and do not make it worse — see the ladder under NEXT TASK.
+**RLS landed 2026-08-29** and the publishable-key exposure is closed (ADR-016). Stage 2's
+remaining blocker is **authentication**, which now needs a decision from Ash before it can be
+built — see NEXT TASK.
 
 Branch: `stage-2/database-schema`. Main branch: `main`.
 
@@ -81,6 +82,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
 
+- **RLS:** enabled on all 7 tables, deny-all, since 2026-08-29 (ADR-016). No policies yet.
 - **Kids/School module:** not started. No child profiles, activities or school data exist. The
   Kids card reads `household_members` where `role = 'Child'`.
 - **Hero integration:** not started. No Hero credentials, tokens or endpoints exist anywhere in
@@ -116,6 +118,9 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
   - `/api/meals` (catalogue) and `/api/meals/plan/[day]/[slot]` (weekly plan), plus
     `apiMealsRepository`, verified the same way.
   - `/api/products` and `/api/household` (+ `members`), completing all five features.
+- **RLS on all 7 tables** (migration `0001_exotic_the_liberteens.sql`, ADR-016), generated
+  from `.enableRLS()` in `src/db/schema.ts`. Plus `npm run db:rls`, which verifies the state
+  *and* probes the publishable key against every table.
 - Local Ollama connectivity check (`scripts/ollama-check.ts`).
 - **AI slice 8a** — `AiProvider` abstraction, `OllamaProvider`, `getAiProvider()`,
   `/api/ai/chat` (health + chat), 12 unit tests, and `npm run ai:chat` for the end-to-end
@@ -176,6 +181,12 @@ Recent and important:
 - `app/api/ai/chat/route.ts` — the AI edge. Bounded at 20 messages of 4,000 characters.
 - `scripts/ai-chat.ts` + `npm run ai:chat` — end-to-end check over the route.
 - `.env.example` — adds `AI_PROVIDER`; notes the Ollama variables are server-only.
+- `src/db/schema.ts` — every table now carries `.enableRLS()`. The header explains why
+  deny-all is the finished state rather than an unfinished one.
+- `drizzle/0001_exotic_the_liberteens.sql` — seven `ENABLE ROW LEVEL SECURITY` statements and
+  nothing else.
+- `scripts/rls-check.ts` + `npm run db:rls` — the verification. Checking `pg_class` alone is
+  the weaker test, so it also tries the key the way an attacker would.
 - `src/features/ask/askAshHome.ts` — `askAshHome()`, `describeAskFailure()` and
   `describeToolsUsed()`. The system prompt used to live here; 9a moved it server-side to
   `src/ai/assistant.ts`, because a prompt that names tools has to live where the tools do.
@@ -320,6 +331,18 @@ Added 2026-08-29 for the read-only tools (slice 9a), all passing:
 - Latency 0.2–1.3s per question on the RTX 5070.
 - Chrome at 1280×800: the card answered from the pantry and showed "Checked your pantry" beside
   the question. No console errors, no hydration warnings.
+
+Added 2026-08-29 for RLS (ADR-016), all passing:
+
+- `npm run db:rls` — before: the publishable key read `households`, `household_members`,
+  `pantry_items`, `products` and `meals`. After: every table returns zero rows, and a direct
+  `POST` to `/rest/v1/households` is refused with
+  `42501 new row violates row-level security policy`.
+- `npm run test:db` — all 6 integration tests still pass, covering reads *and* writes.
+- Through the running app: pantry read, a shopping item added, read back, deleted (204), and
+  the AI assistant still called `getShoppingList` and saw the real row. Test row removed; the
+  shopping table is back to empty.
+- `npm run check` — 165 tests, unchanged. `npm run db:migrate` applied `0001` cleanly.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -342,10 +365,17 @@ throwaway household and delete it, and the foreign keys cascade.
   groceries. Screens gate on `hydrated`; the nav badge did not, and now does. The underlying
   seeding of `initialState` is untouched and worth revisiting — it was invisible against
   localStorage and is a visible flash over the network.
-- **RLS is disabled on all 7 tables.** Anyone holding the anon key can read or modify every
-  row. The tables are empty, so nothing is exposed yet, but this must be closed before any
-  real family data is entered. Enabling RLS without policies blocks all access, so it has to
-  land together with authentication — see `TASKS.md`.
+- ~~RLS is disabled on all 7 tables.~~ **Closed 2026-08-29** (ADR-016). RLS is enabled
+  everywhere, deny-all, and the publishable key now reads nothing and cannot insert. Verify
+  with `npm run db:rls`. Note the old claim in this file — that RLS had to ship with auth —
+  was wrong: the app connects as `postgres`, which owns the tables and bypasses RLS.
+- **Household scoping is enforced by the application, not the database.** Because the app
+  bypasses RLS, a bug in `src/server/repositories.ts` would not be caught by Postgres. Accepted
+  for now; the alternative (running queries as the authenticated user) is worth weighing when
+  auth lands.
+- **No route handler is authenticated.** Anyone who can reach the app can read and write the
+  household through `/api/*`. On the home LAN behind Tailscale that is a smaller problem than
+  the public key was, but it is the thing authentication has to fix.
 - `.env.example` had been renamed rather than copied when `.env.local` was created, so it was
   briefly missing from the repository. Restored, and updated to the newer Supabase key names
   (`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`).
@@ -371,39 +401,32 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Ash asked on 2026-08-28 to bring the AI in "in stages". Slices 8a, 8b and 9a are done and
-verified. The agreed ladder:
+**Authentication (Supabase Auth).** It is the last thing standing between Stage 2 and done, and
+the AI ladder's next rung (slice 9b, the first write tool) waits behind it.
 
-| Slice | Scope | Status |
-| ----- | ----- | ------ |
-| 8a | provider abstraction + `/api/ai/chat`, no tools, no writes | **done** |
-| 8b | "Ask AshHome" card is a real input, text answers only | **done** |
-| 9a | read-only tools: `getShoppingList`, `getPantry`, `getMealPlan` | **done** |
-| 9b | first write tool `addShoppingItem`, behind a confirmation gate | **needs Auth + RLS first** |
-| 10 | pantry-aware meal planning | after 9b |
+RLS already landed on 2026-08-29, so the picture has changed since earlier entries said these
+had to ship together. What is left is genuinely the auth half:
 
-**Do authentication and RLS next.** This is no longer a choice between two reasonable options
-the way it was at 8b. The ladder's next rung is a write tool, and a write tool on an
-unauthenticated route, against tables with RLS disabled, on a permanently logged-in kitchen
-tablet, is the wrong order to build things in. Everything cheap and safe to do before auth has
-now been done.
+1. **Sign-in**, in the Magic Patterns visual language. Do not redesign the app around it.
+2. **Replace `AGROCER_HOUSEHOLD_ID`.** `src/server/repositories.ts` is the single place a
+   household id is resolved, and it was built to be exactly this seam. Handlers ask for
+   repositories, never for an id — keep it that way.
+3. **Protect the route handlers.** None of them check anything today. This is the real
+   remaining exposure now that the public key is walled off.
+4. **Claim the existing household.** `npm run db:seed` creates one with no owner. Decide how
+   the first real user takes ownership of it.
+5. **RLS policies** granting the `authenticated` role its own household. Note these are
+   *defence in depth*, not the enforcement — the app bypasses RLS as `postgres` (ADR-016). Now
+   is the moment to decide whether to keep it that way or run queries as the authenticated
+   user with `set local role`.
 
-So: **Supabase Auth, then RLS policies on all seven tables**, in that order and ideally in one
-pass — enabling RLS without policies blocks every query, so they belong together. A tablet on
-the kitchen wall is a permanently logged-in screen in a shared room, so device identity and
-session length are part of the design, not an afterthought.
-
-Two things it should absorb rather than defer:
-
-- `src/server/repositories.ts` reads `AGROCER_HOUSEHOLD_ID` from the environment. That is the
-  single place a real session should replace, and it was built to be exactly that.
-- The seed script creates a household with no owner. Auth needs to decide how an existing
-  household gets claimed by its first real user.
-
-**If Ash would rather keep going on the AI**, the honest options that do not need auth are:
-more *read* tools where they earn their keep (household preferences, meal history, a budget
-summary once budgeting exists), or Phase 10's pantry-aware meal planning built as a read-only
-suggestion the family then applies by hand. Neither is as valuable as closing the RLS gap.
+**Ask Ash this before building the sign-in flow**, because it changes the design rather than
+the code style: *how should the kitchen wall tablet stay signed in?* It is a permanently
+logged-in shared screen in a family room, which is the opposite of what a normal session
+policy assumes. The plausible answers — a long-lived device session for a trusted device, a
+shared household account for the wall with personal accounts on phones, or a PIN on the tablet
+— lead to materially different work, and `CLAUDE.md`'s device-architecture section
+(kitchen tablet / personal phone / admin PC) is the context for it.
 
 Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
 no optimistic UI. Both are more noticeable now that all five features cross the network.
@@ -425,6 +448,9 @@ Two costs still deliberately unpaid:
   ships a different default component.
 - The hand-written service worker (ADR-011).
 - `legacy/` — the original Vite implementation, kept for reference.
+- **RLS stays enabled on all seven tables.** Deny-all is the intended state until auth brings a
+  user to grant to (ADR-016). Do not disable it to "fix" a query — the app bypasses RLS
+  already, so an RLS error means something is connecting as the wrong role, which is the bug.
 - `src/ai/types.ts` — the `AiProvider` contract (ADR-014). A second provider satisfies it; it
   does not get changed to suit one model.
 - **`/api/ai/chat` has no tools and injects no system prompt, on purpose.** The assistant lives

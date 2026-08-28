@@ -93,6 +93,34 @@ without policies blocks all access.
 transaction pooler cannot cache prepared statements. It must never be imported from a client
 component.
 
+## Security posture
+
+Current, as of 2026-08-29 (ADR-016).
+
+**RLS is enabled on all seven tables, with no policies** — a deliberate deny-all. It does not
+affect the application: route handlers reach Postgres through Drizzle as `postgres`, which owns
+the tables and has `rolbypassrls`. RLS is the wall around the **publishable key**, which is
+public by design and which Supabase otherwise exposes every table to through PostgREST.
+
+So enforcement lives in two places on purpose:
+
+| Concern | Enforced by |
+| ------- | ----------- |
+| One family's data stays separate | The application — `src/server/repositories.ts`, the single place a household id is resolved |
+| The public key reads and writes nothing | The database — RLS deny-all |
+
+Policies wait for authentication, because a policy needs a user to grant to and a schema that
+links users to households. Nothing in the repository imports `supabase-js`; it is not a
+dependency, so the key has no legitimate code path.
+
+`npm run db:rls` verifies both halves: it reports the connecting role and per-table RLS state,
+then *tries* the publishable key against every table and fails if any read succeeds. It only
+reads, so it is safe to run against production.
+
+The accepted cost: because the application bypasses RLS, a bug in household scoping is not
+caught by the database. Running application queries as the authenticated user instead is a real
+option, to weigh when authentication lands.
+
 ## Rendering and offline
 
 App content renders client-side behind a hydration gate (ADR-009). Shopping Mode is its own
