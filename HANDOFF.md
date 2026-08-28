@@ -30,8 +30,9 @@ What actually runs today:
 - **Authentication is enforced** (ADR-017). Email and password via Supabase Auth, session in
   cookies. Every route handler refuses without one (401), and an account not linked to a
   household member is refused too (403). `/sign-in` is the screen; sign-out is on Settings.
-  **No account exists yet** — until Ash creates one and runs `npm run db:claim`, the app is
-  usable only with `AGROCER_AUTH=off`.
+  **Ash's account is live and signed in successfully** (2026-08-29):
+  `ashley.schippersas@gmail.com` is linked to the `Ash` member of The Ashfords. The other four
+  members have no login, which is correct — the children have profiles, not accounts.
 - The full Agrocer Next.js App Router app, ported from the original Vite build, with its
   Magic Patterns visual language intact. Routes under `app/(app)/`: shopping (plus
   `shopping/mode`), pantry, meals, products, household, settings, and an `app/offline` page.
@@ -210,6 +211,11 @@ Recent and important:
 - `src/features/auth/` — `SignInScreen`, `SignOutButton`, and `describeSignInError`, whose
   tests pin that a wrong password and an unknown email read identically.
 - `scripts/claim.ts` + `npm run db:claim` — links an account to a member. Never creates one.
+- `src/data/api/authFailure.ts` — `handleUnauthorized()`, the one place a 401 becomes a
+  redirect, plus `NotInHouseholdError` for the 403 that must not redirect. `setAuthRedirect()`
+  is the test seam.
+- `src/data/api/client.ts` — a single `fail()` turns any bad response into an exception, so
+  `request` and `patch` cannot drift apart on this.
 - `src/features/ask/askAshHome.ts` — `askAshHome()`, `describeAskFailure()` and
   `describeToolsUsed()`. The system prompt used to live here; 9a moved it server-side to
   `src/ai/assistant.ts`, because a prompt that names tools has to live where the tools do.
@@ -386,8 +392,17 @@ Added 2026-08-29 for authentication (ADR-017), all passing:
 - `npm run check` — 169 tests across 13 files. `npm run test:db` — 6 integration tests still
   pass. `npm run build` clean. `npm run db:rls` — RLS on, 1 policy per table, `anon` reads
   nothing.
-- **Not verified: a successful sign-in.** That needs an account, and this agent does not create
-  accounts. See NEXT TASK.
+- **Sign-in confirmed by Ash on 2026-08-29** — the app loads with real household data behind
+  the session.
+
+Added 2026-08-29 for client-side 401 handling:
+
+- 174 unit tests across 14 files (up from 169). The new ones pin that 401 redirects with the
+  current path carried, 403 does not, ordinary failures are untouched, the sign-in screen does
+  not redirect to itself, and server rendering does nothing.
+- **Verified live, in the browser, with a real session.** Expiring the auth cookie on an open
+  `/dashboard` made `/api/shopping` return 401; the next interaction redirected to
+  `/sign-in?next=%2Fdashboard`. That is the wall-tablet scenario end to end.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -420,10 +435,10 @@ throwaway household and delete it, and the foreign keys cascade.
   auth lands.
 - ~~No route handler is authenticated.~~ **Closed 2026-08-29** (ADR-017). Verified: every
   route, including `/api/ai/ask`, answers 401 with no session.
-- **A session that expires with a screen open shows a generic failure**, not a redirect to
-  sign-in. The client repositories treat 401 like any other error. The middleware refreshes on
-  navigation, so this needs a stale tab and an expired refresh token — which is exactly what a
-  wall tablet is. Worth a client-side 401 handler.
+- ~~A session that expires with a screen open shows a generic failure.~~ **Closed 2026-08-29.**
+  A 401 now redirects to `/sign-in?next=…` from every client fetch path, including the
+  assistant. A 403 deliberately does *not* redirect: the account signs in fine and still has no
+  household, so bouncing to sign-in would loop.
 - **`AGROCER_AUTH="off"` disables all of it.** It warns on every request, and exists for local
   work and the integration tests. Never set it where the app is reachable.
 - `.env.example` had been renamed rather than copied when `.env.local` was created, so it was

@@ -617,6 +617,39 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-29 — Sign-in confirmed, and a lapsed session now goes to sign-in (Claude Code)
+
+**Stage:** Stage 2 — finishing what ADR-017 left rough
+**Status:** Complete and verified live
+
+Ash created the account and confirmed sign-in works. `npm run db:claim` linked
+`ashley.schippersas@gmail.com` to the `Ash` member; the other four members stay without
+logins, which is right — the children have profiles, not accounts.
+
+That left one rough edge, and it is now closed. A 401 from any client fetch redirects to
+`/sign-in?next=…` instead of surfacing "Request failed". The middleware refreshes the session
+on every *navigation*, which covers ordinary use but not the wall tablet: a screen open for
+weeks never navigates, so its refresh token can expire under it, and the next tap was hitting
+a dead end.
+
+**A 403 deliberately does not redirect.** It means the account is real but is not linked to a
+household — signing in again succeeds and changes nothing, so a redirect would loop. It gets
+`NotInHouseholdError` and a message instead.
+
+`src/data/api/authFailure.ts` is the one place that decision lives, and both `request` and
+`patch` now share a single `fail()` so they cannot drift apart. The assistant's own fetch path
+calls it too.
+
+**Verified live, with a real session**, which is the part worth recording: with `/dashboard`
+open, expiring the auth cookie made `/api/shopping` return 401, and the next interaction
+redirected to `/sign-in?next=%2Fdashboard`. That is exactly the wall-tablet scenario. 174 unit
+tests, up from 169, cover the decision table — including that the sign-in screen does not
+redirect to itself and that server rendering does nothing.
+
+Note for whoever repeats that test: the redirect navigates the page, which discards anything
+stashed in `window`. Save the cookie somewhere that survives navigation, or expect to sign in
+again afterwards.
+
 ## 2026-08-29 — Supabase Auth: the household now comes from the signed-in user (Claude Code)
 
 **Stage:** Stage 2 — the last blocker

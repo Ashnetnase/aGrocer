@@ -10,6 +10,8 @@
  * sentence worth reading from across a kitchen.
  */
 
+import { handleUnauthorized } from '@/data/api/authFailure';
+
 /** What the card shows a family member. Never a status code or a hostname. */
 export interface AskFailure {
   message: string;
@@ -27,6 +29,16 @@ export interface AskFailure {
 export function describeAskFailure(status: number, kind?: string): AskFailure {
   if (status === 400) {
     return { message: 'That question was too long. Try a shorter one.', retryable: false };
+  }
+
+  // The session expired. `askAshHome` has already started the redirect to sign-in; this is
+  // what the card shows for the moment before the page changes.
+  if (status === 401) {
+    return { message: 'Signing you in again…', retryable: false };
+  }
+
+  if (status === 403) {
+    return { message: 'This account is not part of a household yet.', retryable: false };
   }
 
   // 500 is the repository failing rather than the model: the database is unreachable, or the
@@ -89,6 +101,8 @@ export async function askAshHome(question: string, signal?: AbortSignal): Promis
   const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
 
   if (!response.ok) {
+    // Central, so the assistant behaves like every other screen when a session lapses.
+    handleUnauthorized(response.status);
     throw describeAskFailure(
       response.status,
       typeof body?.kind === 'string' ? body.kind : undefined,

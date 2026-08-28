@@ -137,10 +137,11 @@ reconciling: the phase list assumes work that the stage list already completed.
 - [x] RLS *policies* granting `authenticated` its own household
       (`drizzle/0003_household_rls_policies.sql`) — defence in depth, since the app bypasses
       RLS as `postgres`
-- [ ] **Ash: create the first account** — Supabase dashboard → Authentication → Users, then
-      `npm run db:claim -- <email> "Ash"`. This agent does not create accounts
-- [ ] client-side 401 handling — a session that expires with a screen open shows a generic
-      failure instead of sending you to sign in. Most likely on the wall tablet
+- [x] **first account created and linked** — `ashley.schippersas@gmail.com` signs in as `Ash`.
+      Confirmed working by Ash on 2026-08-29
+- [x] client-side 401 handling — a lapsed session now redirects to `/sign-in?next=…` from every
+      fetch path including the assistant; 403 deliberately does not redirect. Verified live by
+      expiring the cookie on an open dashboard
 - [ ] meal feedback history
 - [ ] audit-friendly inventory events
 - [ ] backup/restore plan
