@@ -46,8 +46,9 @@ What actually runs today:
   and 9a). `POST /api/ai/ask` runs the local qwen3:8b with three read-only tools —
   `getShoppingList`, `getPantry`, `getMealPlan` — behind an explicit allow-list (ADR-015). The
   card labels which data an answer came from ("Checked your pantry").
-  It still **cannot change anything**, and cannot see the calendar, chores, reminders or
-  school information. The system prompt (`src/ai/assistant.ts`) tells it to answer only from
+  Since slice 9b it can also **propose one change** — adding a shopping item — which a person
+  confirms with Add it / Cancel before anything is written (ADR-018). It cannot change anything
+  else, and cannot see the calendar, chores, reminders or school information. The system prompt (`src/ai/assistant.ts`) tells it to answer only from
   what a tool returned and never to invent; the card repeats the limits in a footnote.
   Verified against the real database: sixteen pantry rows returned correctly grouped, an
   empty shopping list reported as empty, a request to add items declined.
@@ -83,7 +84,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
 | Tonight's meal    | **Real** — the weekly plan, with image, time and serves.           |
 | Chores            | **Mock** — one example row. Needs Phase 12.                        |
-| Ask AshHome       | **Real** — reads the shopping list, pantry and meal plan. Cannot write. |
+| Ask AshHome       | **Real** — reads list/pantry/plan; proposes list additions, gated. |
 
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
@@ -139,6 +140,11 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
 - **AI slice 8b** — the "Ask AshHome" card: `src/features/ask/askAshHome.ts` and
   `src/features/dashboard/AskCard.tsx`. Verified in Chrome at a 1280×800 kiosk viewport,
   including the offline path.
+- **AI slice 9b** — the first write tool: `src/ai/tools/write.ts` (`WRITE_TOOLS`, a sibling of
+  the read record), the proposal path in `src/ai/assistant.ts`, `app/api/ai/confirm`, and the
+  Add it / Cancel gate on the card. ADR-018 records the shape.
+- **Wall dashboard cards gate on `hydrated`** — Shopping, Tonight's meal and Kids were showing
+  the Stage 1 demo fixtures until their fetch resolved.
 - **AI slice 9a** — read-only tools: `src/ai/tools/registry.ts` (the allow-list boundary),
   `src/ai/tools/readOnly.ts` (the three tools), `src/ai/assistant.ts` (the loop) and
   `app/api/ai/ask`. Verified against the real Supabase data, not fixtures. ADR-015 records
@@ -224,6 +230,16 @@ Recent and important:
 - `src/ai/tools/registry.ts` — **the security boundary.** Exact-name lookup against a fixed
   record; there is no dynamic dispatch onto the repositories. A refused tool is returned to
   the model as a tool result, not thrown, so it explains the limit itself.
+- `src/ai/tools/write.ts` — `WRITE_TOOLS` and `addShoppingItem`. **A sibling of
+  `READ_ONLY_TOOLS`, never a member** (ADR-015, ADR-018), so the confirmation gate applies to
+  everything here by construction. Write tools carry a Zod schema; read tools take no arguments.
+- `app/api/ai/confirm/route.ts` — the only path that executes a write, and no model is
+  involved in it. Re-validates the tool name against `WRITE_TOOLS` and the arguments against
+  that tool's schema.
+- `src/features/dashboard/{ShoppingCard,TonightCard,PlaceholderCards}.tsx` — now gate on
+  `hydrated`. Without it the wall shows the Stage 1 demo fixtures as though they were real.
+- `src/providers/AgrocerProvider.tsx` — exposes `refreshShopping`, because `/api/ai/confirm`
+  writes outside the repositories and nothing else would know the list had changed.
 - `src/ai/tools/readOnly.ts` — the three tools and the `READ_ONLY_TOOLS` allow-list. Adding
   anything here grants the model access to it. They return prose, not JSON, and withhold ids
   and per-item prices.
@@ -265,6 +281,9 @@ Full list with rationale lives in `AGROCER_MASTER_PLAN.md` (ADR section). Must-p
 - **ADR-017** — Supabase Auth; the household comes from `household_members.user_id`; signing
   up grants nothing; auth fails closed; the middleware is a convenience and
   `currentHouseholdId()` is the boundary.
+- **ADR-018** — the AI proposes changes; a person confirms them. Write tools are never
+  executed by the assistant loop; the confirmation sentence is built server-side from
+  validated arguments; `WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`.
 - **ADR-015** — the AI reaches household data only through a fixed, read-only tool allow-list.
   Exact-name lookup, zero-argument tools, repositories from `serverRepositories()`, and read
   tools separated from write tools by construction rather than convention.
@@ -403,6 +422,21 @@ Added 2026-08-29 for client-side 401 handling:
 - **Verified live, in the browser, with a real session.** Expiring the auth cookie on an open
   `/dashboard` made `/api/shopping` return 401; the next interaction redirected to
   `/sign-in?next=%2Fdashboard`. That is the wall-tablet scenario end to end.
+
+Added 2026-08-29 for the write gate (slice 9b, ADR-018):
+
+- 194 tests across 15 files (up from 174/14). They pin that a write tool never executes in the
+  loop, that the two tool records never overlap, that the confirmation sentence comes from
+  validated arguments even when the model's prose contradicts it, and that malformed arguments
+  produce no proposal at all.
+- **Against the real database:** asking to add bread returned a proposal and left the list
+  empty; confirming wrote the row. Six probes at `/api/ai/confirm` — a read tool, an invented
+  tool, a repository method as a tool name, an empty name, an unknown category, an absurd
+  quantity — all 400, list unchanged.
+- Behaviour: it declines to plan meals, restock the pantry or remove items, without
+  substituting a shopping addition (which it *did* do before the prompt was tightened).
+- The full flow driven in Chrome at 1280×800: proposal shown above the input, Add it pressed,
+  row written, Shopping card updated alongside.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -420,7 +454,9 @@ throwaway household and delete it, and the foreign keys cascade.
   Postgres. Deliberately not papered over with a speculative POST; Stage 2 should decide.
 - `reset()` throws against the database by design. The Settings screen still offers it, so
   with the server flag on that button will surface an error rather than restoring demo data.
-- **First paint shows Stage 1 demo data.** `AgrocerProvider` seeds `initialState` with the
+- **First paint shows Stage 1 demo data.** *(Wall dashboard half fixed 2026-08-29 — Shopping,
+  Tonight's meal and Kids now gate on `hydrated`. The underlying seeding of `initialState` is
+  still there, so any new screen that forgets to gate will have the same bug.)* `AgrocerProvider` seeds `initialState` with the
   demo fixtures, so until the load resolves every screen briefly renders someone else's
   groceries. Screens gate on `hydrated`; the nav badge did not, and now does. The underlying
   seeding of `initialState` is untouched and worth revisiting — it was invisible against
@@ -466,34 +502,43 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-**Ash does this first — it cannot be done by an agent.** Authentication is built and enforced,
-but no account exists, so the app currently only opens with `AGROCER_AUTH=off`:
+Ash asked for the AI to be brought in "in stages" and then to carry on. The ladder is complete:
 
-1. Supabase dashboard → Authentication → Users → **Add user**, with your email and a password.
-2. `npm run db:claim -- you@example.com "Ash"` (run it bare first to list the five members).
-3. `npm run dev`, open `/sign-in`, and sign in.
+| Slice | Scope | Status |
+| ----- | ----- | ------ |
+| 8a | provider abstraction + `/api/ai/chat` | **done** |
+| 8b | "Ask AshHome" card | **done** |
+| 9a | read-only tools | **done** |
+| 9b | first write tool, behind a confirmation gate | **done** |
+| 10 | pantry-aware meal planning | not started |
 
-Until step 2 that account gets 403 from every route. That is the design working, not a bug:
-signing up must not grant access to a household by itself.
+Stage 2 has no blockers left either. So the next task is a genuine choice, and these are the
+honest options in the order I would take them:
 
-**Then, the next build task — pick one:**
+**(a) Finish Stage 2's deployment work.** CI checks, Docker Compose, provisioning
+`agrocer-stg01`, and the **HTTPS decision that still blocks PWA install on a phone** — a LAN
+address over plain HTTP is not a secure context, so the service worker will not register.
+`docs/staging.md` compares the options and recommends Tailscale. This is the last thing
+standing between the app and actually living on the kitchen wall, which is the point of it.
 
-**(a) Client-side 401 handling.** The one rough edge auth left. A session that expires with a
-screen open surfaces a generic failure instead of sending the user to sign in. The wall tablet
-is exactly the device this bites. `src/data/api/client.ts` is where a 401 should become a
-redirect to `/sign-in?next=…` rather than a thrown error.
+**(b) Phase 10 — pantry-aware meal planning.** "Plan five dinners, keep extra groceries under
+$120, add what is missing to the list." The tools exist; what is missing is a planning tool
+and, for the last part, either multi-item proposals or a plan-shaped confirmation. Note this
+needs the multi-item limitation below solved first, or it can only ever add one thing.
 
-**(b) AI slice 9b — the first write tool.** Now unblocked: `addShoppingItem` behind a
-confirmation gate, per `CLAUDE.md`'s rule that sensitive actions need confirmation. Note this
-is the first tool that changes data, so `READ_ONLY_TOOLS` gains a sibling rather than a member
-(ADR-015 — the separation is by construction, not convention). The card's footnote and system
-prompt both currently promise the assistant cannot change anything; they change with it.
+**(c) Stage 4 groundwork** — recipes, consumption learning, budgeting, specials. Large, and
+Phase 6's recipe providers are the natural entry point.
 
-**(c) Finish Stage 2's remainder:** CI checks, Docker Compose deployment, the staging VM, and
-the HTTPS decision that still blocks PWA install (`docs/staging.md`; Tailscale recommended).
+**Known limitations worth fixing whenever they get in the way:**
 
-My recommendation is (a) then (b): (a) is small and stops auth having made the tablet worse in
-one specific way, and (b) is the thing the AI ladder has been building toward.
+- **Multi-item proposals.** "Add milk and eggs" proposes milk, and eggs go unmentioned —
+  Ollama returns no prose alongside a tool call, so there is nowhere to say it. Prompting was
+  tried and cannot work. Needs a list-shaped confirmation UI. This blocks the useful half of
+  Phase 10.
+- **The Ask card at phone width** is still unverified; the browser tooling would not resize
+  below desktop width across three sessions.
+- **`initialState` still seeds the Stage 1 demo fixtures.** The dashboard cards now gate on
+  `hydrated`, but any new screen that forgets to will show a convincing fake list.
 
 Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
 no optimistic UI.
@@ -528,9 +573,14 @@ Two costs still deliberately unpaid:
 - **`/api/ai/chat` has no tools and injects no system prompt, on purpose.** The assistant lives
   at `/api/ai/ask`. Keeping them apart is what makes "one path to household data with a model
   attached" a checkable statement. Do not add tools or a prompt to the transport route.
-- **`READ_ONLY_TOOLS` contains only read tools.** A write tool is slice 9b, needs Auth + RLS
-  and a confirmation gate, and does not join that record. The separation is by construction,
-  not by convention — keep it that way.
+- **`READ_ONLY_TOOLS` contains only read tools; `WRITE_TOOLS` is a separate record.** The
+  separation is by construction, not convention (ADR-015, ADR-018) — the confirmation gate
+  applies to the write record as a whole, so a tool added to the wrong one silently loses it.
+- **No write tool may execute inside the assistant loop.** The loop returns a proposal;
+  `/api/ai/confirm` is the only executor. If a tool should ever bypass the gate, that is an
+  ADR, not a flag.
+- **The confirmation sentence comes from `AiWriteTool.describe`, not from the model.** The
+  model has already been observed describing its own proposal wrongly.
 - **The registry's exact-name lookup.** Do not replace it with anything that maps model output
   onto a repository method, however convenient. See ADR-015 for what was rejected and why.
 - **The three places that describe what the assistant can and cannot do** —

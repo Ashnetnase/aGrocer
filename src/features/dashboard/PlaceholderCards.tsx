@@ -37,12 +37,16 @@ function MockRow({ label, detail, tone }: { label: string; detail: string; tone?
 }
 
 export function KidsCard() {
-  const { household } = useAgrocer();
+  // Gated like the other real-data cards: the demo household has children of its own, and
+  // showing someone else's children's names on a family wall is worse than showing nothing.
+  const { household, hydrated } = useAgrocer();
   const children = household.members.filter((member) => member.role === 'Child');
 
   return (
     <DashboardCard title="Kids / Today" placeholder="Phases 12–13">
-      {children.length === 0 ? (
+      {!hydrated ? (
+        <p className="py-6 text-base text-muted">Loading…</p>
+      ) : children.length === 0 ? (
         <p className="py-6 text-base text-muted">No children in the household yet.</p>
       ) : (
         <ul className="flex flex-wrap gap-3">

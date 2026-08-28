@@ -39,6 +39,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       reply: answer.reply,
       toolsUsed: answer.toolsUsed,
+      // Present only when the model asked to change something. Nothing has happened yet —
+      // `/api/ai/confirm` is the only route that acts on it, and only after a person agrees.
+      ...(answer.proposal ? { proposal: answer.proposal } : {}),
       model: answer.model,
       durationMs: answer.durationMs,
     });

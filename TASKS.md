@@ -27,8 +27,8 @@ Current state of the code lives in `HANDOFF.md`.
 - [~] Phase 7 — meals, meal planning and grocery budgeting *(planning done, budgeting not)*
 - [x] Phase 8 — local Ollama AI service *(slices 8a and 8b done: provider abstraction,
       `/api/ai/chat`, and the "Ask AshHome" card. Still no tools and no writes — that is Phase 9)*
-- [~] Phase 9 — controlled AI tool/action system *(9a done: three read-only tools behind an
-      explicit allow-list. 9b's first write tool wants Auth + RLS first)*
+- [x] Phase 9 — controlled AI tool/action system *(9a read tools + 9b the first write tool,
+      behind a confirmation gate. The model proposes; a person confirms)*
 - [ ] Phase 10 — pantry-aware AI meal planning
 - [ ] Phase 11 — reminders, scheduler and notifications
 - [ ] Phase 12 — kids, chores, family calendar and school-data foundation
@@ -50,9 +50,10 @@ reconciling: the phase list assumes work that the stage list already completed.
 - [x] Shopping — real, interactive, checkable from the wall
 - [x] Tonight's meal — real
 - [x] Chores — placeholder
-- [x] Ask AshHome — **real, and reads real data** (slices 8b + 9a). Answers from the shopping
-      list, pantry and meal plan, and labels which it consulted. Still cannot change anything
-      or see the calendar, chores or school, and the card says so
+- [x] Ask AshHome — **real, reads real data, and can add to the list with confirmation**
+      (slices 8b, 9a, 9b). Answers from the shopping list, pantry and meal plan and labels
+      which it consulted; proposes shopping additions behind an Add it / Cancel gate. Cannot
+      change anything else or see the calendar, chores or school, and the card says so
 - [ ] quick-add shopping directly on the dashboard (currently opens the full list)
 - [ ] real-time or polled updates so a phone change appears on the tablet without a reload
 - [ ] kiosk/device configuration (Phase 14)
@@ -139,6 +140,9 @@ reconciling: the phase list assumes work that the stage list already completed.
       RLS as `postgres`
 - [x] **first account created and linked** — `ashley.schippersas@gmail.com` signs in as `Ash`.
       Confirmed working by Ash on 2026-08-29
+- [x] wall dashboard cards gate on `hydrated` — Shopping, Tonight's meal and Kids showed the
+      Stage 1 demo fixtures until their fetch resolved, which was mistaken for real data
+      during development. They now show "Loading…"
 - [x] client-side 401 handling — a lapsed session now redirects to `/sign-in?next=…` from every
       fetch path including the assistant; 403 deliberately does not redirect. Verified live by
       expiring the cookie on an open dashboard
@@ -177,9 +181,16 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
             `READ_ONLY_TOOLS` allow-list (ADR-015), with `/api/ai/ask` owning the loop.
             Verified against the real database: sixteen pantry rows returned correctly
             grouped, nothing invented, empty cases reported as empty
-      - [ ] 9b first write tool (`addShoppingItem`) — **do Auth + RLS first**
+      - [x] 9b first write tool (`addShoppingItem`) behind a confirmation gate (ADR-018).
+            `WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`, not a member; the confirmation
+            sentence is built server-side from validated arguments; `/api/ai/confirm` is the
+            only path that executes, and it re-validates both tool name and arguments
       - [ ] more read tools where they earn it: household preferences, meal history, budget
-- [ ] confirmation gate for sensitive actions (email, deletions, anything spending money)
+- [x] confirmation gate for AI writes (ADR-018) — the pattern every later write tool inherits
+- [ ] confirmation gate for the *other* sensitive actions once they exist (email, deletions,
+      anything spending money)
+- [ ] multi-item proposals — "add milk and eggs" proposes milk only and cannot mention eggs,
+      because Ollama returns no prose alongside a tool call. Needs a list-shaped confirmation
 - [ ] streaming responses (deliberately deferred; a whole answer is fine for a wall tablet)
 
 ## Stage 4 — Recipes, consumption learning, budget and specials — `[ ]` NOT STARTED

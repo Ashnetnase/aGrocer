@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { ASSISTANT_SYSTEM_PROMPT, askAssistant } from './assistant';
 import type { AiTool } from './tools/registry';
+import type { AiWriteTool } from './tools/write';
 import { AiError, type AiChatRequest, type AiChatResult, type AiProvider } from './types';
 
 /**
@@ -55,6 +57,29 @@ const tools = {
   getShoppingList: fakeTool('getShoppingList', 'Still needed (1): Milk.'),
 };
 
+/** Records whether it ever ran, which is the property the gate exists to guarantee. */
+let addRan = false;
+
+const addThing: AiWriteTool<{ name: string }> = {
+  spec: {
+    name: 'addThing',
+    description: 'Propose adding a thing.',
+    parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  },
+  schema: z.object({ name: z.string().min(1) }),
+  describe: (args) => `Add ${args.name} to the list`,
+  execute: async () => {
+    addRan = true;
+    return 'Added.';
+  },
+};
+
+const writeTools = { addThing: addThing as AiWriteTool };
+
+beforeEach(() => {
+  addRan = false;
+});
+
 describe('ASSISTANT_SYSTEM_PROMPT', () => {
   it('tells the model to use the tools rather than guess', () => {
     expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/call the tool rather than guessing/i);
@@ -81,7 +106,7 @@ describe('askAssistant', () => {
   it('sends the system prompt and the question, and offers the tools', async () => {
     const { provider, turnAt } = scriptedProvider([result({ content: 'Fine.' })]);
 
-    await askAssistant('What is for dinner?', repos, { provider, tools });
+    await askAssistant('What is for dinner?', repos, { provider, tools, writeTools: {} });
 
     expect(turnAt(0).messages).toEqual([
       { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
@@ -177,5 +202,84 @@ describe('askAssistant', () => {
     );
 
     expect(error).toBeInstanceOf(AiError);
+  });
+});
+
+describe('the write gate', () => {
+  it('offers write tools alongside read tools', async () => {
+    const { provider, turnAt } = scriptedProvider([result({ content: 'Fine.' })]);
+
+    await askAssistant('anything', repos, { provider, tools, writeTools });
+
+    expect(turnAt(0).tools?.map((spec) => spec.name)).toEqual([
+      'getPantry',
+      'getShoppingList',
+      'addThing',
+    ]);
+  });
+
+  it('does NOT execute a write tool — it returns a proposal instead', async () => {
+    const { provider } = scriptedProvider([
+      result({ toolCalls: [{ name: 'addThing', arguments: { name: 'Milk' } }] }),
+    ]);
+
+    const answer = await askAssistant('add milk', repos, { provider, tools, writeTools });
+
+    expect(addRan).toBe(false);
+    expect(answer.proposal).toEqual({
+      tool: 'addThing',
+      description: 'Add Milk to the list',
+      args: { name: 'Milk' },
+    });
+  });
+
+  it('stops the loop on a proposal rather than asking the model again', async () => {
+    // Only one turn is scripted: a second call would throw.
+    const { provider, requests } = scriptedProvider([
+      result({ toolCalls: [{ name: 'addThing', arguments: { name: 'Milk' } }] }),
+    ]);
+
+    await askAssistant('add milk', repos, { provider, tools, writeTools });
+
+    expect(requests).toHaveLength(1);
+  });
+
+  it('describes the proposal from validated arguments, not from the model’s words', async () => {
+    const { provider } = scriptedProvider([
+      result({
+        content: 'I have added seventeen loaves of bread.',
+        toolCalls: [{ name: 'addThing', arguments: { name: 'Bread' } }],
+      }),
+    ]);
+
+    const answer = await askAssistant('add bread', repos, { provider, tools, writeTools });
+
+    // What the family confirms is the server's sentence, whatever the model claimed.
+    expect(answer.proposal?.description).toBe('Add Bread to the list');
+  });
+
+  it('refuses malformed arguments and lets the model retry, without proposing anything', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { provider, turnAt } = scriptedProvider([
+      result({ toolCalls: [{ name: 'addThing', arguments: { name: '' } }] }),
+      result({ content: 'Sorry, what should I add?' }),
+    ]);
+
+    const answer = await askAssistant('add', repos, { provider, tools, writeTools });
+
+    expect(answer.proposal).toBeUndefined();
+    expect(addRan).toBe(false);
+    expect(turnAt(1).messages.at(-1)?.content).toMatch(/not valid/i);
+    warn.mockRestore();
+  });
+
+  it('falls back to its own sentence when the model says nothing', async () => {
+    const { provider } = scriptedProvider([
+      result({ content: '', toolCalls: [{ name: 'addThing', arguments: { name: 'Eggs' } }] }),
+    ]);
+
+    const answer = await askAssistant('add eggs', repos, { provider, tools, writeTools });
+
+    expect(answer.reply).toBe('Add Eggs to the list?');
   });
 });

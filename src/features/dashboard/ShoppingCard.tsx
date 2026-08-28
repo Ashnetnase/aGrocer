@@ -12,6 +12,13 @@ import { DashboardCard } from './DashboardCard';
  * The shopping card, backed by the same repositories as the phone app — one source of truth,
  * never a tablet-specific copy of the list.
  *
+ * **Nothing renders until the real list has loaded.** `AgrocerProvider` seeds its initial
+ * state with the Stage 1 demo fixtures, so without this gate the kitchen wall shows a
+ * convincing fake shopping list — Milk, Bread, Bananas — until the fetch resolves. That is not
+ * hypothetical: it was mistaken for the family's real list during development on 2026-08-29.
+ * A brief "Loading…" is a far smaller problem than a wall display confidently showing
+ * groceries nobody needs.
+ *
  * Items are checkable straight from the wall, because that is the whole point of a tablet in
  * the kitchen. Adding an item opens the full list rather than putting a keyboard on the wall:
  * the quick-add control belongs here eventually, but a half-working one would be worse than a
@@ -22,7 +29,7 @@ import { DashboardCard } from './DashboardCard';
 const VISIBLE = 6;
 
 export function ShoppingCard({ className }: { className?: string }) {
-  const { shopping, toggleShoppingItem } = useAgrocer();
+  const { shopping, toggleShoppingItem, hydrated } = useAgrocer();
   const summary = summariseShopping(shopping);
   const visible = shopping.slice(0, VISIBLE);
   const hidden = shopping.length - visible.length;
@@ -32,7 +39,7 @@ export function ShoppingCard({ className }: { className?: string }) {
       className={className}
       title="Shopping"
       meta={
-        shopping.length
+        hydrated && shopping.length
           ? `${pluralise(summary.remaining.length, 'item')} left · ${nzd(summary.total)}`
           : undefined
       }
@@ -45,7 +52,9 @@ export function ShoppingCard({ className }: { className?: string }) {
         </Link>
       }
     >
-      {shopping.length === 0 ? (
+      {!hydrated ? (
+        <p className="py-6 text-base text-muted">Loading…</p>
+      ) : shopping.length === 0 ? (
         <p className="py-6 text-base text-muted">Nothing on the list.</p>
       ) : (
         <ul className="grid gap-1 sm:grid-cols-2">

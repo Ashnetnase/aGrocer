@@ -63,10 +63,19 @@ export function describeAskFailure(status: number, kind?: string): AskFailure {
   }
 }
 
+/** A change the assistant has asked for. Nothing has happened until it is confirmed. */
+export interface AskProposal {
+  tool: string;
+  /** Written by the server from validated arguments, never by the model. Safe to display. */
+  description: string;
+  args: unknown;
+}
+
 export interface AskAnswer {
   reply: string;
   /** Which tools the assistant used, so the card can show where the answer came from. */
   toolsUsed: string[];
+  proposal?: AskProposal;
   model: string;
   durationMs: number;
 }
@@ -119,9 +128,60 @@ export async function askAshHome(question: string, signal?: AbortSignal): Promis
   return {
     reply: body.reply.trim(),
     toolsUsed: Array.isArray(body.toolsUsed) ? (body.toolsUsed as string[]) : [],
+    proposal: readProposal(body.proposal),
     model: typeof body.model === 'string' ? body.model : 'unknown',
     durationMs: typeof body.durationMs === 'number' ? body.durationMs : 0,
   };
+}
+
+/**
+ * A proposal is only shown if it has a description to show. A confirm button over a blank
+ * sentence is the one thing worse than no confirmation at all.
+ */
+function readProposal(raw: unknown): AskProposal | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const candidate = raw as Record<string, unknown>;
+  if (typeof candidate.tool !== 'string' || typeof candidate.description !== 'string') {
+    return undefined;
+  }
+  if (candidate.description.trim() === '') return undefined;
+  return { tool: candidate.tool, description: candidate.description, args: candidate.args };
+}
+
+/**
+ * Carries out a proposal the family confirmed.
+ *
+ * Sends the tool and arguments back exactly as received — the server re-validates both, so
+ * this does not need to understand what any of them mean.
+ */
+export async function confirmProposal(
+  proposal: AskProposal,
+  signal?: AbortSignal,
+): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch('/api/ai/confirm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      signal,
+      body: JSON.stringify({ tool: proposal.tool, args: proposal.args }),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw {
+      message: 'Could not reach AshHome. Check the tablet’s connection.',
+      retryable: true,
+    } satisfies AskFailure;
+  }
+
+  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+
+  if (!response.ok) {
+    handleUnauthorized(response.status);
+    throw describeAskFailure(response.status);
+  }
+
+  return typeof body?.result === 'string' ? body.result : 'Done.';
 }
 
 /** Tool names are internal; the card shows the family what was actually consulted. */

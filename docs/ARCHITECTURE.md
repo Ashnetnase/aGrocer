@@ -159,13 +159,19 @@ src/features/dashboard/      "Ask AshHome" card on the wall dashboard
 src/features/ask/            the request, and failure → readable sentence
   askAshHome.ts
         ↓
-app/api/ai/ask/route.ts      POST a question → one answer (the assistant)
+app/api/ai/ask/route.ts      POST a question → an answer, or a PROPOSAL
         ↓
 src/ai/assistant.ts          the system prompt and the tool loop (max 3 rounds)
-        ├──────────────────→ src/ai/tools/registry.ts   the allow-list boundary
-        │                    src/ai/tools/readOnly.ts   getShoppingList · getPantry
-        │                          ↓                    getMealPlan
+        ├──────────────────→ src/ai/tools/readOnly.ts   getShoppingList · getPantry
+        │                          ↓                    getMealPlan — these RUN
         │                    serverRepositories() → Drizzle → PostgreSQL
+        │
+        └──────────────────→ src/ai/tools/write.ts      addShoppingItem — this does NOT run.
+                                                        The loop stops and returns a proposal.
+
+app/api/ai/confirm/route.ts  the ONLY path that executes a write. No model involved.
+        ↓                    Re-validates the tool name and the arguments.
+   src/ai/tools/write.ts → serverRepositories() → Drizzle → PostgreSQL
         ↓
 src/ai/provider.ts           getAiProvider() — the ONLY place a provider is chosen
         ↓
@@ -179,6 +185,13 @@ Ollama on 127.0.0.1:11434    qwen3:8b (RTX 5070)
 Two routes, deliberately distinct. `/api/ai/ask` is the assistant: it owns the prompt, runs the
 tool loop, and is the only path by which a model reaches household data. `/api/ai/chat` is the
 raw transport: no prompt, no tools, no data.
+
+**The AI proposes writes; a person confirms them** (ADR-018). A write tool is never executed
+by the assistant loop — the model calls it, the loop validates the arguments and returns an
+`AssistantProposal`, and nothing happens until somebody presses a button. The sentence they
+read is generated server-side from the validated arguments, never taken from the model's prose,
+so what is agreed to is exactly what will run. `WRITE_TOOLS` is a *sibling* of
+`READ_ONLY_TOOLS`, not a member, so the gate applies by construction.
 
 **Tools are an allow-list, not a bridge** (ADR-015). Lookup is by exact name against a fixed
 record; nothing maps model output onto a repository method. Every 9a tool takes no arguments,
@@ -209,9 +222,9 @@ it moved server-side, because a prompt that describes tools and the tools themse
 if they live in different places. It is not a secret and not a security boundary — the allow-list
 is the security boundary.
 
-The assistant can read the shopping list, pantry and meal plan. It **cannot** change anything,
-and cannot see the family calendar, chores, reminders or school information, because none of
-that exists as data yet. The prompt tells it to answer only from what a tool returned and never
+The assistant can read the shopping list, pantry and meal plan, and can *propose* adding one
+shopping item. It cannot change anything else, and cannot see the family calendar, chores,
+reminders or school information, because none of that exists as data yet. The prompt tells it to answer only from what a tool returned and never
 to invent an item, a quantity or a date; the card repeats the limits in a footnote and labels
 which data an answer came from. On a kitchen wall, an assistant that appears to know what is in
 the freezer and is guessing is worse than one that admits it cannot look.

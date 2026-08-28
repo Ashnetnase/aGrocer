@@ -617,6 +617,62 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-29 — The first write tool, behind a confirmation gate (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 9, slice 9b — the rung the whole AI ladder was building toward
+**Status:** Complete and verified
+
+The assistant can now change something: add one item to the shopping list. It never does so on
+its own — it *proposes*, and a person presses a button. ADR-018 records the shape and what was
+rejected.
+
+**Three properties do the work.**
+
+1. **`WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`, not a member.** ADR-015 made that split
+   structural; this keeps it structural, so the gate cannot be missed by adding a tool to the
+   wrong record. A test asserts the two records never overlap.
+2. **The sentence a person confirms is generated server-side from validated arguments**, never
+   taken from the model's prose. Worth the trouble: during testing the model claimed "I have
+   added seventeen loaves of bread" while proposing one loaf. The confirmation read correctly,
+   and there is now a test pinning exactly that case.
+3. **Arguments are validated twice** — once when proposing, once at `/api/ai/confirm` — because
+   the round trip through the browser means they arrive as user input the second time.
+
+**Verified against the real database.** Asking to add bread returned a proposal and left the
+list empty; confirming it added the row. `/api/ai/confirm` refuses a read tool, an invented
+tool, a repository method spelled as a tool name, an empty item name, an unknown category and
+an absurd quantity — six probes, all 400, list unchanged.
+
+**Two real problems the testing found, both fixed.**
+
+- *The model substituted an action.* "Plan burgers for Friday dinner" made it reach for the
+  only write tool it had and propose adding burgers to the **shopping list**. The gate caught
+  it — the sentence said plainly what it would do — but substituting is bad behaviour, so the
+  prompt now forbids it. Re-tested: it declines and names what it cannot do.
+- *The confirmation was below the fold.* Rendered inside the scrolling answer area, a 60-word
+  answer pushed the buttons out of sight. It now sits pinned above the input, outside the
+  scroll. A confirmation you have to scroll to reach is not a confirmation.
+
+**A known limitation, deliberately not papered over.** Asked for "milk and eggs", the model
+proposes milk and eggs go unmentioned. Ollama returns empty content alongside a tool call, so
+there is no prose in which to say "eggs still needs adding" — prompting for it was tried and
+cannot work. Fixing it properly means proposing a list, which needs a different confirmation
+UI. Recorded in the code at the point it matters.
+
+**And one bug this work surfaced, unrelated but worse.** The wall dashboard's Shopping,
+Tonight's meal and Kids cards did not gate on `hydrated`. `AgrocerProvider` seeds its initial
+state with the Stage 1 demo fixtures, so until the fetch resolved the kitchen wall showed a
+convincing fake shopping list — Milk, Bread, Bananas, $80.87 — and a dinner nobody planned. It
+was mistaken for real data during this session, which is precisely the failure the project
+cares most about avoiding. All three cards now show "Loading…" until the real data arrives.
+`HANDOFF.md` had listed the underlying issue as known, with a note that screens gate on
+`hydrated`; the dashboard cards never did.
+
+**Verified.** `npm run check` — 194 tests across 15 files (was 174/14). Build clean. The full
+flow driven in Chrome at 1280×800: proposal shown, Add it pressed, row written, and the
+Shopping card updating alongside — which needed `refreshShopping` exposed on the provider,
+since `/api/ai/confirm` bypasses the repositories that would normally notify it.
+
 ## 2026-08-29 — Sign-in confirmed, and a lapsed session now goes to sign-in (Claude Code)
 
 **Stage:** Stage 2 — finishing what ADR-017 left rough
@@ -1867,6 +1923,45 @@ without verifying it, which on a server is worth nothing.
 its own household. They remain defence in depth, not the enforcement — the app still connects
 as `postgres` and bypasses them (ADR-016). They matter if a signed-in token ever reaches
 PostgREST directly.
+
+
+## ADR-018 — The AI proposes changes; a person confirms them
+
+**Status:** Accepted (2026-08-29)
+
+`CLAUDE.md` requires confirmation for sensitive actions. This records the shape that gives, now
+that the assistant can change data at all.
+
+**A write tool is never executed by the assistant loop.** The model calls it, `askAssistant`
+intercepts the call, validates the arguments, and returns an `AssistantProposal` instead of
+acting. Execution happens only at `POST /api/ai/confirm`, which involves no model at all. So
+the sequence is: model proposes → person reads a sentence → person presses a button → server
+runs it.
+
+**`WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`, not a member.** ADR-015 made the read/write
+split structural, and this keeps it that way: the gate applies to everything in the write
+record by construction, so a future tool cannot slip past it by being added to the wrong list.
+
+**The confirmation sentence is generated server-side from validated arguments**
+(`AiWriteTool.describe`), never taken from the model's prose. What a person agrees to is
+therefore exactly what will run. This is not theoretical — during testing the model said "I
+have added seventeen loaves of bread" while proposing one; the sentence shown was the correct
+one, and there is a test pinning that.
+
+**Write tools carry a Zod schema; read tools take no arguments.** Model output is untrusted
+input. Arguments are validated twice — once when the proposal is made, once at `/api/ai/confirm`
+— because the round trip through the browser means they arrive as user input the second time.
+
+**That round trip grants no new privilege**, since the same signed-in person can already POST
+to `/api/shopping`. The gate is about *intent*, not authority: it stops the assistant acting on
+its own reading of an ambiguous request. On a shared kitchen wall, where anyone passing can
+talk to the tablet, that distinction is the whole point.
+
+**Rejected: letting low-risk writes through automatically.** The master plan allows for it
+eventually, and adding a shopping item is about as low-risk as a write gets. But the first
+write tool sets the pattern every later one inherits, and "the model decided to change
+something" is not a behaviour to establish casually. If a tool should ever bypass the gate,
+that is a decision to record here, not a flag to add quietly.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

@@ -11,12 +11,16 @@ import { DashboardCard } from './DashboardCard';
 /**
  * Tonight's dinner, read from the same plan the Meals screen writes.
  *
+ * Like the shopping card, this waits for the real plan. `AgrocerProvider` starts from the
+ * Stage 1 demo fixtures, which include a planned dinner — so without the gate the wall
+ * announces a meal nobody planned.
+ *
  * Cost and the missing-ingredient warning are deliberately absent: both need ingredient-level
  * matching against products and pantry, which belongs with the recipe work rather than being
  * approximated here. A wrong number on the kitchen wall is worse than no number.
  */
 export function TonightCard() {
-  const { meals, plan } = useAgrocer();
+  const { meals, plan, hydrated } = useAgrocer();
   const week = usePlannerWeek();
   const tonight = findMeal(meals, mealFor(plan, week.todayKey, 'dinner'));
 
@@ -28,11 +32,13 @@ export function TonightCard() {
           href="/meals"
           className="rounded-full bg-moss-50 px-4 py-2 text-sm font-bold text-moss-700 transition-colors hover:bg-moss-100"
         >
-          {tonight ? 'Recipe' : 'Plan it'}
+          {hydrated && tonight ? 'Recipe' : 'Plan it'}
         </Link>
       }
     >
-      {tonight ? (
+      {!hydrated ? (
+        <p className="py-6 text-base text-muted">Loading…</p>
+      ) : tonight ? (
         <div className="flex items-center gap-5">
           {tonight.image ? (
             <Image

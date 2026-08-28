@@ -61,6 +61,15 @@ interface AgrocerActions {
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
 
   resetDemoData: () => Promise<void>;
+
+  /**
+   * Re-reads the shopping list.
+   *
+   * Exposed for writes that happen outside this provider — today only the assistant's
+   * confirmed proposals, which go through `/api/ai/confirm` rather than a repository method,
+   * so nothing here would otherwise know the list had changed.
+   */
+  refreshShopping: () => Promise<void>;
 }
 
 type AgrocerValue = AgrocerState & AgrocerActions;
@@ -230,6 +239,8 @@ export function AgrocerProvider({
         await repositories.reset();
         await loadAll();
       },
+
+      refreshShopping,
     }),
     [
       repositories,
