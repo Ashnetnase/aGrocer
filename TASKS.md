@@ -25,9 +25,10 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] Phase 5 — pantry/freezer inventory
 - [ ] Phase 6 — recipe providers and family recipes
 - [~] Phase 7 — meals, meal planning and grocery budgeting *(planning done, budgeting not)*
-- [~] Phase 8 — local Ollama AI service *(connectivity proven by `npm run ai:check`; no
-      service, provider abstraction or tool calling exists)*
-- [ ] Phase 9 — controlled AI tool/action system
+- [x] Phase 8 — local Ollama AI service *(slices 8a and 8b done: provider abstraction,
+      `/api/ai/chat`, and the "Ask AshHome" card. Still no tools and no writes — that is Phase 9)*
+- [ ] Phase 9 — controlled AI tool/action system *(9a read-only tools are safe before auth;
+      9b's first write tool wants Auth + RLS first)*
 - [ ] Phase 10 — pantry-aware AI meal planning
 - [ ] Phase 11 — reminders, scheduler and notifications
 - [ ] Phase 12 — kids, chores, family calendar and school-data foundation
@@ -49,7 +50,8 @@ reconciling: the phase list assumes work that the stage list already completed.
 - [x] Shopping — real, interactive, checkable from the wall
 - [x] Tonight's meal — real
 - [x] Chores — placeholder
-- [x] Ask AshHome — placeholder
+- [x] Ask AshHome — **real** (slice 8b). Asks the local Ollama and shows the answer. Labelled
+      on the card as unable to see the list, pantry or calendar until Phase 9 tools land
 - [ ] quick-add shopping directly on the dashboard (currently opens the full list)
 - [ ] real-time or polled updates so a phone change appears on the tablet without a reload
 - [ ] kiosk/device configuration (Phase 14)
@@ -143,14 +145,24 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 - [ ] open Agrocer from a phone on the home network and install it
 - [ ] confirm it stays reachable with the Ryzen desktop powered off (ADR-007)
 
-## Stage 3 — AI meal and grocery assistant — `[ ]` NOT STARTED
+## Stage 3 — AI meal and grocery assistant — `[~]` IN PROGRESS
 
-*AshHome Phases 7–8.*
+*AshHome Phases 7–8. Being taken in slices — see the 2026-08-28 progress log entry.*
 
-- [ ] backend AI service abstraction (provider-agnostic — Ollama first, cloud fallback optional)
-- [ ] local Ollama service over the LAN (RTX 5070 machine)
+- [x] backend AI service abstraction (provider-agnostic — `AiProvider`, chosen in one place).
+      Cloud fallback has a seam (`AI_PROVIDER`) but no implementation
+- [x] local Ollama provider + `/api/ai/chat` (health and one-shot chat), verified end to end
+      with `npm run ai:chat`. Ollama stays bound to localhost, so this works only on the
+      workstation; from staging it returns 503 `unreachable` until the tunnel question is answered
+- [x] slice 8b — "Ask AshHome" dashboard card is a real input. The system prompt lives with
+      the feature (`src/features/ask/askAshHome.ts`), not the route, and tells the model to
+      refuse rather than invent household data. Verified live: it declines to list or change
+      the shopping list
 - [ ] controlled AI tool/action system — explicit functions only, never raw system access
+      - [ ] 9a read-only tools (`getShoppingList`, `getPantry`, `getMealPlan`) — safe before auth
+      - [ ] 9b first write tool (`addShoppingItem`) — **do Auth + RLS first**
 - [ ] confirmation gate for sensitive actions (email, deletions, anything spending money)
+- [ ] streaming responses (deliberately deferred; a whole answer is fine for a wall tablet)
 
 ## Stage 4 — Recipes, consumption learning, budget and specials — `[ ]` NOT STARTED
 

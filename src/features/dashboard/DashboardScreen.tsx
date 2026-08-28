@@ -6,7 +6,8 @@ import { useAgrocer } from '@/providers/AgrocerProvider';
 import { useToday } from '@/providers/useToday';
 import { ShoppingCard } from './ShoppingCard';
 import { TonightCard } from './TonightCard';
-import { AskCard, ChoresCard, KidsCard, RemindersCard, ScheduleCard } from './PlaceholderCards';
+import { ChoresCard, KidsCard, RemindersCard, ScheduleCard } from './PlaceholderCards';
+import { AskCard } from './AskCard';
 
 /**
  * The wall dashboard (Phase 1).

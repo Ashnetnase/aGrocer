@@ -14,6 +14,11 @@ interface DashboardCardProps {
   meta?: string;
   /** Marks a card whose data is not real yet, so nobody mistakes mock data for the family's. */
   placeholder?: string;
+  /**
+   * A footnote for a card that *is* real but limited — where "Placeholder" would be a lie and
+   * saying nothing would overstate what the card can do.
+   */
+  note?: string;
   action?: ReactNode;
   className?: string;
   children: ReactNode;
@@ -23,6 +28,7 @@ export function DashboardCard({
   title,
   meta,
   placeholder,
+  note,
   action,
   className,
   children,
@@ -49,6 +55,12 @@ export function DashboardCard({
       {placeholder ? (
         <p className="mt-3 shrink-0 rounded-xl bg-canvas px-3 py-2 text-xs font-semibold text-muted">
           Placeholder — real data arrives with {placeholder}
+        </p>
+      ) : null}
+
+      {note ? (
+        <p className="mt-3 shrink-0 rounded-xl bg-canvas px-3 py-2 text-xs font-semibold text-muted">
+          {note}
         </p>
       ) : null}
     </section>

@@ -7,6 +7,8 @@ import { DashboardCard } from './DashboardCard';
 /**
  * Cards whose services do not exist yet (Phases 11–13).
  *
+ * "Ask AshHome" used to live here. It moved to `AskCard.tsx` when slice 8b made it real.
+ *
  * They reserve the layout so the dashboard's shape is settled before the data arrives, and
  * every one of them is labelled as a placeholder. The mock content is deliberately generic —
  * inventing plausible school notices or chores for real children would be indistinguishable
@@ -92,29 +94,6 @@ export function RemindersCard() {
     <DashboardCard title="Reminders" placeholder="Phase 11">
       <ul>
         <MockRow label="Example: overdue reminder" detail="Overdue" tone="urgent" />
-      </ul>
-    </DashboardCard>
-  );
-}
-
-export function AskCard({ className }: { className?: string }) {
-  return (
-    <DashboardCard className={className} title="Ask AshHome" placeholder="Phases 8–9">
-      <p className="text-sm text-muted">
-        Always through explicit tools, never with direct access to the household data.
-      </p>
-      <ul className="mt-2 flex flex-wrap gap-2">
-        {[
-          '“What are we having for dinner?”',
-          '“Add milk to shopping.”',
-        ].map((example) => (
-          <li
-            key={example}
-            className="rounded-full bg-canvas px-3 py-1.5 text-sm font-semibold text-muted"
-          >
-            {example}
-          </li>
-        ))}
       </ul>
     </DashboardCard>
   );

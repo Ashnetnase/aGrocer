@@ -99,6 +99,64 @@ App content renders client-side behind a hydration gate (ADR-009). Shopping Mode
 route rather than a flag (ADR-010). A hand-written service worker provides offline support
 (ADR-011) — deliberately not a generated one.
 
+## AI service
+
+Current, as of 2026-08-28 (ADR-014). Provider abstraction, one route, and one family-facing
+entry point; no tools, no writes.
+
+```
+src/features/dashboard/      "Ask AshHome" card on the wall dashboard
+  AskCard.tsx
+        ↓
+src/features/ask/            the system prompt and the failure wording
+  askAshHome.ts
+        ↓
+app/api/ai/chat/route.ts     GET health · POST one answer (Zod-validated, bounded)
+        ↓
+src/ai/provider.ts           getAiProvider() — the ONLY place a provider is chosen
+        ↓
+src/ai/types.ts              AiProvider, AiMessage, AiChatResult, AiHealth, AiError
+        ↓
+src/ai/ollamaProvider.ts     the only Ollama-shaped code in the repository
+        ↓
+Ollama on 127.0.0.1:11434    qwen3:8b (RTX 5070)
+```
+
+The same seam as the repositories (ADR-003), applied to inference: features depend on
+`AiProvider`, and swapping qwen3 for gemma — or Ollama for a cloud provider — changes
+`src/ai/provider.ts` and nothing else. `AI_PROVIDER` selects it; only `ollama` is implemented.
+
+Everything under `src/ai/` is server-side. `OLLAMA_BASE_URL` describes the inside of the home
+network and must never reach a browser.
+
+`AiError` carries a `kind` (`unreachable | modelMissing | timeout | upstream | config`), a
+detailed `message` for the server log, and a `publicMessage` safe to show a user. The route maps
+the kind to 503/504/502, so a caller can distinguish a misconfigured server from a slow one
+without learning the address.
+
+Ollama binds to localhost deliberately, so this works only on the workstation running it. From
+the staging VM the route returns 503 `unreachable` until a tunnel or authenticated proxy is
+decided — never `OLLAMA_HOST=0.0.0.0`.
+
+**The system prompt belongs to the feature, not the route.** `/api/ai/chat` injects nothing, so
+each caller owns its own framing; `ASK_SYSTEM_PROMPT` is the dashboard card's. It is not a secret
+and not a security boundary — it ships in the client bundle and the route accepts arbitrary
+messages. The security boundary is that there are no tools.
+
+Because there are none, the model cannot see the shopping list, pantry, meal plan or calendar,
+and cannot change anything. The prompt tells it to say so rather than guess, and the card repeats
+the limit in a footnote. On a kitchen wall, an assistant that appears to know what is in the
+freezer and is guessing is worse than one that admits it cannot look.
+
+No conversation history is kept, here or anywhere else: each question stands alone.
+
+Deliberately absent, each belonging to a named later phase: tool calling (Phase 9), conversation
+persistence (the application owns state, not the model), and streaming.
+
+Two scripts, easy to confuse: `npm run ai:check` talks straight to Ollama and proves the machine
+can reach it; `npm run ai:chat` goes through `/api/ai/chat` and proves the whole path, so it needs
+`npm run dev` running.
+
 ## Tooling
 
 `npm run dev` · `build` · `start` · `lint` · `typecheck` · `test` · `check` (all three).
@@ -150,9 +208,9 @@ early, but not to be architecturally excluded either.
 
 ## AI
 
-A backend AI service abstraction so no application logic binds to one model. First target is
-local Ollama on a separate LAN machine (RTX 5070 12 GB); models may change (Qwen, Gemma, others)
-with an optional cloud fallback.
+The provider abstraction, the local Ollama service and the "Ask AshHome" card are **Current** —
+see the AI service section above. What remains planned: the cloud fallback implementation (the
+`AI_PROVIDER` seam exists, the provider does not), tool calling, and streaming.
 
 The governing principle:
 

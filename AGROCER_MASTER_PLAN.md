@@ -387,7 +387,9 @@ No supermarket automation or autonomous AI agents unless the stage is explicitly
 
 ## Stage 3 — AI meal and grocery assistant
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS** — slices 8a and 8b landed 2026-08-28 (the provider abstraction, the
+AI service route, and the wall dashboard's "Ask AshHome" card). Deliberately sliced: see the
+progress log entries for the ladder and where it stops before Auth/RLS.
 
 ### Goal
 
@@ -395,9 +397,10 @@ Add a controlled AI assistant that uses tools over Agrocer's structured data.
 
 ### Planned scope
 
-- [ ] AI provider abstraction
-- [ ] cloud AI fallback
-- [ ] optional local AI when RTX desktop is on
+- [x] AI provider abstraction — `src/ai/types.ts`, `src/ai/provider.ts`
+- [ ] cloud AI fallback — the seam exists (`AI_PROVIDER`), no implementation
+- [x] optional local AI when RTX desktop is on — `src/ai/ollamaProvider.ts`, `/api/ai/chat`
+- [x] a family-facing entry point — "Ask AshHome" on the wall dashboard (slice 8b)
 - [ ] tool calling
 - [ ] get pantry
 - [ ] get household preferences
@@ -605,6 +608,132 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-28 — "Ask AshHome" becomes a real input on the wall dashboard (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 8, slice 8b
+**Status:** Complete and verified; slice 9a (read-only tools) not started
+
+Second slice of the ladder recorded in the 8a entry below. The dashboard card that described
+an AI area now is one: a question goes to `/api/ai/chat`, and the answer comes back from the
+local qwen3:8b on the RTX 5070.
+
+**The honesty problem this slice had to solve.** The model still has no tools, so it cannot see
+the shopping list, the pantry, the meal plan or the calendar, and it cannot change anything. A
+kitchen-wall assistant that *appears* to know what is in the freezer, and is guessing, is worse
+than no assistant at all — and `CLAUDE.md` already forbids the AI inventing school dates for
+exactly this reason. So the limit is stated three times over, in three places that each catch a
+different reader:
+
+1. **The system prompt** (`ASK_SYSTEM_PROMPT`) tells the model it has no access to the family's
+   data, that it must say so plainly rather than guess, and that it cannot add or change
+   anything. Verified live: "What is on our shopping list right now, and add bread to it?" was
+   answered "I cannot see your shopping list yet. Please open the Agrocer app to view or
+   update your list." — no invented items, no pretended write.
+2. **A footnote on the card**, so a family member reads the same limit without asking.
+3. **The example chips** are only questions this slice can honestly answer (cooking and
+   household). The master plan's "Add milk to shopping" and "What are the kids doing tomorrow?"
+   examples were deliberately removed until Phase 9 makes them true — inviting a question the
+   assistant must refuse is a poor introduction to it.
+
+**Other decisions worth keeping.**
+
+- **The system prompt lives with the feature, not the route.** `/api/ai/chat` injects nothing
+  on purpose, so each caller owns its own framing. The prompt is not a secret and not a
+  security boundary — it ships in the client bundle and the route accepts arbitrary messages
+  anyway. The security boundary is that there are no tools.
+- **No conversation history.** Each question stands alone. A shared tablet in a family room
+  should not accumulate a transcript nobody chose to keep, and the application owns anything
+  worth remembering — not the model.
+- **Failures are sentences, not status codes.** `describeAskFailure` maps the route's `kind` to
+  something a person can act on: `unreachable` becomes "The assistant is offline. It runs on
+  the home PC — check that is on", with a Try again button. A non-retryable failure gets no
+  button. No status code, hostname or stack trace can reach the wall.
+- `DashboardCard` gained a `note` prop. "Placeholder" would now be a lie on this card, and
+  saying nothing would overstate it; a real-but-limited card needed its own footnote.
+- The card was moved out of `PlaceholderCards.tsx` into its own `AskCard.tsx`, which is the
+  file that stopped being a placeholder.
+
+**Verified.** `npm run check` — 136 tests across 10 files (was 124/9); the 12 new ones cover the
+prompt's guarantees, that no history is sent, and that every failure arrives as a readable
+sentence with nothing leaked. `npm run build` clean; `/dashboard` grew 3.05 kB → 5.04 kB. In
+Chrome at a real 1280×800 kiosk viewport: an example chip returned a mince-and-rice answer, a
+typed question about the shopping list was refused correctly, the answer area scrolls inside
+its own card while the input stays pinned and the page itself still does not scroll, and no
+console errors or hydration warnings appeared. With `OLLAMA_BASE_URL` pointed at a dead port,
+the card showed the offline sentence and its Try again button.
+
+**One trap, twice.** A dev server started after `npm run build` serves a stale `.next`, *and*
+the Stage 1 service worker (ADR-011) serves a cached bundle — so the dashboard rendered the old
+card twice over while the new one was already on disk. Delete `.next`, and unregister the
+service worker in DevTools, before believing a dashboard change did not work.
+
+**Not re-verified:** the Ask card at a phone-width viewport. The browser tooling would not
+resize below the desktop width this session. The layout is a wrapping example list above a
+flex row, so the risk is low, but it is unchecked.
+
+## 2026-08-28 — AI provider abstraction and the `/api/ai/chat` service (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 8, slice 8a only
+**Status:** Complete and verified; slice 8b not started
+
+Ash asked to bring the AI in "in stages". This is the first slice, chosen to be the largest
+step that changes nothing a family member can see and touches no household data.
+
+**The ladder that was agreed**, smallest first, so a later session knows where this sits:
+
+| Slice | Scope | Gate |
+| ----- | ----- | ---- |
+| 8a | provider abstraction + `/api/ai/chat`, no tools, no writes | none — landed |
+| 8b | "Ask AshHome" dashboard card becomes a real input, text answers only | none |
+| 9a | read-only tools: `getShoppingList`, `getPantry`, `getMealPlan` | none |
+| 9b | first write tool `addShoppingItem`, behind a confirmation gate | **wants Auth + RLS first** |
+| 10 | pantry-aware meal planning | after 9b |
+
+**What landed.**
+
+- `src/ai/types.ts` — `AiProvider`, `AiMessage`, `AiChatRequest`, `AiChatResult`, `AiHealth`,
+  and `AiError` with a `kind` of `unreachable | modelMissing | timeout | upstream | config`.
+  Every error carries both a detailed `message` for the server log and a `publicMessage` safe
+  to show a user, the same split the data routes already make.
+- `src/ai/ollamaProvider.ts` — the only Ollama-shaped code in the repository. Keeps
+  `stream: false` and `think: false` from the spike, for the same reasons, and discards the
+  `thinking` scratchpad rather than letting it reach a caller.
+- `src/ai/provider.ts` — `getAiProvider()`, the single place a provider is chosen. Reads
+  `AI_PROVIDER` (defaults `ollama`) and caches across hot reloads exactly as `src/db/client.ts`
+  does. A cloud fallback is added here and nowhere else.
+- `app/api/ai/chat/route.ts` — `GET` for health, `POST` for one answer. Accepts either
+  `{ prompt }` or `{ messages }`, bounded at 20 messages of 4,000 characters so one request
+  cannot pin the GPU. `AiErrorKind` maps to 503/504/502 so a caller can tell a misconfigured
+  server from a slow one without being told the address.
+- `scripts/ai-chat.ts` + `npm run ai:chat` — the end-to-end check, over the route rather than
+  straight to Ollama, which is what distinguishes it from `npm run ai:check`.
+
+**What it deliberately does not do**, and must not grow by accident:
+
+- **No tools.** The model cannot read or write one row of household data. That is Phase 9, and
+  it arrives as an explicit allow-list of application functions, per `CLAUDE.md`.
+- **No system prompt injection.** The route is a transport; the assistant's framing belongs to
+  the feature that calls it. This keeps 8b free to own the personality.
+- **No persistence.** The application owns permanent state, not the model.
+- **No streaming.** A whole answer is fine for a wall tablet, and a streaming reader is more
+  to misread. Revisit when a long answer actually feels slow.
+
+**Ollama still binds to localhost**, unchanged. So `/api/ai/chat` only works when the app runs
+on this workstation; from the staging VM it will return 503 `unreachable` until the tunnel
+question is answered. That is the correct failure, not a bug.
+
+**Verified.** `npm run check` — 124 tests, up from 112; the 12 new ones mock `fetch` and pin
+the classification of every failure path plus the discarding of the scratchpad. `npm run build`
+clean, `/api/ai/chat` dynamic, every screen still statically prerendered, so no server-only
+module leaked into a client bundle. Against real Ollama: health reported 0.33.1 with
+`qwen3:8b` ready, a prompt answered in 3.9s, the `{ messages }` form honoured a system message,
+and the three validation failures (empty body, blank prompt, non-JSON) each returned 400.
+Pointing `OLLAMA_BASE_URL` at a dead port returned 503 `unreachable` with the address absent
+from the response body and present in the server log.
+
+One incidental fix: a dev server started immediately after `npm run build` serves a stale
+`.next` and answers HTML. The script now says so instead of failing on a JSON syntax error.
 
 ## 2026-08-27 — Local Ollama connectivity proven (Claude Code)
 
@@ -1433,6 +1562,28 @@ comfortably on the 3 GB `agrocer-stg01` spec anyway.
 
 **Not decided here:** Drizzle is the standing recommendation for schema and migrations (`drizzle-zod`
 keeps Zod as the single source of truth per section 5) but is not yet ratified.
+
+## ADR-014 — AI reaches AshHome only through a server-side provider abstraction
+
+**Status:** Accepted (2026-08-28)
+
+`CLAUDE.md` requires that no application logic bind to one model. The shape that satisfies it
+is the one ADR-003 already uses for persistence: features depend on an interface, and the
+implementation is chosen in exactly one place.
+
+- Features and route handlers depend on `AiProvider` (`src/ai/types.ts`) and never on Ollama.
+- `getAiProvider()` (`src/ai/provider.ts`) is the only code that picks an implementation. A
+  cloud fallback, or a swap from qwen3 to gemma, is a change there and nowhere else.
+- All of it is server-side. `OLLAMA_BASE_URL` describes the inside of the home network and
+  must never reach a browser, so nothing under `src/ai/` may be imported by a client component
+  — the same rule as `src/db/client.ts`.
+- The model has no tools until Phase 9, and when it gets them they are an explicit allow-list
+  of application functions, never system access.
+
+The alternative — calling Ollama directly from a feature, or from the browser — was rejected
+on both counts: it would bind AshHome to one model, and it would publish a private network
+address to every device on the wall.
+
 
 ## ADR-009 — App content renders client-side behind a hydration gate
 
