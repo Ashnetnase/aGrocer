@@ -8,6 +8,7 @@ import { households, inventoryEvents } from '@/db/schema';
 import type { Database } from '@/db/client';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { createDrizzleRepositories } from './drizzleRepositories';
+import { createShoppingProductRepository, type ShoppingProductRepository } from '@/shopping/repository';
 
 /**
  * Integration tests against a real Postgres database (ADR-013).
@@ -35,6 +36,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
   let db: Database;
   let repos: AgrocerRepositories;
   let householdId: string;
+  let shoppingProducts: ShoppingProductRepository;
 
   beforeAll(async () => {
     sql = postgres(url as string, { max: 1, prepare: false });
@@ -47,6 +49,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     if (!row) throw new Error('Could not create the test household');
     householdId = row.id;
     repos = createDrizzleRepositories(db, householdId);
+    shoppingProducts = createShoppingProductRepository(db, householdId);
   });
 
   afterAll(async () => {
@@ -119,6 +122,25 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     expect(await repos.shopping.list()).toHaveLength(1);
 
     await repos.shopping.remove(merged.id);
+  });
+
+  it('persists, replaces and removes a household retailer product preference', async () => {
+    const product = {
+      retailer: 'new-world' as const,
+      externalProductId: 'integration-anchor-2l',
+      name: 'Anchor Blue Milk 2L',
+      brand: 'Anchor',
+      size: '2L',
+      productUrl: 'https://www.newworld.co.nz/shop/product/integration-anchor-2l',
+      availability: 'available' as const,
+    };
+    await shoppingProducts.savePreferredProduct('Milk', product, 2);
+    const remembered = await shoppingProducts.getPreferredProduct('milk', 'new-world');
+    expect(remembered?.product.name).toBe('Anchor Blue Milk 2L');
+    expect(remembered?.defaultQuantity).toBe(2);
+
+    await shoppingProducts.removePreferredProduct('MILK', 'new-world');
+    expect(await shoppingProducts.getPreferredProduct('milk', 'new-world')).toBeUndefined();
   });
 
   it('creates and adjusts a pantry item', async () => {

@@ -12,6 +12,7 @@ import {
   text,
   timestamp,
   uuid,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import type { MealIngredient } from '@/domain/schemas/meal';
 
@@ -227,6 +228,73 @@ export const shoppingItems = pgTable(
   },
   (table) => ({
     householdIdx: index('shopping_items_household_idx').on(table.householdId, table.createdAt),
+  }),
+).enableRLS();
+
+/* -------------------------------------------------------------------------- */
+/* Stage 5 retailer product memory                                             */
+/* -------------------------------------------------------------------------- */
+
+export const retailerProducts = pgTable(
+  'retailer_products',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+    retailer: text('retailer').notNull(),
+    storeId: text('store_id'),
+    externalProductId: text('external_product_id'),
+    name: text('name').notNull(),
+    brand: text('brand'),
+    size: text('size'),
+    unit: text('unit'),
+    priceCents: integer('price_cents'),
+    specialPriceCents: integer('special_price_cents'),
+    productUrl: text('product_url'),
+    imageUrl: text('image_url'),
+    availability: text('availability').notNull().default('unknown'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    householdIdx: index('retailer_products_household_idx').on(table.householdId, table.retailer),
+    externalIdx: uniqueIndex('retailer_products_external_idx').on(
+      table.householdId,
+      table.retailer,
+      table.storeId,
+      table.externalProductId,
+    ),
+  }),
+).enableRLS();
+
+export const shoppingProductPreferences = pgTable(
+  'shopping_product_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+    shoppingItemKey: text('shopping_item_key').notNull(),
+    retailer: text('retailer').notNull(),
+    storeId: text('store_id'),
+    retailerProductId: uuid('retailer_product_id').references(() => retailerProducts.id, { onDelete: 'set null' }),
+    externalProductId: text('external_product_id'),
+    productName: text('product_name').notNull(),
+    brand: text('brand'),
+    size: text('size'),
+    productUrl: text('product_url'),
+    defaultQuantity: smallint('default_quantity').notNull().default(1),
+    confidenceBasisPoints: smallint('confidence_basis_points').notNull().default(10000),
+    lastConfirmedAt: timestamp('last_confirmed_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    householdIdx: index('shopping_product_preferences_household_idx').on(table.householdId),
+    itemRetailerIdx: uniqueIndex('shopping_product_preferences_item_retailer_idx').on(
+      table.householdId,
+      table.shoppingItemKey,
+      table.retailer,
+      table.storeId,
+    ),
   }),
 ).enableRLS();
 

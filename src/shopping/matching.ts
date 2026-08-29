@@ -1,0 +1,83 @@
+import type { ShoppingItem } from '@/domain/schemas/shopping';
+import { normaliseRetailerText } from './manual';
+import type { ProductPreference, RetailerProduct } from './schemas';
+import type { ShoppingProvider, TrolleyLine } from './types';
+
+export interface ProductPreferenceReader {
+  getPreferredProduct(itemKey: string, retailer: 'new-world', storeId?: string): Promise<ProductPreference | undefined>;
+}
+
+function tokens(value: string): Set<string> {
+  return new Set(normaliseRetailerText(value).split(' ').filter(Boolean));
+}
+
+export function rankProduct(query: string, product: RetailerProduct): number {
+  const queryNormal = normaliseRetailerText(query);
+  const productNormal = normaliseRetailerText([product.brand, product.name, product.size].filter(Boolean).join(' '));
+  if (queryNormal === productNormal || normaliseRetailerText(product.name) === queryNormal) return 0.98;
+  if (productNormal.includes(queryNormal)) return 0.9;
+  const requested = tokens(query);
+  const candidate = tokens(productNormal);
+  const overlap = [...requested].filter((token) => candidate.has(token)).length;
+  return requested.size === 0 ? 0 : Math.min(0.89, 0.35 + (overlap / requested.size) * 0.5);
+}
+
+export async function resolveShoppingItem(
+  item: ShoppingItem,
+  provider: ShoppingProvider,
+  preferences?: ProductPreferenceReader,
+  storeId?: string,
+): Promise<TrolleyLine> {
+  const shoppingItem = { id: item.id, name: item.name, quantity: item.quantity, unit: item.unit };
+  const preference = await preferences?.getPreferredProduct(normaliseRetailerText(item.name), 'new-world', storeId);
+  if (preference) {
+    const unavailable = preference.product.availability === 'unavailable';
+    const executable = Boolean(preference.product.productUrl || preference.product.externalProductId);
+    return {
+      shoppingItem,
+      requestedText: item.name,
+      requestedQuantity: item.quantity,
+      product: preference.product,
+      confidence: unavailable ? 0 : preference.confidence,
+      source: 'household-preference',
+      status: unavailable ? 'unavailable' : executable ? 'ready' : 'needs-review',
+      requiresReview: unavailable || !executable,
+      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.' : executable ? undefined : 'Saved product needs a New World product URL or id.',
+    };
+  }
+
+  let found: RetailerProduct[] = [];
+  try {
+    found = await provider.search(item.name, storeId);
+  } catch {
+    return {
+      shoppingItem, requestedText: item.name, requestedQuantity: item.quantity, confidence: 0,
+      source: 'unresolved', status: 'needs-review', requiresReview: true,
+      reason: 'The New World companion is offline, so this item could not be searched.',
+    };
+  }
+  const candidates = found
+    .map((product) => ({ product, score: rankProduct(item.name, product) }))
+    .sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  if (!best) return {
+    shoppingItem, requestedText: item.name, requestedQuantity: item.quantity, confidence: 0,
+    source: 'unresolved', status: 'needs-review', requiresReview: true,
+    reason: 'No product match was found.',
+  };
+
+  const unavailable = best.product.availability === 'unavailable';
+  const ready = best.score >= 0.86 && !unavailable;
+  return {
+    shoppingItem,
+    requestedText: item.name,
+    requestedQuantity: item.quantity,
+    product: best.product,
+    candidates: candidates.slice(0, 5).map(({ product }) => product),
+    confidence: best.score,
+    source: best.score >= 0.97 ? 'exact-match' : 'ranked-candidate',
+    status: unavailable ? 'unavailable' : ready ? 'ready' : 'needs-review',
+    requiresReview: !ready,
+    reason: unavailable ? 'Matched product is unavailable.' : ready ? undefined : 'Match confidence is too low; choose a product.',
+  };
+}

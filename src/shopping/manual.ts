@@ -17,3 +17,9 @@ export class ManualShoppingProvider implements ShoppingProvider {
       .slice(0, 10);
   }
 }
+
+export { normaliseRetailerText };
+
+function normaliseRetailerText(value: string): string {
+  return normalise(value);
+}

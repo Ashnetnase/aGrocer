@@ -57,6 +57,13 @@
       "when": 1787974383603,
       "tag": "0007_glorious_pete_wisdom",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788038399245,
+      "tag": "0008_demonic_smiling_tiger",
+      "breakpoints": true
     }
   ]
 }

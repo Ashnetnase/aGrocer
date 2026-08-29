@@ -5,6 +5,7 @@ import { getDb } from '@/db/client';
 import { householdMembers } from '@/db/schema';
 import { authEnabled } from '@/auth/config';
 import { currentUser } from '@/auth/server';
+import { createShoppingProductRepository } from '@/shopping/repository';
 
 /**
  * Server-side repository access for route handlers.
@@ -82,4 +83,8 @@ export async function currentHouseholdId(): Promise<string> {
 
 export async function serverRepositories(): Promise<AgrocerRepositories> {
   return createDrizzleRepositories(getDb(), await currentHouseholdId());
+}
+
+export async function serverShoppingProductRepository() {
+  return createShoppingProductRepository(getDb(), await currentHouseholdId());
 }

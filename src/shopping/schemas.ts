@@ -1,0 +1,63 @@
+import { z } from 'zod';
+
+export const retailerSchema = z.literal('new-world');
+export const availabilitySchema = z.enum(['available', 'unavailable', 'unknown']);
+
+export const retailerProductSchema = z.object({
+  id: z.string().uuid().optional(),
+  retailer: retailerSchema,
+  storeId: z.string().trim().min(1).max(100).optional(),
+  externalProductId: z.string().trim().min(1).max(200).optional(),
+  name: z.string().trim().min(1).max(300),
+  brand: z.string().trim().max(120).optional(),
+  size: z.string().trim().max(80).optional(),
+  unit: z.string().trim().max(40).optional(),
+  price: z.number().nonnegative().optional(),
+  specialPrice: z.number().nonnegative().optional(),
+  productUrl: z.string().url().max(2_000).optional(),
+  imageUrl: z.string().url().max(2_000).optional(),
+  availability: availabilitySchema.default('unknown'),
+  lastSeenAt: z.string().datetime().optional(),
+});
+export type RetailerProduct = z.infer<typeof retailerProductSchema>;
+
+export const productPreferenceSchema = z.object({
+  id: z.string().uuid().optional(),
+  shoppingItemKey: z.string().trim().min(1).max(200),
+  retailer: retailerSchema,
+  storeId: z.string().trim().min(1).max(100).optional(),
+  product: retailerProductSchema,
+  defaultQuantity: z.number().int().min(1).max(99).default(1),
+  confidence: z.number().min(0).max(1).default(1),
+  lastConfirmedAt: z.string().datetime(),
+});
+export type ProductPreference = z.infer<typeof productPreferenceSchema>;
+
+export const trolleyAddItemSchema = z.object({
+  shoppingItemId: z.string().min(1).max(200),
+  productUrl: z.string().url().max(2_000).optional(),
+  externalProductId: z.string().min(1).max(200).optional(),
+  expectedName: z.string().trim().min(1).max(300),
+  quantity: z.number().int().min(1).max(99),
+}).refine((item) => item.productUrl || item.externalProductId, {
+  message: 'A product URL or external product id is required',
+});
+
+export const trolleyAddBatchSchema = z.object({ items: z.array(trolleyAddItemSchema).min(1).max(100) });
+export type TrolleyAddItem = z.infer<typeof trolleyAddItemSchema>;
+
+export const trolleyAddStatusSchema = z.enum([
+  'added', 'needs-login', 'product-not-found', 'product-unavailable', 'selector-failed',
+  'quantity-mismatch', 'requires-review', 'blocked', 'unknown-error',
+]);
+export type TrolleyAddStatus = z.infer<typeof trolleyAddStatusSchema>;
+
+export const trolleyAddResultSchema = z.object({
+  shoppingItemId: z.string(),
+  status: trolleyAddStatusSchema,
+  requestedQuantity: z.number().int(),
+  confirmedQuantity: z.number().int().nonnegative().optional(),
+  confirmedProductName: z.string().optional(),
+  message: z.string().optional(),
+});
+export type TrolleyAddResult = z.infer<typeof trolleyAddResultSchema>;
