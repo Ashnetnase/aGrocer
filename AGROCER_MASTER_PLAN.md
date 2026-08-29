@@ -495,7 +495,8 @@ Prepare a supermarket trolley for human review without autonomous payment.
 - [x] deterministic product matching with confidence, preferences and unresolved-item review
 - [~] substitutions — candidate selection and unavailable replacement state exist
 - [x] quantity reconciliation in the companion request/verified result contract
-- [~] visible Playwright cart preparation — implemented, mocked/tested, not live-site validated
+- [~] browser cart preparation — normal-Chrome extension fallback implemented after Cloudflare
+      rejected Playwright; extension selectors are protocol-tested but not live-site validated
 - [ ] background job handling
 - [x] explicit partial-failure/error states; background retries remain future work
 - [x] cart review UI with ready/review/unavailable summaries
@@ -641,6 +642,15 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-30 - Normal Chrome trolley extension fallback (Codex)
+
+Live Playwright search repeatedly reached Cloudflare's security challenge even after manual
+verification, so no bypass or stealth behavior was added. A Manifest V3 extension now bridges the
+Agrocer Shopping screen to the user's normal logged-in Chrome profile, processes an explicitly
+submitted batch one visible product page at a time, and returns verified per-item outcomes. The
+bridge protocol is Zod-validated and covered by the 306-test unit suite. Installing the unpacked
+extension and validating New World's live Add/quantity selectors remains manual.
 
 ## 2026-08-30 - Stage 5 New World trolley companion foundation (Codex)
 

@@ -694,6 +694,14 @@ returns `blocked` promptly instead of hanging or pretending the catalogue is emp
 companion Chrome window uses `.runtime/newworld-profile`; Ash must complete that check and log in
 there once, then rerun the milk search. Do not bypass or add stealth behavior.
 
+Ash completed the check but Cloudflare immediately challenged the Playwright profile again. That
+path is now an optional fallback, not the recommended integration. The Manifest V3 extension in
+`companion/extension` operates in Ash's normal logged-in Chrome profile without hiding automation.
+Agrocer detects it through a validated page bridge and sends a batch only after the explicit Add
+button. **Next manual step:** load that directory unpacked in `chrome://extensions`, refresh
+Agrocer, confirm “Chrome trolley extension ready”, then live-test one known exact product. The
+selectors intentionally return failure unless quantity is visibly verified.
+
 The old AI verification instructions below are historical and retained for audit context.
 
 The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check

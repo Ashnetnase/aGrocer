@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBasketIcon } from 'lucide-react';
 import type { ShoppingItem, ShoppingItemDraft } from '@/domain/schemas/shopping';
@@ -15,6 +15,7 @@ import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PreparedTrolley, TrolleyLine } from '@/shopping/types';
 import type { RetailerProduct, TrolleyAddResult } from '@/shopping/schemas';
+import { extensionEventSchema, pingNewWorldExtension, sendBatchToNewWorldExtension } from '@/shopping/extensionBridge';
 
 export function ShoppingScreen() {
   const router = useRouter();
@@ -27,6 +28,21 @@ export function ShoppingScreen() {
   const [sending, setSending] = useState(false);
   const [sendResults, setSendResults] = useState<TrolleyAddResult[] | null>(null);
   const [trolleyError, setTrolleyError] = useState<string | null>(null);
+  const [extensionOnline, setExtensionOnline] = useState(false);
+
+  useEffect(() => {
+    const receive = (event: MessageEvent<unknown>) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      const parsed = extensionEventSchema.safeParse(event.data);
+      if (!parsed.success) return;
+      if (parsed.data.type === 'AGROCER_NEW_WORLD_READY') setExtensionOnline(true);
+      if (parsed.data.type === 'AGROCER_NEW_WORLD_RESULTS') { setSendResults(parsed.data.results); setSending(false); }
+      if (parsed.data.type === 'AGROCER_NEW_WORLD_ERROR') { setTrolleyError(parsed.data.message); setSending(false); }
+    };
+    window.addEventListener('message', receive);
+    pingNewWorldExtension();
+    return () => window.removeEventListener('message', receive);
+  }, []);
 
   const { remaining, checked, total, progress } = useMemo(() => summariseShopping(shopping), [shopping]);
   const budget = summariseShoppingBudget(total, household.settings.weeklyBudget);
@@ -64,6 +80,11 @@ export function ShoppingScreen() {
       quantity: line.requestedQuantity,
     }));
     setSending(true); setTrolleyError(null);
+    if (extensionOnline) {
+      try { sendBatchToNewWorldExtension(items); }
+      catch { setTrolleyError('The prepared products were not valid for the browser extension.'); setSending(false); }
+      return;
+    }
     try {
       const response = await fetch('/api/trolley/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items }) });
       if (!response.ok) throw new Error('send failed');
@@ -88,7 +109,7 @@ export function ShoppingScreen() {
       {trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
         <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold text-ink">New World trolley</h2><p className="text-xs text-muted">{trolley.summary.total} items · {trolley.summary.ready} ready · {trolley.summary.needsReview} need review · {trolley.summary.unavailable} unavailable</p></div><button type="button" className="text-xs font-bold text-muted" onClick={() => setTrolley(null)}>Close</button></div>
         <div className="mt-3 space-y-2">
-          {!trolley.companion.online ? <div className="rounded-xl bg-honey-50 px-3 py-2 text-sm text-ink"><strong>New World Companion offline</strong><p className="text-xs text-muted">Product memory works, but Agrocer cannot add products to your trolley.</p></div> : null}
+          {extensionOnline ? <div className="rounded-xl bg-moss-100 px-3 py-2 text-sm text-moss-800"><strong>Chrome trolley extension ready</strong><p className="text-xs">Products will be added in your normal visible New World tab.</p></div> : !trolley.companion.online ? <div className="rounded-xl bg-honey-50 px-3 py-2 text-sm text-ink"><strong>Trolley companion offline</strong><p className="text-xs text-muted">Install the Chrome extension or start the local companion to add products.</p></div> : null}
           {trolley.lines.map((line) => <div key={line.shoppingItem.id} className="rounded-xl bg-white px-3 py-2 text-sm">
             <div className="flex justify-between gap-3"><span>{line.requestedQuantity} {line.shoppingItem.unit} {line.requestedText}</span><span className={line.status === 'ready' ? 'text-moss-700' : 'text-berry-600'}>{line.status === 'ready' ? 'Ready' : line.status === 'unavailable' ? 'Unavailable' : 'Needs review'}</span></div>
             {line.product ? <p className="mt-1 text-xs text-muted">{line.product.name}{line.product.size ? ` · ${line.product.size}` : ''}{line.product.price !== undefined ? ` · ${nzd(line.product.price)}` : ''}<br />{line.source === 'household-preference' ? 'Matched from household preference' : `Match confidence ${Math.round(line.confidence * 100)}%`}</p> : <p className="mt-1 text-xs text-muted">{line.reason}</p>}
@@ -96,7 +117,7 @@ export function ShoppingScreen() {
           </div>)}
         </div>
         {sendResults ? <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm"><strong>{sendResults.filter((result) => result.status === 'added').length} / {sendResults.length} added</strong><p className="text-xs text-muted">{sendResults.some((result) => result.status !== 'added') ? 'Some products require your attention.' : 'Your trolley is ready for review.'}</p></div> : null}
-        <button type="button" disabled={!trolley.companion.online || !trolley.summary.ready || sending} onClick={() => void sendToNewWorld()} className="mt-3 h-11 w-full rounded-2xl bg-moss-600 text-sm font-bold text-white disabled:bg-line disabled:text-muted">{sending ? 'Adding products…' : `Add ${trolley.summary.ready} ready items to New World`}</button>
+        <button type="button" disabled={(!extensionOnline && !trolley.companion.online) || !trolley.summary.ready || sending} onClick={() => void sendToNewWorld()} className="mt-3 h-11 w-full rounded-2xl bg-moss-600 text-sm font-bold text-white disabled:bg-line disabled:text-muted">{sending ? 'Adding products…' : `Add ${trolley.summary.ready} ready items to New World`}</button>
         <p className="mt-2 text-center text-xs text-muted">Agrocer prepares the trolley. You complete checkout and payment in New World.</p>
       </section> : null}
 

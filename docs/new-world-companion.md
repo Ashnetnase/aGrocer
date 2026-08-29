@@ -1,7 +1,28 @@
 # New World trolley companion
 
-Stage 5 uses a local, visible Chrome session to prepare a New World trolley. Agrocer never
+Stage 5 uses the user's normal, visible Chrome session to prepare a New World trolley. Agrocer never
 collects a New World password and never selects payment, checks out, or places an order.
+
+## Recommended: normal Chrome extension
+
+New World's Cloudflare check repeatedly rejected the Playwright-controlled profile during live
+testing. The supported fallback is the unpacked extension in `companion/extension`:
+
+1. Open `chrome://extensions` in the Chrome profile already logged into New World.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select `C:\Users\ashle\Documents\Github\aGrocer\companion\extension`.
+5. Refresh the Agrocer Shopping page.
+
+Agrocer will show **Chrome trolley extension ready**. Prepare the list and press **Add ready items
+to New World**. The extension opens each exact product in a visible New World tab, attempts the
+requested quantity, and returns structured results. It reports `added` only when the on-page
+quantity can be verified.
+
+The extension is currently implemented and protocol-tested but its live Add/quantity selectors
+still need one controlled product test against the normal logged-in Chrome session.
+
+## Optional: Playwright companion
 
 ## Configure
 
