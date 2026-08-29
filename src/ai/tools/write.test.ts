@@ -40,8 +40,21 @@ describe('the write allow-list', () => {
     }
   });
 
-  it('holds exactly one tool — the first write, deliberately narrow', () => {
-    expect(Object.keys(WRITE_TOOLS)).toEqual(['addShoppingItem']);
+  it('holds exactly the writes it is meant to, and no others', () => {
+    expect(Object.keys(WRITE_TOOLS)).toEqual(['addShoppingItem', 'addRecipeToMeals']);
+  });
+
+  it('lets the model point at a recipe but never describe one', () => {
+    // addRecipeToMeals takes an id and nothing else. Every saved field is fetched from the
+    // provider at execution time, so a hallucinated recipe produces an id that will not
+    // resolve rather than a meal nobody chose.
+    const tool = WRITE_TOOLS.addRecipeToMeals!;
+    expect(tool.schema.safeParse({ recipeId: '52770' }).success).toBe(true);
+    expect(tool.schema.safeParse({ recipeId: '52770', name: 'Invented' })).toMatchObject({
+      success: true,
+      data: { recipeId: '52770' },
+    });
+    expect(tool.schema.safeParse({ recipeId: '' }).success).toBe(false);
   });
 });
 

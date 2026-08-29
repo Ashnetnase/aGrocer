@@ -62,6 +62,12 @@ What actually runs today:
   what a tool returned and never to invent; the card repeats the limits in a footnote.
   Verified against the real provider: "Add milk and eggs" proposes both, quantity one, and
   performs no write until confirmation.
+- **Recipe import is real** (Stage 4). `Meals → Plan dinner → Add a recipe` offers **Paste**
+  (any text) and **Search** (TheMealDB via `/api/recipes`). Both produce the same reviewable
+  draft and hand it to the normal meal form — one path into the meal store. Nothing is saved
+  from the import sheet. Pasted text rather than a fetched URL, deliberately: fetching would
+  have the server request arbitrary addresses from a network that also hosts Vaultwarden,
+  Proxmox and Ollama.
 - Two AI scripts, easy to confuse: `npm run ai:check` talks straight to Ollama (the original
   connectivity spike); `npm run ai:chat` goes through `/api/ai/chat` and proves the whole
   path, so it needs `npm run dev` running.
@@ -102,7 +108,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
 | Tonight's meal    | **Real** — plan, pantry warning, and complete catalogue-priced meal cost. |
 | Chores            | **Mock** — one example row. Needs Phase 12.                        |
-| Ask AshHome       | **Real** — reads list/pantry/plan; proposes list additions, gated. |
+| Ask AshHome       | **Real** — reads list/pantry/plan, searches recipes; proposes list additions and recipe saves, gated. |
 
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
@@ -174,6 +180,11 @@ unknown products or incompatible units must not quietly understate dinner's cost
 - **AI slice 8b** — the "Ask AshHome" card: `src/features/ask/askAshHome.ts` and
   `src/features/dashboard/AskCard.tsx`. Verified in Chrome at a 1280×800 kiosk viewport,
   including the offline path.
+- **Recipe import** (Stage 4) — `src/domain/services/recipeImport.ts` (pasted text),
+  `src/recipes/` (the `RecipeProvider` seam + TheMealDB), `/api/recipes`, and the
+  `RecipeImportSheet` review step.
+- **AI recipe tools** — `searchRecipes` (read) and `addRecipeToMeals` (write, gated).
+  **Written and unit-tested; the live model behaviour is NOT yet verified.** See NEXT TASK.
 - **AI slice 9b** — the first write tool: `src/ai/tools/write.ts` (`WRITE_TOOLS`, a sibling of
   the read record), the proposal path in `src/ai/assistant.ts`, `app/api/ai/confirm`, and the
   Add it / Add all / Cancel gate on the card. ADR-018 records the shape.
@@ -644,100 +655,92 @@ Added 2026-08-29 for meal feedback UI:
 
 ## NEXT TASK
 
-Read `AGENTS.md`, then this file, then `AGROCER_MASTER_PLAN.md`. Everything below is current
-after the multi-item proposal work begun from commit `f060ee7` on
-`stage-2/database-schema` (20+ commits ahead of `main`; nothing has been merged).
+### Do this first — the AI recipe tools are unverified
 
-### State in one paragraph
+`searchRecipes` (read) and `addRecipeToMeals` (write, gated) are **written, typechecked and
+unit-tested, but their live behaviour with qwen3:8b has never been run.** I was interrupted
+before the end-to-end check. Everything else in the repository has been exercised against the
+real model or the real database; these two have not. Treat them as unproven.
 
-Stage 2's build work is complete: Postgres behind route handlers, Supabase Auth enforced on
-every data-bearing/action route, RLS on all nine tables, history tables, CI, and a deployment
-runbook. The raw data-free `/api/ai/chat` transport is the documented auth exception. The AI
-ladder is complete through slice 9b — the assistant reads the shopping list, pantry and meal
-plan through a read-only tool allow-list, and can *propose* one or several shopping items behind
-one list-shaped confirmation gate. Stage 4 now has pantry-to-recipe matching, the weekly
-budget target, complete-coverage meal costs, and append-only feedback capture. **238 unit tests across 19 files,
-10 integration tests, build clean,
-`npm run db:rls` green.**
+Run, with `AGROCER_AUTH=off npm run dev`:
 
-### Blocked on Ash — not code, do not attempt
+```bash
+curl -s -X POST localhost:3000/api/ai/ask -H 'content-type: application/json'   -d '{"question":"Find a chicken curry recipe we could add"}'
+```
 
-**Host decided 2026-08-29: `192.168.1.49`**, the box already serving `vault` (8080) and
-`status` (3001). Every address below is now concrete rather than a placeholder.
+What to look for, in order of importance:
 
-1. ~~**Deploy.**~~ **DONE 2026-08-29 — deployed, verified from outside, and installed as a
-   PWA on a phone. Stage 2 is COMPLETE.**
-   `https://home.ashnetbase.org` — `/` redirects to `/sign-in`, `/sign-in` 200,
-   `/api/shopping` 401 (`{"error":"Sign in to continue"}`), `/dashboard` redirects,
-   `/sw.js` and `/manifest.webmanifest` 200 over a real certificate.
-   **Still outstanding: rotate the database password.** It was exposed in a chat transcript on
-   2026-08-29 via an editor selection of `.env.local`. Supabase → Project Settings → Database
-   → Reset database password, then update `.env.local` here, `.env` on `192.168.1.49`
-   (doubling any `$`), and `docker compose up -d`. No rebuild — `DATABASE_URL` is runtime.
-2. **Ollama for production** (ADR-020): `OLLAMA_HOST=0.0.0.0:11434` on the workstation, an
-   inbound rule on TCP 11434 scoped to **`192.168.1.49` only**, a DHCP reservation for
-   `192.168.1.222`, and `OLLAMA_BASE_URL=http://192.168.1.222:11434` in the homelab `.env`.
-   Note `ashnetserv1` is Proxmox with no GPU — its Ollama is not the target and is being
-   moved away from, which is the whole reason this item exists.
-3. **`api.chat.ashnetbase.org` publishes an unauthenticated Ollama to the internet.** Anyone
-   who guesses the hostname gets free inference. **Decision 2026-08-29: Cloudflare Access with
-   a single email policy** — chosen over deleting the route because `chat.ashnetbase.org` may
-   depend on it.
-4. **The account password is weak** (`test123!`, set 2026-08-29 during setup) on the account
-   holding the children's names. Change it in the Supabase dashboard.
-5. **CI secrets** — `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` as GitHub
-   Actions secrets. The workflow skips cleanly without them; with them the integration tests
-   and the RLS check actually run.
-6. **Cloudflare Claude Code plugin** — Ash asked for it; `claude plugin marketplace add
-   cloudflare/skills` and `claude plugin install cloudflare@cloudflare` were **blocked by the
-   permission classifier**, so Ash must run them.
+1. **Does it chain?** It should call `searchRecipes`, then propose `addRecipeToMeals` with an
+   id the search actually returned. A model that proposes an id it invented is the failure
+   this design is built against — the id will not resolve and `describe` will say so, but the
+   prompt should stop it happening at all.
+2. **Is the description the real title?** `describe` fetches from the provider rather than
+   trusting the model, so the confirmation must show TheMealDB's title even if the model
+   called the dish something else.
+3. **Does it still refuse the things it should?** "Plan burgers for Friday" must not become a
+   recipe save. Adding a second write tool makes substitution more tempting, and the prompt
+   line forbidding it was written for one tool.
+4. Nothing should be written until the confirmation is pressed. Check `/api/meals` before and
+   after proposing.
 
-### Code work, in the order I would take it
+If the model struggles to chain two tools, the honest options are: raise `MAX_TOOL_ROUNDS`
+from 3, sharpen the tool descriptions, or accept search-only and let the family save from the
+import sheet. Do not paper over it by having `addRecipeToMeals` accept a title.
 
-**(a) Multi-item AI proposals — DONE 2026-08-29.** "Add milk and eggs" now produces one
-proposal containing both server-described actions, Add all confirms them through one batch
-write, and any invalid action refuses the whole list. Verified against the real qwen3:8b
-provider without writing to the database.
+### Then
 
-**(b) Weekly budget target — DONE 2026-08-29.** Optional household setting persisted locally
-and in Postgres; shopping views compare the current list estimate with it. This is a target,
-not historical spend tracking.
+- **Voice: talk-back only.** `speechSynthesis` is local to the browser, costs nothing and
+  leaks nothing — read the assistant's answer aloud on the wall dashboard. Ash has agreed to
+  this half.
+- **Voice: the microphone is deliberately NOT started.** Chrome's `SpeechRecognition` streams
+  kitchen audio to Google, which sits badly with a household that runs its AI on its own GPU.
+  Ash has not decided, and it should not be decided by accident. A local alternative
+  (`whisper.cpp` beside Ollama) is a project, not a button. `CLAUDE.md` puts voice at Phase 17.
+- **Web search for the AI: recommended against.** A scoped recipe API is structured JSON from
+  one known host, validated by Zod. General web access means untrusted prose reaching a model
+  that proposes actions on household data — prompt injection, with the confirmation gate
+  demoted from belt-and-braces to the only thing standing there.
+- **Low-stock / staple-reorder prediction.** `inventory_events` has been accumulating since
+  2026-08-29 and nothing reads it. Give it real history first.
 
-**(c) Meal cost estimation — DONE 2026-08-29.** ADR-021 keeps legacy recipe text and adds
-optional structured name/amount/unit/product details. Editing upgrades old recipes; costs are
-shown only when every ingredient has a compatible catalogue price. Migration `0007` is live.
+### Blocked on Ash — infrastructure, not code
 
-**(d) Low-stock / staple-reorder prediction.** `inventory_events` has been accumulating the
-history since 2026-08-29 and nothing reads it yet. Give it a few weeks of real data first —
-predictions from three rows will be worse than none.
-
-**Meal feedback UI — DONE 2026-08-29.** Meal detail records a whole-family or named-member
-rating for the planned date and shows the three newest entries. It loads through provider
-actions only when opened. Corrections append; localStorage writes still refuse rather than
-creating device-only history.
-
-**NEXT TASK: recipe import.** Keep the first slice bounded: import into the existing MealDraft /
-structured ingredient model, require a human review in `MealFormSheet`, and do not let fetched
-page content write directly. Decide pasted-text versus server-fetched URL input before choosing
-dependencies; preserve Zod as the boundary either way.
+1. ~~Deploy~~ **done and verified**, and the PWA is installed on a phone. Stage 2 is COMPLETE.
+2. **Rotate the database password** — exposed in a chat transcript on 2026-08-29 via an editor
+   selection of `.env.local`. Supabase → Project Settings → Database → Reset, then update
+   `.env.local` here and `.env` on `192.168.1.49` (doubling any `$`), then `docker compose up -d`.
+3. **The account password is weak** (`test123!`) on the account holding the children's names.
+4. **Ollama's auto-created firewall rules are still enabled.** `Get-NetFirewallRule
+   -DisplayName "ollama.exe" | Disable-NetFirewallRule`. Until then the scoped rule from
+   ADR-020 does nothing and the GPU is reachable by the whole LAN. Re-check after every Ollama
+   upgrade — a new version recreates them.
+5. **`api.chat.ashnetbase.org` is an unauthenticated Ollama on the public internet.** Decision
+   taken: Cloudflare Access, one email policy. Worth re-checking whether anything actually
+   depends on that hostname — it is Ash's own Proxmox *test* instance, so deleting the route
+   may be simpler than guarding it.
+6. **CI secrets** — `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` as GitHub
+   Actions secrets, so the integration tests and the RLS check actually run.
+7. **Tightening (ADR-019).** `cloudflared` shares the host, so Agrocer can join
+   `cloudflare-tunnel_default`, publish no port, and be reached at `http://agrocer:3000` —
+   removing the plaintext LAN hop. `docs/deploy.md`, "Tightening".
 
 ### Smaller known gaps
 
-- **The Ask card at phone width is unverified** across four sessions. The browser tooling here
-  would not resize below desktop width. Someone with a phone should just look at it.
-- **Every write refetches the whole list, and there is no optimistic UI.** Free against
-  localStorage, a round trip to Sydney now. Most visible on the pantry steppers.
-- **No automated backups.** `docs/backup.md` has verified commands; a weekly cron on the
-  homelab is the obvious step once it is running. Note a full dump contains `auth.users`.
+- **The Ask card at phone width is unverified** across five sessions; the browser tooling here
+  will not resize below desktop width. Someone with a phone should just look at it.
+- **Every write refetches the whole list, and there is no optimistic UI.**
+- **No automated backups.** `docs/backup.md` has verified commands. A full dump contains
+  `auth.users` — password hashes — so it is a credential store.
+- **`meal_feedback` has a UI now**, but nothing reads the history for learning yet.
 
 ### Two traps that have each cost an hour
 
-- **A dev server started right after `npm run build` serves a stale `.next`** and answers HTML
-  for routes that exist. Delete `.next`, restart.
+- **A dev server started right after `npm run build` serves a stale `.next`.** It also serves
+  stale *modules* after edits — a fix can test as broken. Delete `.next`, restart.
 - **The Stage 1 service worker caches the bundle**, so a dashboard change can look like it did
-  not apply when it is already compiled. Unregister it and clear `agrocer-shell-v1`.
+  not apply. Unregister it and clear `agrocer-shell-v1`.
 
-Both bit twice in one session. Check them before debugging the code.
+Both bit again this session. Check them before debugging code.
 
 ## Do Not Accidentally Change
 
@@ -781,6 +784,13 @@ Both bit twice in one session. Check them before debugging the code.
   model has already been observed describing its own proposal wrongly.
 - **The registry's exact-name lookup.** Do not replace it with anything that maps model output
   onto a repository method, however convenient. See ADR-015 for what was rejected and why.
+- **`searchRecipes` is the only read tool with arguments, and it reads no household data.**
+  Everything that touches the family's own data stays argument-free, so nothing the model
+  emits can widen what it reads (ADR-015). A test enforces that split.
+- **`addRecipeToMeals` takes an id and nothing else.** Every saved field is fetched from the
+  provider at execution time, and `describe` fetches too, so what a person confirms is the
+  real recipe rather than the model's account of it. Do not add a `title` argument to save a
+  round trip — that is the whole safety property.
 - **The three places that describe what the assistant can and cannot do** —
   `ASSISTANT_SYSTEM_PROMPT`, the Ask card's `note`, and its example chips. They are consistent
   on purpose, and they were all rewritten together when 9a changed what was true. Change all
@@ -796,7 +806,9 @@ Both bit twice in one session. Check them before debugging the code.
 
 ## Last Updated
 
-2026-08-29 — multi-item AI proposals, weekly budget, meal costs, and feedback capture completed
-by Codex on `stage-2/database-schema`. Migrations through `0007` are applied; this handoff
-records the branch checkpoint pushed to `origin/stage-2/database-schema`. Nothing was merged
-to `main`.
+2026-08-29, on `stage-2/database-schema`. Migrations through `0007` are applied. Nothing has
+been merged to `main`, which is ~30 commits behind.
+
+The **AI recipe tools** (`searchRecipes`, `addRecipeToMeals`) are the newest work and the one
+part whose live model behaviour has **not** been checked — see the top of NEXT TASK. Everything
+else here has been exercised against the real model, the real database, or the deployed app.

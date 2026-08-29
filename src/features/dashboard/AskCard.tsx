@@ -43,6 +43,7 @@ const EXAMPLES = [
   'What are we having for dinner?',
   'What is still on the shopping list?',
   'Add milk to the shopping list',
+  'Find a chicken curry recipe',
 ];
 
 type State =
@@ -123,7 +124,7 @@ export function AskCard({ className }: { className?: string }) {
       className={className}
       title="Ask AshHome"
       meta={busy ? 'Thinking…' : undefined}
-      note="Can read your shopping list, pantry and meal plan, and can add to the list once you confirm. It cannot change anything else, or see the calendar, chores or school yet."
+      note="Can read your list, pantry and meal plan, search for recipes, and — once you confirm — add to the list or save a recipe. It cannot change anything else, or see the calendar, chores or school yet."
     >
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div ref={answerRef} className="min-h-0 flex-1 overflow-y-auto">

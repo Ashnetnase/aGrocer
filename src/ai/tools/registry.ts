@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import type { AiToolSpec } from '../types';
 
@@ -24,10 +25,19 @@ import type { AiToolSpec } from '../types';
  * household — a tool cannot read another family's data any more than a route handler can.
  */
 
-export interface AiTool {
+export interface AiTool<TArgs = unknown> {
   spec: AiToolSpec;
+  /**
+   * Present only for tools that take arguments, and validated before `execute` sees them.
+   *
+   * Most read tools take none, which is the safest shape: nothing the model emits can widen
+   * what they read. `searchRecipes` is the first exception — a search without a query is not
+   * a search — and it is exactly the case ADR-015 anticipated: arguments arrive validated
+   * here, or the call is refused.
+   */
+  schema?: z.ZodType<TArgs>;
   /** Returns what the model should see. Compact: it is spent as context on every turn. */
-  execute(repos: AgrocerRepositories): Promise<string>;
+  execute(repos: AgrocerRepositories, args: TArgs): Promise<string>;
 }
 
 /** No arguments. Repeated for each tool so the shape is obvious at the call site. */
@@ -51,6 +61,7 @@ export async function runTool(
   tools: Record<string, AiTool>,
   name: string,
   repos: AgrocerRepositories,
+  rawArgs: unknown = {},
 ): Promise<ToolRun> {
   const tool = tools[name];
   if (!tool) {
@@ -64,8 +75,24 @@ export async function runTool(
       };
   }
 
+  let args: unknown = undefined;
+  if (tool.schema) {
+    const parsed = tool.schema.safeParse(rawArgs);
+    if (!parsed.success) {
+      // Told to the model rather than thrown, so it can correct itself within the round
+      // budget instead of the whole question failing.
+      console.warn('[ai/tools] rejected arguments for', name, parsed.error.message);
+      return {
+        name,
+        ok: false,
+        content: `Those arguments are not valid for ${name}. Check what it needs and try once more.`,
+      };
+    }
+    args = parsed.data;
+  }
+
   try {
-    return { name, ok: true, content: await tool.execute(repos) };
+    return { name, ok: true, content: await tool.execute(repos, args) };
   } catch (error) {
     // The message can carry a connection string, so it stays in the server log. The model
     // is told the tool failed and nothing about why.

@@ -1,6 +1,8 @@
+import { z } from 'zod';
 import { buildPlannerWeek } from '@/domain/services/dates';
 import { summariseShopping } from '@/domain/services/shopping';
 import { nzd } from '@/lib/format';
+import { getRecipeProvider } from '@/recipes/provider';
 import { NO_ARGUMENTS, type AiTool } from './registry';
 
 /**
@@ -119,6 +121,50 @@ function describeStock(item: { name: string; quantity: number; unit: string }): 
 }
 
 /**
+ * Recipe search — the one read tool that takes an argument, and the one that reads something
+ * other than the household.
+ *
+ * It reaches the configured recipe provider rather than a repository, so it exposes no family
+ * data at all. It is in this record because the invariant that matters is *read-only*, and it
+ * is: searching cannot change anything. Saving what it finds is a write tool with a
+ * confirmation gate.
+ *
+ * Ids are returned because `addRecipeToMeals` needs one, and because an id is the only thing
+ * the model can hand back that the server can verify. A title it made up would not resolve.
+ */
+const searchRecipes: AiTool<{ query: string }> = {
+  spec: {
+    name: 'searchRecipes',
+    description:
+      'Search a public recipe database by name for recipes the household does not have yet. ' +
+      'Use this when asked to find or suggest a new recipe. Returns ids you can pass to ' +
+      'addRecipeToMeals. Do not use it to answer what the family already has — that is ' +
+      'getMealPlan.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'A dish or main ingredient, e.g. "chicken curry".' },
+      },
+      required: ['query'],
+    },
+  },
+  schema: z.object({ query: z.string().trim().min(2).max(60) }),
+  async execute(_repos, args) {
+    const results = await getRecipeProvider().search(args.query);
+    if (results.length === 0) return `No recipes found for "${args.query}".`;
+
+    // Capped: the whole list is spent as context on every following turn, and a family
+    // choosing between twenty options on a wall tablet is not choosing.
+    const shown = results.slice(0, 5);
+    const lines = shown.map(
+      (recipe) =>
+        `${recipe.title} (id ${recipe.id}${recipe.area ? `, ${recipe.area}` : ''})`,
+    );
+    return `Found ${results.length}, showing ${shown.length}: ${lines.join('; ')}.`;
+  },
+};
+
+/**
  * The allow-list. Adding a tool here grants the model access to it, so the review question
  * for any addition is "does the model need this, and is it read-only?".
  */
@@ -126,4 +172,5 @@ export const READ_ONLY_TOOLS: Record<string, AiTool> = {
   getShoppingList: shoppingList,
   getPantry: pantry,
   getMealPlan: mealPlan,
+  searchRecipes: searchRecipes as AiTool,
 };

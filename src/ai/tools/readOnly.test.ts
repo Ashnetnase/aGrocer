@@ -4,7 +4,7 @@ import type { Meal, Plan } from '@/domain/schemas/meal';
 import type { PantryItem } from '@/domain/schemas/pantry';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import { READ_ONLY_TOOLS } from './readOnly';
-import { runTool, toolSpecs } from './registry';
+import { runTool } from './registry';
 
 /**
  * These tools are the only path by which a model reaches household data, so what matters is
@@ -100,14 +100,33 @@ function fakeRepositories(data: {
 const run = (name: string, repos: AgrocerRepositories) => runTool(READ_ONLY_TOOLS, name, repos);
 
 describe('the allow-list', () => {
-  it('exposes exactly the three read-only tools', () => {
-    expect(Object.keys(READ_ONLY_TOOLS)).toEqual(['getShoppingList', 'getPantry', 'getMealPlan']);
+  it('exposes exactly the read-only tools, and no others', () => {
+    expect(Object.keys(READ_ONLY_TOOLS)).toEqual([
+      'getShoppingList',
+      'getPantry',
+      'getMealPlan',
+      'searchRecipes',
+    ]);
   });
 
-  it('gives every tool an empty parameter schema, so nothing the model emits widens it', () => {
-    for (const spec of toolSpecs(READ_ONLY_TOOLS)) {
-      expect(spec.parameters).toEqual({ type: 'object', properties: {} });
+  it('every household tool takes no arguments, so nothing the model emits widens its read', () => {
+    // searchRecipes is the exception and reads no household data at all — a search needs a
+    // query. Everything that touches the family's own data stays argument-free.
+    for (const [name, tool] of Object.entries(READ_ONLY_TOOLS)) {
+      if (name === 'searchRecipes') continue;
+      expect(tool.spec.parameters).toEqual({ type: 'object', properties: {} });
+      expect(tool.schema).toBeUndefined();
     }
+  });
+
+  it('validates the arguments of the one tool that takes them', () => {
+    // A tool with arguments and no schema would hand model output straight to an
+    // implementation, which is the thing ADR-015 exists to prevent.
+    const search = READ_ONLY_TOOLS.searchRecipes!;
+    expect(search.schema).toBeDefined();
+    expect(search.schema!.safeParse({ query: 'chicken' }).success).toBe(true);
+    expect(search.schema!.safeParse({ query: 'a' }).success).toBe(false);
+    expect(search.schema!.safeParse({}).success).toBe(false);
   });
 
   it('refuses a tool that is not on the list, and tells the model rather than throwing', async () => {
