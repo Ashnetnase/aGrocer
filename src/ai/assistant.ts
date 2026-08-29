@@ -150,6 +150,12 @@ export async function askAssistant(
   const toolsUsed: string[] = [];
   let model = provider.model;
 
+  const directPlan = await directMealPlanProposal(question, repos, writeTools);
+  if (directPlan) {
+    toolsUsed.push('getMeals');
+    return { reply: `I found ${directPlan.mealName}. Shall I plan it for ${directPlan.dayLabel} ${directPlan.slot}?`, toolsUsed, proposal: { actions: [directPlan.action] }, model, durationMs: Date.now() - startedAt };
+  }
+
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     // On the final round the tools are withheld, which is what forces an answer: a model
     // offered tools it cannot use would otherwise keep asking for them.
@@ -242,4 +248,23 @@ export async function askAssistant(
     })`,
     'The assistant could not finish that. Try asking it more simply.',
   );
+}
+
+async function directMealPlanProposal(
+  question: string,
+  repos: AgrocerRepositories,
+  writeTools: Record<string, AiWriteTool>,
+): Promise<{ mealName: string; dayLabel: string; slot: string; action: AssistantProposalAction } | undefined> {
+  if (!/\b(plan|schedule|put)\b/i.test(question)) return undefined;
+  const day = question.match(/\b(mon|tue|wed|thu|fri|sat|sun)(?:day)?\b/i)?.[1]?.toLowerCase();
+  if (!day) return undefined;
+  const slot = (question.match(/\b(breakfast|lunch|dinner)\b/i)?.[1]?.toLowerCase() ?? 'dinner') as 'breakfast' | 'lunch' | 'dinner';
+  const meals = await repos.meals.list();
+  const normalized = question.toLowerCase();
+  const meal = meals.filter((item) => normalized.includes(item.name.toLowerCase())).sort((a, b) => b.name.length - a.name.length)[0];
+  if (!meal) return undefined;
+  const tool = writeTools.planMeal;
+  if (!tool) return undefined;
+  const args = { mealName: meal.name, day: day.slice(0, 3) as 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', slot };
+  return { mealName: meal.name, dayLabel: day.charAt(0).toUpperCase() + day.slice(1), slot, action: { tool: 'planMeal', description: await tool.describe(args), args } };
 }
