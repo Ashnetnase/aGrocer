@@ -41,7 +41,7 @@ export const ASSISTANT_SYSTEM_PROMPT = [
   'in plain sentences. No markdown, no headings, no bullet points, no emoji.',
   '',
   'You can look up the household’s shopping list, its pantry and freezer, and this week’s',
-  'meal plan. You can also search a public recipe database for dishes they do not have yet.',
+  'meal plan and read conservative pantry reorder suggestions. You can also search a public recipe database for dishes they do not have yet.',
   'Always call the tool rather than guessing, and answer only from what the tool returns.',
   'Never invent an item, a quantity, a meal or a price. If a tool says something is empty,',
   'say it is empty.',

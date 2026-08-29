@@ -4,6 +4,7 @@ import { summariseShopping } from '@/domain/services/shopping';
 import { nzd } from '@/lib/format';
 import { getRecipeProvider } from '@/recipes/provider';
 import { NO_ARGUMENTS, type AiTool } from './registry';
+import { predictReorders } from '@/domain/services/reorderPrediction';
 
 /**
  * The read-only tools (AshHome Phase 9, slice 9a).
@@ -120,6 +121,15 @@ const mealCatalogue: AiTool = {
   },
 };
 
+const reorderSuggestions: AiTool = {
+  spec: { name: 'getReorderSuggestions', description: 'Read conservative pantry reorder suggestions based on recent inventory use. This is advisory only.', parameters: NO_ARGUMENTS },
+  async execute(repos) {
+    const suggestions = predictReorders(await repos.inventoryEvents.list());
+    if (suggestions.length === 0) return 'There are no reorder suggestions yet.';
+    return `Keep an eye on: ${suggestions.map((item) => item.reason === 'recently-empty' ? `${item.itemName} recently ran out` : `${item.itemName} used ${item.uses} times recently`).join('; ')}.`;
+  },
+};
+
 function describeItem(item: { name: string; quantity: number; unit: string }): string {
   return item.quantity > 1 ? `${item.name} ×${item.quantity} ${item.unit}` : item.name;
 }
@@ -181,5 +191,6 @@ export const READ_ONLY_TOOLS: Record<string, AiTool> = {
   getPantry: pantry,
   getMealPlan: mealPlan,
   getMeals: mealCatalogue,
+  getReorderSuggestions: reorderSuggestions,
   searchRecipes: searchRecipes as AiTool,
 };

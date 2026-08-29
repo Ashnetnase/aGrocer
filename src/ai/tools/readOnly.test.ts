@@ -76,6 +76,7 @@ function fakeRepositories(data: {
       adjustQuantity: forbidden,
       remove: forbidden,
     },
+    inventoryEvents: { list: async () => [] },
     meals: {
       list: async () => data.meals ?? [],
       getPlan: async () => data.plan ?? {},
@@ -106,6 +107,7 @@ describe('the allow-list', () => {
       'getPantry',
       'getMealPlan',
       'getMeals',
+      'getReorderSuggestions',
       'searchRecipes',
     ]);
   });
@@ -273,5 +275,11 @@ describe('getMeals', () => {
 
   it('reports an empty catalogue plainly', async () => {
     expect((await run('getMeals', fakeRepositories({ meals: [] }))).content).toBe('The meal catalogue is empty.');
+  });
+});
+
+describe('getReorderSuggestions', () => {
+  it('reports when there is no history yet', async () => {
+    expect((await run('getReorderSuggestions', fakeRepositories({}))).content).toBe('There are no reorder suggestions yet.');
   });
 });
