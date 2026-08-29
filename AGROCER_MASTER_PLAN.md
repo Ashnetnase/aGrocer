@@ -479,8 +479,9 @@ Make Agrocer smarter using household history and external grocery information.
 
 ## Stage 5 — New World / supermarket trolley preparation
 
-**STATUS: IN PROGRESS (2026-08-30)** — review-only trolley preparation is implemented; retailer
-product feeds and cart APIs remain intentionally unconfigured.
+**STATUS: IN PROGRESS (2026-08-30)** — deterministic matching, household product memory and the
+local visible-browser companion foundation are implemented. Live New World selectors remain to be
+validated against the user's session before trolley addition can be called working.
 
 ### Goal
 
@@ -490,16 +491,16 @@ Prepare a supermarket trolley for human review without autonomous payment.
 
 - [x] `ShoppingProvider` abstraction (`src/shopping/types.ts`)
 - [x] manual provider and matching/review service
-- [~] New World provider seam (safe unconfigured adapter; no private-page scraping)
-- [x] product matching with unresolved-item review status
-- [ ] substitutions
-- [ ] quantity reconciliation
-- [ ] browser-assisted cart preparation if permitted/viable
+- [x] New World browser provider communicating with a separate local companion
+- [x] deterministic product matching with confidence, preferences and unresolved-item review
+- [~] substitutions — candidate selection and unavailable replacement state exist
+- [x] quantity reconciliation in the companion request/verified result contract
+- [~] visible Playwright cart preparation — implemented, mocked/tested, not live-site validated
 - [ ] background job handling
-- [ ] retry/error handling
-- [ ] cart review
-- [ ] user approval
-- [ ] final checkout remains manual
+- [x] explicit partial-failure/error states; background retries remain future work
+- [x] cart review UI with ready/review/unavailable summaries
+- [x] separate explicit user action before sending ready products to the companion
+- [x] final checkout remains manual by construction
 
 ### Safety/product rule
 
@@ -640,6 +641,16 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-30 - Stage 5 New World trolley companion foundation (Codex)
+
+Added household-scoped retailer-product cache and product preferences (migration `0008`),
+deterministic matching and confidence rules, remembered selections, prepare/send endpoints, and a
+visible Playwright companion with centralised selectors and truthful partial-failure reporting.
+The Shopping UI now separates ready, review and unavailable lines and requires a second explicit
+action before cart-building. The live database is migrated to 11 RLS-protected tables. Verified:
+303 unit tests, 11 database integration tests, typecheck, lint, production build, RLS probe and
+companion `/health`. Live New World search/cart selectors are not yet validated.
 
 ## 2026-08-29 - AI meal catalogue and planner proposal coverage (Codex)
 

@@ -83,7 +83,8 @@ the bulk of the test suite.
 Drizzle ORM over postgres-js on Supabase managed PostgreSQL (ADR-013), project `agrocer` in
 ap-southeast-2. Nine tables in `src/db/schema.ts`: `households`, `household_members`,
 `pantry_items`, `products`, `shopping_items`, `meals`, `plan_entries`, `inventory_events`, and
-`meal_feedback`. Migrations `0000`–`0007` are applied; `0006` adds the nullable
+`meal_feedback`, `retailer_products`, and `shopping_product_preferences`. Migrations
+`0000`–`0008` are applied; `0006` adds the nullable
 `households.weekly_budget_cents` target and `0007` adds nullable JSONB structured ingredient
 details beside the legacy `meals.ingredients` text array. `npm run db:seed` creates one household.
 
@@ -101,7 +102,7 @@ belong to the whole family or one household member and records the planned meal 
 localStorage implementation deliberately refuses feedback writes: history that exists on one
 device but not another is not household history.
 
-**RLS is enabled on all nine tables**, with one household policy per table and no anonymous
+**RLS is enabled on all eleven tables**, with one household policy per table and no anonymous
 access. `npm run db:rls` verifies both the metadata and a publishable-key probe.
 
 `src/db/client.ts` is server-only. It throws when `DATABASE_URL` is absent, caches the client on
@@ -134,7 +135,7 @@ Signing up grants nothing: an account with no member row gets 403. Linking is
 `npm run db:claim`, a deliberate act. Auth is enforced unless `AGROCER_AUTH="off"`, which
 fails closed by design.
 
-**RLS is enabled on all nine tables**, with policies granting `authenticated` its own
+**RLS is enabled on all eleven tables**, with policies granting `authenticated` its own
 household and `anon` nothing. It does not affect the application: route handlers reach Postgres
 as `postgres`, which owns the tables and has `rolbypassrls`. RLS is the wall around the
 **publishable key**, which is public by design and which Supabase otherwise exposes every table

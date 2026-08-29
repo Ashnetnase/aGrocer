@@ -673,9 +673,23 @@ Added 2026-08-29 for meal feedback UI:
 ## NEXT TASK
 
 Current state (2026-08-30): recipe/planner AI, voice input/output, reorder and use-soon advice,
-product alternatives, specials abstraction/screen, and notifications are implemented and checked.
-The old verification instructions below are historical; the remaining action is to rebuild the
-Docker host and choose/configure a real retailer feed if desired.
+product alternatives, specials abstraction/screen, notifications, and the Stage 5 trolley companion
+foundation are implemented and checked. Migration `0008` is applied: 11 tables have RLS and one
+authenticated household policy each.
+
+Stage 5 now supports both preferred integration paths: a future official retailer API and a local,
+visible New World browser companion. It no longer treats an official API as a prerequisite. Product
+preferences persist, deterministic matching runs before any future AI ranking, and prepare/send are
+separate explicit actions. Run the companion with `npm run companion:newworld`; configuration and
+safety details are in `docs/new-world-companion.md`.
+
+**Next Stage 5 task:** live-test the visible companion against Ash's logged-in New World session.
+Repair only the central selectors in `companion/src/retailers/newworld/newworld.selectors.ts` and
+the deterministic client behavior discovered by that test. Search and trolley addition are coded
+but not claimed working against the live site. CAPTCHA/blocking must return `blocked`; checkout and
+payment remain user-only.
+
+The old AI verification instructions below are historical and retained for audit context.
 
 The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check
 through the tunnel; then the next code slice is voice talk-back (`speechSynthesis`).
@@ -831,10 +845,10 @@ Both bit again this session. Check them before debugging code.
 
 ## Last Updated
 
-2026-08-30, on `stage-2/database-schema`. Migrations through `0007` are applied. Nothing has
+2026-08-30, on `stage-2/database-schema`. Migrations through `0008` are applied. Nothing has
 been merged to `main`, which is ~30 commits behind.
 
-Stage 5 now has a review-only trolley preparation slice: `src/shopping/*` provides manual matching,
-an explicit New World adapter seam, and `/api/trolley/prepare` plus a Shopping-screen review panel.
-It never logs into New World or checks out. The next implementation dependency is an official New
-World product feed/API (or a user-supplied catalogue); until then unmatched lines remain manual.
+Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
+upgraded Shopping review UI, and a separate visible Playwright companion. The health endpoint is
+locally smoke-tested, but live New World search/cart selectors have not yet been validated. No New
+World credentials are stored and payment/final checkout are not implemented.
