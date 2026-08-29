@@ -68,7 +68,7 @@ export function MealPickerSheet({
           }}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
         >
-          <ClipboardPasteIcon className="h-4 w-4" /> Paste a recipe
+          <ClipboardPasteIcon className="h-4 w-4" /> Add a recipe
         </button>
 
         <div className="space-y-2">

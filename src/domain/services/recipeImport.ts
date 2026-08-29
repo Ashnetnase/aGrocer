@@ -149,6 +149,15 @@ export function parseImportedIngredient(line: string): MealIngredient | undefine
   // "of" survives "2 cups of rice" and belongs to neither field.
   rest = rest.replace(/^of\s+/i, '').trim();
 
+  // A second unit word — "400g can tomatoes", "1kg pack mince" — is packaging, not the
+  // ingredient. Only stripped when something follows it, so "Cloves" the spice and "Can" on
+  // its own survive as names.
+  const words = rest.split(/\s+/);
+  if (words.length > 1 && UNITS.includes((words[0] ?? '').toLowerCase())) {
+    rest = words.slice(1).join(' ');
+    rest = rest.replace(/^of\s+/i, '').trim();
+  }
+
   if (rest === '') return undefined;
   return { name: titleCase(rest), amount: taken.amount, unit };
 }

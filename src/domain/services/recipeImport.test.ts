@@ -78,6 +78,21 @@ describe('parseImportedIngredient', () => {
     });
   });
 
+  it('strips packaging words that follow the unit', () => {
+    // "400g can tomatoes" is 400g of tomatoes; the can is not the ingredient.
+    expect(parseImportedIngredient('400g can tomatoes')).toEqual({
+      name: 'Tomatoes',
+      amount: 400,
+      unit: 'g',
+    });
+    expect(parseImportedIngredient('1kg pack of mince')?.name).toBe('Mince');
+  });
+
+  it('keeps a unit word that IS the ingredient', () => {
+    // "Cloves" the spice, not a count of garlic.
+    expect(parseImportedIngredient('1 tsp cloves')?.name).toBe('Cloves');
+  });
+
   it('removes the "of" in "2 cups of rice"', () => {
     expect(parseImportedIngredient('2 cups of rice')?.name).toBe('Rice');
   });
