@@ -197,7 +197,7 @@ unknown products or incompatible units must not quietly understate dinner's cost
   `src/recipes/` (the `RecipeProvider` seam + TheMealDB), `/api/recipes`, and the
   `RecipeImportSheet` review step.
 - **AI recipe tools** — `searchRecipes` (read) and `addRecipeToMeals` (write, gated).
-  **Written and unit-tested; the live model behaviour is NOT yet verified.** See NEXT TASK.
+  Live-verified with qwen3:8b; recipe saves and planner proposals are confirmation-gated.
 - **AI slice 9b** — the first write tool: `src/ai/tools/write.ts` (`WRITE_TOOLS`, a sibling of
   the read record), the proposal path in `src/ai/assistant.ts`, `app/api/ai/confirm`, and the
   Add it / Add all / Cancel gate on the card. ADR-018 records the shape.
@@ -216,7 +216,8 @@ unknown products or incompatible units must not quietly understate dinner's cost
 ## Work In Progress
 
 Stage 2 code is complete; only the physical homelab deployment and phone PWA install remain.
-Stage 4 is active. Recipe import is the next useful code slice. Low-stock prediction and
+Stage 4 is active. Product alternatives, specials, waste reduction and notifications remain.
+Low-stock prediction and
 feedback learning remain deliberately deferred until their history contains real signal.
 
 The current Stage 4 AI slice includes `getMeals` plus gated `planMeal`; both are covered by

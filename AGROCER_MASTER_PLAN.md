@@ -457,8 +457,8 @@ Make Agrocer smarter using household history and external grocery information.
 
 ### Planned scope
 
-- [ ] recipe discovery/search
-- [ ] recipe import
+- [x] recipe discovery/search
+- [x] recipe import
 - [x] pantry-to-recipe matching — `src/domain/services/recipeMatch.ts`, surfaced as the
       Tonight's meal card's missing-ingredient warning. Presence only, not quantities
 - [~] consumption history — `inventory_events` accumulates it (Stage 2); nothing reads it yet
@@ -470,7 +470,7 @@ Make Agrocer smarter using household history and external grocery information.
       text; complete catalogue-priced estimates appear in meal detail and on the wall dashboard
 - [x] meal feedback capture — whole-family or named-member ratings recorded from meal detail;
       three newest entries shown, with append-only corrections
-- [ ] product alternatives
+- [~] product alternatives
 - [ ] supermarket price/specials provider abstraction
 - [ ] waste/use-soon recommendations
 - [ ] notifications
