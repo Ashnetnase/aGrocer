@@ -77,6 +77,14 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
 
+      # Stage 5. The companion normally runs visibly on the workstation, so the deployed
+      # container needs that workstation's LAN URL rather than 127.0.0.1. Keep `manual` until
+      # the companion is configured; the Shopping screen then remains usable and reports it offline.
+      SHOPPING_PROVIDER: ${SHOPPING_PROVIDER:-manual}
+      NEW_WORLD_COMPANION_URL: ${NEW_WORLD_COMPANION_URL:-http://127.0.0.1:4317}
+      NEW_WORLD_STORE_ID: ${NEW_WORLD_STORE_ID:-}
+      NEW_WORLD_COMPANION_TOKEN: ${NEW_WORLD_COMPANION_TOKEN:-}
+
     # Modest ceilings suited to a small homelab VM.
     deploy:
       resources:
