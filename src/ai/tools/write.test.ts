@@ -59,9 +59,9 @@ describe('the write allow-list', () => {
 
   it('validates meal planning to an exact UUID, day and slot', () => {
     const plan = WRITE_TOOLS.planMeal!;
-    expect(plan.schema.safeParse({ mealId: 'not-an-id', day: 'fri', slot: 'dinner' }).success).toBe(false);
-    expect(plan.schema.safeParse({ mealId: '11111111-1111-4111-8111-111111111111', day: 'fri', slot: 'dinner' }).success).toBe(true);
-    expect(plan.schema.safeParse({ mealId: '11111111-1111-4111-8111-111111111111', day: 'friday', slot: 'dinner' }).success).toBe(false);
+    expect(plan.schema.safeParse({ mealName: '', day: 'fri', slot: 'dinner' }).success).toBe(false);
+    expect(plan.schema.safeParse({ mealName: 'Chicken curry', day: 'fri', slot: 'dinner' }).success).toBe(true);
+    expect(plan.schema.safeParse({ mealName: 'Chicken curry', day: 'friday', slot: 'dinner' }).success).toBe(false);
   });
 
   it('assigns an existing meal and reports the requested slot', async () => {
@@ -69,14 +69,14 @@ describe('the write allow-list', () => {
     const assign = vi.fn(async () => ({}));
     const repositories = {
       meals: {
-        list: async () => [{ id: '11111111-1111-4111-8111-111111111111', name: 'Chicken curry' }],
+        list: async () => [{ id: 'm1', name: 'Chicken curry' }],
         assign,
       },
     } as unknown as AgrocerRepositories;
-    const args = { mealId: '11111111-1111-4111-8111-111111111111', day: 'fri' as const, slot: 'dinner' as const };
+    const args = { mealName: 'Chicken curry', day: 'fri' as const, slot: 'dinner' as const };
     expect(plan.describe(args)).toContain('fri dinner');
     expect(await plan.execute(args, repositories)).toContain('Chicken curry');
-    expect(assign).toHaveBeenCalledWith('fri', 'dinner', args.mealId);
+    expect(assign).toHaveBeenCalledWith('fri', 'dinner', 'm1');
   });
 });
 

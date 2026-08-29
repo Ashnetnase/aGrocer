@@ -177,19 +177,19 @@ const addRecipeToMeals: AiWriteTool<AddRecipeArgs> = {
   },
 };
 
-const planMealArgs = z.object({ mealId: z.string().uuid(), day: dayKeySchema, slot: slotSchema });
+const planMealArgs = z.object({ mealName: z.string().trim().min(1).max(120), day: dayKeySchema, slot: slotSchema });
 type PlanMealArgs = z.infer<typeof planMealArgs>;
 const planMeal: AiWriteTool<PlanMealArgs> = {
-  spec: { name: 'planMeal', description: 'Propose planning an existing saved meal for a day and slot. Use only a meal id returned by getMeals. The family confirms before anything changes.', parameters: { type: 'object', properties: { mealId: { type: 'string' }, day: { type: 'string' }, slot: { type: 'string' } }, required: ['mealId', 'day', 'slot'] } },
+  spec: { name: 'planMeal', description: 'Propose planning an existing saved meal by its exact name for a day and slot. Never show internal IDs. The family confirms before anything changes.', parameters: { type: 'object', properties: { mealName: { type: 'string' }, day: { type: 'string' }, slot: { type: 'string' } }, required: ['mealName', 'day', 'slot'] } },
   schema: planMealArgs,
   describe(args) {
-    return `Plan saved meal ${args.mealId} for ${args.day} ${args.slot}`;
+    return `Plan “${args.mealName}” for ${args.day} ${args.slot}`;
   },
   async execute(args, repos) {
     const meals = await repos.meals.list();
-    const meal = meals.find((item) => item.id === args.mealId);
+    const meal = meals.find((item) => item.name.toLowerCase() === args.mealName.toLowerCase());
     if (!meal) return 'That meal could not be found, so nothing was planned.';
-    await repos.meals.assign(args.day, args.slot, args.mealId);
+    await repos.meals.assign(args.day, args.slot, meal.id);
     return `Planned ${meal.name} for ${args.day} ${args.slot}.`;
   },
 };

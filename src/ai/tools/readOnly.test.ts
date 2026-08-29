@@ -271,7 +271,7 @@ describe('getMealPlan', () => {
 describe('getMeals', () => {
   it('returns meal names with stable ids for a later planning proposal', async () => {
     const { content } = await run('getMeals', fakeRepositories({ meals: [meal({ id: 'm1', name: 'Chicken curry' })] }));
-    expect(content).toBe('Chicken curry (id m1)');
+    expect(content).toBe('Saved meals: Chicken curry.');
   });
 
   it('reports an empty catalogue plainly', async () => {
