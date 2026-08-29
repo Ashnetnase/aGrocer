@@ -357,7 +357,7 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
 | `cloudflared` | its own machine | Tunnel `homelab`, ID `7a9f3afc-7fed-4e64-84a5-034cc130374d`, healthy |
 
 - **Deployment: the Cloudflare Tunnel `homelab` on `ashnetbase.org`** (ADR-019).
-  `home.ashnetbase.org` → `HTTP` → **`http://<agrocer-host-ip>:3000`** — a LAN IP, **not**
+  `home.ashnetbase.org` → `HTTP` → **`http://192.168.1.49:3000`** — a LAN IP, **not**
   `localhost`. `cloudflared` runs on a different machine and routes to every service by
   address, which is how the first deploy attempt 502'd. The container publishes `3000:3000`
   to the LAN accordingly. `docs/deploy.md` is the runbook.
@@ -650,14 +650,21 @@ budget target, complete-coverage meal costs, and append-only feedback capture. *
 
 ### Blocked on Ash — not code, do not attempt
 
+**Host decided 2026-08-29: `192.168.1.49`**, the box already serving `vault` (8080) and
+`status` (3001). Every address below is now concrete rather than a placeholder.
+
 1. **Deploy.** The tunnel route `home.ashnetbase.org` exists but points at `localhost:3000`;
-   it must be `http://<agrocer-host-ip>:3000` (likely `192.168.1.49`). Then `git clone`,
-   `.env`, `docker compose up -d --build` on that host. `docs/deploy.md`.
-2. **Ollama for production** (ADR-020): `OLLAMA_HOST=0.0.0.0:11434` on the workstation, a
-   firewall rule on TCP 11434 scoped to the Agrocer host, a DHCP reservation for
-   `192.168.1.222`, and `OLLAMA_BASE_URL` in the homelab `.env`.
+   it must be `http://192.168.1.49:3000`. Then `git clone`, `.env`,
+   `docker compose up -d --build` on that host. `docs/deploy.md`.
+2. **Ollama for production** (ADR-020): `OLLAMA_HOST=0.0.0.0:11434` on the workstation, an
+   inbound rule on TCP 11434 scoped to **`192.168.1.49` only**, a DHCP reservation for
+   `192.168.1.222`, and `OLLAMA_BASE_URL=http://192.168.1.222:11434` in the homelab `.env`.
+   Note `ashnetserv1` is Proxmox with no GPU — its Ollama is not the target and is being
+   moved away from, which is the whole reason this item exists.
 3. **`api.chat.ashnetbase.org` publishes an unauthenticated Ollama to the internet.** Anyone
-   who guesses the hostname gets free inference. Cloudflare Access, one email policy.
+   who guesses the hostname gets free inference. **Decision 2026-08-29: Cloudflare Access with
+   a single email policy** — chosen over deleting the route because `chat.ashnetbase.org` may
+   depend on it.
 4. **The account password is weak** (`test123!`, set 2026-08-29 during setup) on the account
    holding the children's names. Change it in the Supabase dashboard.
 5. **CI secrets** — `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` as GitHub

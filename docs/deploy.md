@@ -12,14 +12,16 @@ Cloudflare edge  ── TLS terminates here, real certificate
    │  (tunnel "homelab", outbound only — no port open on the router)
    ▼
 cloudflared          -- runs on its OWN machine, not with the app
-   │  http://<agrocer-host>:3000   <- a LAN IP, not localhost
+   │  http://192.168.1.49:3000     <- a LAN IP, not localhost
    ▼
 agrocer container ──────────► Supabase Postgres (ap-southeast-2)
 ```
 
 ## Prerequisites
 
-- Docker Engine on the homelab host.
+- Docker Engine on **`192.168.1.49`** — the host chosen on 2026-08-29. It already runs `vault`
+  (8080) and `status` (3001), so Docker is there and the machine is always on. Check port 3000
+  is free before deploying: `ss -tlnp | grep :3000` should print nothing.
 - The `homelab` Cloudflare Tunnel already running there — it is, serving `chat`, `vault`,
   `status` and `api.chat`.
 - A Supabase project with the schema applied and at least one claimed account
@@ -35,7 +37,7 @@ routes → Add**:
 | Subdomain | `home` |
 | Domain | `ashnetbase.org` |
 | Service type | `HTTP` |
-| URL | `<agrocer-host-ip>:3000` — e.g. `192.168.1.49:3000` |
+| URL | `192.168.1.49:3000` |
 
 `HTTP` is correct here, not HTTPS: the hop from `cloudflared` to the container is inside the
 home network. TLS is terminated at Cloudflare's edge.
@@ -99,7 +101,7 @@ Then from **another machine on the LAN**, because that is how `cloudflared` reac
 is the check that distinguishes "the app is running" from "the tunnel can see the app":
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://<agrocer-host-ip>:3000/sign-in   # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.49:3000/sign-in   # 200
 ```
 
 Then from a phone, **off the home Wi-Fi** — mobile data proves it is the tunnel and not the
