@@ -11,28 +11,35 @@ phone / wall tablet
 Cloudflare edge  ── TLS terminates here, real certificate
    │  (tunnel "homelab", outbound only — no port open on the router)
    ▼
-cloudflared          -- runs on its OWN machine, not with the app
-   │  http://192.168.1.49:3002     <- a LAN IP, not localhost
+cloudflared          -- a container on this SAME host (cloudflare-tunnel_default)
+   │  http://192.168.1.49:3000     <- host LAN IP today; see "Tightening" below
    ▼
 agrocer container ──────────► Supabase Postgres (ap-southeast-2)
 ```
 
 ## Prerequisites
 
-- Docker Engine on **`192.168.1.49`** — the host chosen on 2026-08-29. It already runs `vault`
-  (8080), `status` (3001) and **Portainer on 3000**, so pick a free host port:
+- Docker Engine on **`192.168.1.49`** — the host chosen on 2026-08-29. Its hostname is
+  `portainer`, which is misleading: Portainer the application is on **8000/9443**, not 3000.
 
-  ```bash
-  ss -tlnp | grep -E ':(3000|3002)\s'   # 3000 is Portainer; confirm your choice is free
-  ```
+  What is actually running there, verified on 2026-08-29:
 
-  Set `AGROCER_HOST_PORT=3002` in `.env` (or any free port) and use the same number in the
-  tunnel route. **Move the new thing, not the running one** — Portainer is what you reach for
-  when a container misbehaves, and relocating it mid-deploy risks losing the UI exactly when
-  you need it. The container is always 3000 internally (`PORT`, `EXPOSE`, healthcheck), and
-  nothing in the app derives a URL from the port, so this needs no rebuild.
-- The `homelab` Cloudflare Tunnel already running there — it is, serving `chat`, `vault`,
-  `status` and `api.chat`.
+  | Port | Container |
+  | ---- | --------- |
+  | 8080 | `vaultwarden` |
+  | 3001 | `uptime-kuma` |
+  | 8000, 9443 | `portainer` |
+  | 80, 81, 443 | `ngix-npm-1` |
+  | — | `cloudflared` |
+
+  **Port 3000 is free**, so the default needs no override. `AGROCER_HOST_PORT` exists for the
+  next host where it is not — set it in `.env` and use the same number in the tunnel route.
+  The container is always 3000 internally (`PORT`, `EXPOSE`, healthcheck) and nothing in the
+  app derives a URL from the port, so changing the published one needs no rebuild.
+- The `homelab` Cloudflare Tunnel **runs on this same host**, as a container on the
+  `cloudflare-tunnel_default` network, started with `["tunnel","run"]` — the token is in an
+  environment variable, so all routing lives in the Zero Trust dashboard and there is no
+  config file to edit.
 - A Supabase project with the schema applied and at least one claimed account
   (`npm run db:claim`).
 
@@ -46,15 +53,15 @@ routes → Add**:
 | Subdomain | `home` |
 | Domain | `ashnetbase.org` |
 | Service type | `HTTP` |
-| URL | `192.168.1.49:3002` |
+| URL | `192.168.1.49:3000` |
 
 `HTTP` is correct here, not HTTPS: the hop from `cloudflared` to the container is inside the
 home network. TLS is terminated at Cloudflare's edge.
 
-**The route is a LAN IP, not `localhost`.** `cloudflared` runs on its own machine and reaches
-every service by address — `vault → 192.168.1.49:8080`, `chat → 192.168.1.37:8080`. So
-`localhost:3000` would mean localhost *inside cloudflared*, and the route would 502 forever.
-Find the address with `hostname -I` on whichever box runs the container.
+**The route is a LAN IP, not `localhost`.** `cloudflared` is a *container*, so `localhost`
+means inside that container, not the host — which is why the first attempt 502'd. It reaches
+every service by address: `vault → 192.168.1.49:8080` (its own host), `chat → 192.168.1.37:8080`
+(another machine). Find the address with `hostname -I`.
 
 In the current Cloudflare UI this lives under the tunnel's **Published application routes**
 tab — not "Public Hostname", and not "Hostname routes", which is for private WARP routing.
@@ -75,10 +82,10 @@ Copy `.env.example` to `.env` next to `docker-compose.yml` on the homelab host a
 DATABASE_URL=                            # Supabase → Database → session pooler
 NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-AGROCER_HOST_PORT=3002                   # 3000 is Portainer on 192.168.1.49
+# AGROCER_HOST_PORT=3002                 # only if 3000 is taken; it is free on .49
 ```
 
-Three values, not five. `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are **not** needed here —
+Three values, not five, and no port line — 3000 is free on this host. `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are **not** needed here —
 nothing in the running container reads them, only `scripts/claim.ts` and `scripts/rls-check.ts`
 do, and those run from a checkout against `.env.local`. Compose briefly demanded `SUPABASE_URL`
 and aborted otherwise-valid deploys because of it.
@@ -107,9 +114,9 @@ rebuild, not a restart**. Everything secret is runtime-only and never enters an 
 ## 4. Verify
 
 ```bash
-# On the host. Use the PUBLISHED port (AGROCER_HOST_PORT), not the container's 3000.
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/sign-in      # 200
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/api/shopping # 401 — auth works
+# On the host. Use the PUBLISHED port — 3000 unless you set AGROCER_HOST_PORT.
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/sign-in      # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/shopping # 401 — auth works
 
 docker compose ps        # health: healthy
 docker compose logs -f   # no repeated errors
@@ -119,7 +126,7 @@ Then from **another machine on the LAN**, because that is how `cloudflared` reac
 is the check that distinguishes "the app is running" from "the tunnel can see the app":
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.49:3002/sign-in   # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.49:3000/sign-in   # 200
 ```
 
 Then from a phone, **off the home Wi-Fi** — mobile data proves it is the tunnel and not the
@@ -146,6 +153,22 @@ Point the kiosk browser at `https://home.ashnetbase.org/dashboard` and sign in o
 session persists — the middleware refreshes the token on every request, which is why a tablet
 left open for weeks stays signed in (ADR-017). If it ever does lapse, the next tap redirects
 to sign-in rather than showing an error.
+
+## Tightening, once it is working
+
+`cloudflared` turned out to be a container **on this same host**, on the
+`cloudflare-tunnel_default` network. ADR-019 assumed otherwise, which is why the compose file
+publishes a LAN port and accepts the session cookie travelling in clear on that hop.
+
+Now that the assumption is corrected, the clean arrangement is available: join Agrocer to
+`cloudflare-tunnel_default`, publish **no** host port at all, and point the route at
+`http://agrocer:3000` by container name. That removes the LAN hop entirely and makes host port
+collisions permanently irrelevant.
+
+**Do it as a second step, not as part of the first deploy.** Two changes at once means a 502
+tells you nothing about which one caused it. Get `200`/`401` on `127.0.0.1:3000` first — that
+proves the application — then move it behind the Docker network and re-verify the same two
+codes through the tunnel.
 
 ## What is deliberately not here
 

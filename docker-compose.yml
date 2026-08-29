@@ -4,10 +4,14 @@
 # this container is stateless and can be destroyed and rebuilt without losing anything.
 #
 # HTTPS comes from the existing Cloudflare Tunnel rather than from this file (ADR-019).
-# `cloudflared` runs on a different machine from this container and reaches it over the LAN,
-# the same way it reaches vault, chat and status — so the port is published to the network,
-# not to loopback. TLS still terminates at Cloudflare's edge, and no port is opened on the
-# router. See ADR-019 for what that costs and why it is accepted.
+# `cloudflared` is a container on the SAME host, on `cloudflare-tunnel_default`, and currently
+# reaches this one by host LAN address — so the port is published to the network rather than
+# to loopback. TLS terminates at Cloudflare's edge and no port is opened on the router.
+#
+# Because they share a host, the better arrangement is available and documented in
+# `docs/deploy.md`: join this service to `cloudflare-tunnel_default`, publish no port, and
+# route to `http://agrocer:3000`. That removes the plaintext LAN hop. Deliberately deferred
+# until the app is verified working, so a 502 has only one possible cause.
 #
 # Copy `.env.example` to `.env` beside this file and fill it in. Compose reads `.env`
 # automatically; it is gitignored, like `.env.local`.
@@ -27,14 +31,15 @@ services:
     restart: unless-stopped
 
     ports:
-      # Published to the LAN because `cloudflared` lives on another machine and routes by IP
-      # (`http://<this-host>:<port>`). Loopback would be safer and simply would not work here.
+      # Published to the LAN because the tunnel route addresses this host by IP. Loopback
+      # would be safer and would not work, because `cloudflared` is itself a container —
+      # `localhost` there means inside it, not on the host.
       #
       # The HOST port is configurable; the container port is not. `PORT=3000`, `EXPOSE 3000`
-      # and the healthcheck are all fixed at 3000 inside. On a homelab box 3000 is a popular
-      # address — Portainer holds it on `192.168.1.49` — and nothing in the app derives a URL
-      # from the port, so moving it is one line here plus one field in the tunnel route. No
-      # rebuild.
+      # and the healthcheck are all fixed at 3000 inside. Nothing in the app derives a URL
+      # from the port, so moving the published one is a line here plus a field in the tunnel
+      # route, with no rebuild. 3000 is free on `192.168.1.49` (Portainer is on 8000/9443,
+      # despite the host being named `portainer`), so the default stands there.
       #
       # What this costs, stated plainly: the app is reachable over plain HTTP by anything on
       # the home network, so the session cookie travels in clear on the LAN hop between

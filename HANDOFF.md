@@ -352,9 +352,19 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
 | ---- | ------- | ---- |
 | Workstation (this machine) | `192.168.1.222` | RTX 5070, Ollama **0.33.1** (`qwen3:8b`, `qwen3:4b`), bound to `127.0.0.1`. Development. Not 24/7 (ADR-007) |
 | `ashnetserv1` | `192.168.1.14` | Proxmox, **no GPU**. Ollama **0.7.1** (`phi3:mini`, `llama3:8b`). Published at `api.chat.ashnetbase.org` |
-| homelab services box | `192.168.1.49` | Runs `vault` (8080) and `status` (3001). The likely Agrocer host |
+| **Agrocer host** (hostname `portainer`) | `192.168.1.49` | `vaultwarden` 8080, `uptime-kuma` 3001, `portainer` 8000/9443, `ngix-npm-1` 80/81/443, **and `cloudflared`**. **Port 3000 is free** |
 | chat box | `192.168.1.37` | Runs `chat` (8080) |
-| `cloudflared` | its own machine | Tunnel `homelab`, ID `7a9f3afc-7fed-4e64-84a5-034cc130374d`, healthy |
+| `cloudflared` | **on `192.168.1.49`** | A container on `cloudflare-tunnel_default`, started `["tunnel","run"]` — token in an env var, so routing lives in the Zero Trust dashboard. Tunnel `homelab`, ID `7a9f3afc-7fed-4e64-84a5-034cc130374d`, healthy |
+
+Two facts in this table were wrong until 2026-08-29 and are worth flagging, because both
+reached the repository by being written up rather than checked. `cloudflared` was recorded as
+running on its own machine — it does not; the LAN-IP routes are because *some* services are
+elsewhere. And port 3000 was recorded as held by Portainer — it is not; Portainer is on
+8000/9443 and the host is merely named `portainer`. Both were confirmed by probing the host.
+
+Because `cloudflared` shares the host, the clean arrangement is now available: join Agrocer to
+`cloudflare-tunnel_default`, publish no port, route to `http://agrocer:3000`. Deferred until
+after the first working deploy — see `docs/deploy.md`, "Tightening".
 
 - **Deployment: the Cloudflare Tunnel `homelab` on `ashnetbase.org`** (ADR-019).
   `home.ashnetbase.org` → `HTTP` → **`http://192.168.1.49:3000`** — a LAN IP, **not**

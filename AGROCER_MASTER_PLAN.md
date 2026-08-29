@@ -2224,11 +2224,29 @@ concern from hosting.
 would bind to `127.0.0.1:3000` because only `cloudflared` on the same host needed it. That was
 wrong about Ash's setup, and the correction is worth recording rather than quietly editing.
 
-`cloudflared` runs on a *different* machine and routes to every service by LAN IP —
-`vault → 192.168.1.49:8080`, `chat → 192.168.1.37:8080`, `status → 192.168.1.49:3001`. So
-`localhost:3000` in the tunnel config meant localhost *inside cloudflared*, and the route
-returned 502 no matter what Agrocer did. The container therefore publishes `3000:3000` to the
-LAN, and the tunnel route is `http://<agrocer-host>:3000`.
+`cloudflared` routes to every service by LAN IP — `vault → 192.168.1.49:8080`,
+`chat → 192.168.1.37:8080`, `status → 192.168.1.49:3001`. So `localhost:3000` in the tunnel
+config meant localhost *inside cloudflared*, and the route returned 502 no matter what Agrocer
+did. The container therefore publishes to the LAN, and the tunnel route is
+`http://192.168.1.49:3000`.
+
+**Corrected again on 2026-08-29, and the correction matters.** This amendment first claimed
+`cloudflared` ran on a *different machine*. It does not: it is a container on `192.168.1.49`
+itself, on the `cloudflare-tunnel_default` network. The LAN-IP routing was real, but the
+inference drawn from it was wrong — the routes use addresses because *some* services live on
+other machines, not because `cloudflared` does.
+
+That changes what is possible. Since they share a host, Agrocer can join
+`cloudflare-tunnel_default`, publish no port at all, and be reached at `http://agrocer:3000`
+by container name — which removes the plaintext LAN hop this ADR accepted as a cost. That is
+the target arrangement, recorded in `docs/deploy.md` and deliberately deferred until the
+first deploy is verified, so that a 502 has only one candidate cause.
+
+**Also corrected: port 3000 was reported as taken by Portainer on that host and is not.**
+Portainer serves 8000/9443; the host is merely *named* `portainer`. The published port is now
+`${AGROCER_HOST_PORT:-3000}` so the next collision is a config line rather than a code change,
+but no override is needed here. The wrong fact reached the repository because a report was
+written up without being checked — verified afterwards by probing the host directly.
 
 **What that costs, since the original reasoning was a security argument.** The app is now
 reachable over plain HTTP by anything on the home network, so the session cookie travels in
