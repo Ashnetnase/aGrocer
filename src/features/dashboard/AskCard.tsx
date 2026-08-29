@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckIcon, SendHorizonalIcon, SparklesIcon } from 'lucide-react';
+import { CheckIcon, SendHorizonalIcon, SparklesIcon, Volume2Icon, VolumeXIcon } from 'lucide-react';
 import {
   askAshHome,
   confirmProposal,
@@ -67,9 +67,16 @@ export function AskCard({ className }: { className?: string }) {
   const inFlight = useRef<AbortController | null>(null);
   const history = useRef<AskHistoryMessage[]>([]);
   const answerRef = useRef<HTMLDivElement>(null);
+  const [speaking, setSpeaking] = useState(false);
 
   // A wall tablet stays mounted for weeks, but the route can still be left mid-question.
-  useEffect(() => () => inFlight.current?.abort(), []);
+  useEffect(
+    () => () => {
+      inFlight.current?.abort();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    },
+    [],
+  );
 
   // Scroll a fresh answer into view rather than leaving the previous one's tail showing.
   useEffect(() => {
@@ -177,10 +184,20 @@ export function AskCard({ className }: { className?: string }) {
               ) : null}
 
               {(state.status === 'answered' || state.status === 'confirming') && state.reply ? (
-                // `aria-live` so the answer is announced rather than silently appearing.
-                <p aria-live="polite" className="mt-2 whitespace-pre-wrap text-lg text-ink">
-                  {state.reply}
-                </p>
+                <div className="mt-2 flex items-start gap-2">
+                  <p aria-live="polite" className="whitespace-pre-wrap text-lg text-ink">
+                    {state.reply}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label={speaking ? 'Stop speaking' : 'Read answer aloud'}
+                    title={speaking ? 'Stop speaking' : 'Read answer aloud'}
+                    onClick={() => speak(state.reply, setSpeaking)}
+                    className="shrink-0 rounded-full p-2 text-muted transition-colors hover:bg-canvas hover:text-ink"
+                  >
+                    {speaking ? <VolumeXIcon className="h-5 w-5" aria-hidden /> : <Volume2Icon className="h-5 w-5" aria-hidden />}
+                  </button>
+                </div>
               ) : null}
 
               {state.status === 'done' ? (
@@ -304,6 +321,20 @@ export function AskCard({ className }: { className?: string }) {
       </div>
     </DashboardCard>
   );
+}
+
+function speak(text: string, setSpeaking: (speaking: boolean) => void) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.onend = () => setSpeaking(false);
+  utterance.onerror = () => setSpeaking(false);
+  setSpeaking(true);
+  window.speechSynthesis.speak(utterance);
 }
 
 function proposalConfirmLabel(proposal: AskProposal): string {

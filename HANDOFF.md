@@ -97,6 +97,9 @@ validated server-side and never persisted.
 
 Alternative persistence path:
 
+Voice talk-back is implemented on the dashboard as an explicit local speechSynthesis control;
+the microphone remains intentionally disabled.
+
 - The localStorage implementation is intact and runs when the server-data flag is off. It is
   not dead code: it is the no-database path and what the provider's tests use. It is selected
   at startup, not an automatic runtime fallback after a database failure.

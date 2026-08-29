@@ -640,6 +640,12 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-29 - AI voice talk-back (Codex)
+
+Ask AshHome now offers an explicit local `speechSynthesis` button for reading an answer aloud.
+Speech is cancelled when the card unmounts; no microphone or remote audio capture is used.
+Typecheck, lint and unit tests pass (277 tests).
+
 ## 2026-08-29 - AI recipe save refresh and short session memory (Codex)
 
 Live qwen3:8b verification confirmed recipe search chaining into gated recipe saving. The
