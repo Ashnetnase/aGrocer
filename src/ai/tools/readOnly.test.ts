@@ -264,3 +264,14 @@ describe('getMealPlan', () => {
     expect(content).toMatch(/^Nothing is planned this week\./);
   });
 });
+
+describe('getMeals', () => {
+  it('returns meal names with stable ids for a later planning proposal', async () => {
+    const { content } = await run('getMeals', fakeRepositories({ meals: [meal({ id: 'm1', name: 'Chicken curry' })] }));
+    expect(content).toBe('Chicken curry (id m1)');
+  });
+
+  it('reports an empty catalogue plainly', async () => {
+    expect((await run('getMeals', fakeRepositories({ meals: [] }))).content).toBe('The meal catalogue is empty.');
+  });
+});

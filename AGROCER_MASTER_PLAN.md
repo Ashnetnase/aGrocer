@@ -640,6 +640,12 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-29 - AI meal catalogue and planner proposal coverage (Codex)
+
+Added `getMeals` and confirmation-gated `planMeal` to the assistant path, with validation and
+execution tests. The model can now prepare a saved meal for a requested day and slot without
+writing inside the assistant loop. Unit suite: 283 tests.
+
 ## 2026-08-29 - Pantry reorder suggestions (Codex)
 
 Recent inventory events now feed an authenticated, read-only suggestion endpoint and Pantry UI.

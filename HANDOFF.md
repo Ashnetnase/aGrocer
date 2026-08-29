@@ -219,6 +219,9 @@ Stage 2 code is complete; only the physical homelab deployment and phone PWA ins
 Stage 4 is active. Recipe import is the next useful code slice. Low-stock prediction and
 feedback learning remain deliberately deferred until their history contains real signal.
 
+The current Stage 4 AI slice includes `getMeals` plus gated `planMeal`; both are covered by
+unit tests. The next refinement is broader live verification after the Docker host is rebuilt.
+
 ## Files Changed
 
 Recent and important:
