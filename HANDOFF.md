@@ -17,9 +17,10 @@ and the read-only tools), taken 2026-08-28/29 at Ash's request to bring the AI i
 
 Stage 1 closed as a dev-complete milestone (ADR-012). Staging deployment moved into Stage 2.
 
-**RLS and authentication both landed 2026-08-29** (ADR-016, ADR-017). Stage 2 has no blocker
-left; what remains in it is deployment, CI and a few data extras. **One step needs Ash, not
-another agent:** creating the first Supabase account and linking it — see NEXT TASK.
+**Stage 2's build work is complete** as of 2026-08-29. RLS (ADR-016), authentication
+(ADR-017), the AI ladder through slice 9b (ADR-018), history tables, CI, and a deployment
+runbook. **What is left is Ash's, not another agent's:** adding one hostname to the Cloudflare
+Tunnel and running `docker compose up` on the homelab host — see NEXT TASK.
 
 Branch: `stage-2/database-schema`. Main branch: `main`.
 
@@ -133,6 +134,12 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
 - **Supabase Auth** (ADR-017): `src/auth/` (config, server and browser clients),
   `middleware.ts`, `/sign-in`, sign-out on Settings, `household_members.user_id` (migration
   `0002`), `authenticated` RLS policies (migration `0003`), and `npm run db:claim`.
+- **History tables** — `inventory_events` (written automatically by the pantry repository)
+  and `meal_feedback` (append-and-read only), migrations `0004`/`0005`, plus `/api/feedback`.
+- **CI** — `.github/workflows/ci.yml`: typecheck, lint, test, build, integration tests, and an
+  RLS job that fails if the publishable key can read anything.
+- **Deployment** — Stage 2 `docker-compose.yml`, Dockerfile build args, `docs/deploy.md`
+  (Cloudflare Tunnel, ADR-019) and `docs/backup.md`.
 - Local Ollama connectivity check (`scripts/ollama-check.ts`).
 - **AI slice 8a** — `AiProvider` abstraction, `OllamaProvider`, `getAiProvider()`,
   `/api/ai/chat` (health + chat), 12 unit tests, and `npm run ai:chat` for the end-to-end
@@ -281,6 +288,8 @@ Full list with rationale lives in `AGROCER_MASTER_PLAN.md` (ADR section). Must-p
 - **ADR-017** — Supabase Auth; the household comes from `household_members.user_id`; signing
   up grants nothing; auth fails closed; the middleware is a convenience and
   `currentHouseholdId()` is the boundary.
+- **ADR-019** — HTTPS via the existing Cloudflare Tunnel on `ashnetbase.org`; the container
+  binds to `127.0.0.1`, never the LAN; Cloudflare Access deliberately not in front of it.
 - **ADR-018** — the AI proposes changes; a person confirms them. Write tools are never
   executed by the assistant loop; the confirmation sentence is built server-side from
   validated arguments; `WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`.
@@ -295,6 +304,12 @@ Also binding, from `CLAUDE.md`: AshHome serves mobile, standard app and wall das
 LLM, owns permanent state. AI acts only through explicitly defined tools.
 
 ## Environment / Services
+
+- **Deployment target: the homelab host, behind the existing Cloudflare Tunnel `homelab` on
+  `ashnetbase.org`** (ADR-019). Planned hostname `home.ashnetbase.org` → `HTTP` →
+  `localhost:3000`. The container binds to loopback only. `docs/deploy.md` is the runbook.
+- `agrocer-stg01` as a separate VM is no longer the plan; `docs/staging.md` is kept for its
+  VM and Docker steps and is annotated as superseded on HTTPS.
 
 - Node: 20+ (Next.js 15 / React 19).
 - Dev server: `npm run dev` — http://localhost:3000.
@@ -437,6 +452,22 @@ Added 2026-08-29 for the write gate (slice 9b, ADR-018):
   substituting a shopping addition (which it *did* do before the prompt was tightened).
 - The full flow driven in Chrome at 1280×800: proposal shown above the input, Add it pressed,
   row written, Shopping card updated alongside.
+
+Added 2026-08-29 for the end of Stage 2's build work:
+
+- **Inventory events, against the live database.** Create → adjust +3 → delete produced
+  exactly `created (after 2)`, `adjusted (delta 3, after 5)`, `removed (after 0)` — all three
+  still naming the item with it deleted and the foreign key nulled.
+- **Meal feedback** round-tripped through `/api/feedback`; a bad rating and a malformed date
+  each returned 400.
+- `npm run test:db` — **9 integration tests**, up from 6.
+- `npm run check` — 194 tests. `npm run build` clean, and **also clean with `.env.local` moved
+  aside and only CI's placeholder `NEXT_PUBLIC_*` values**, which is what proves the build does
+  not depend on a live project.
+- `npm run db:rls` — 9 tables, RLS on, 1 policy each, publishable key reads nothing.
+- `npm run db:migrate` and `npm run db:generate` are both clean no-ops.
+- **`pg_dump` verified** against the live project via Docker — 200 KB, all 7 public tables plus
+  `auth`, and RLS state and policies included. Test artefacts deleted.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -502,43 +533,42 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Ash asked for the AI to be brought in "in stages" and then to carry on. The ladder is complete:
+**Stage 2's build work is done. What remains is Ash's, and needs the homelab host.**
+`docs/deploy.md` is the runbook; the short version:
 
-| Slice | Scope | Status |
-| ----- | ----- | ------ |
-| 8a | provider abstraction + `/api/ai/chat` | **done** |
-| 8b | "Ask AshHome" card | **done** |
-| 9a | read-only tools | **done** |
-| 9b | first write tool, behind a confirmation gate | **done** |
-| 10 | pantry-aware meal planning | not started |
+1. **Cloudflare Zero Trust → Networks → Tunnels → `homelab` → Public Hostnames → Add.**
+   Subdomain `home`, domain `ashnetbase.org`, service type **HTTP**, URL `localhost:3000`.
+   HTTP is right — the hop from `cloudflared` to the container is over loopback on the same
+   machine; TLS terminates at Cloudflare's edge.
+2. **Copy the repository to the homelab host**, create `.env` beside `docker-compose.yml` with
+   `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Do **not** set `AGROCER_AUTH`.
+3. `docker compose up -d --build`.
+4. From a phone **on mobile data** (which proves it is the tunnel, not the LAN): open
+   `https://home.ashnetbase.org`, sign in, then install it to the home screen. That install is
+   the thing the HTTPS question had been blocking since Stage 1.
+5. Point the wall tablet at `https://home.ashnetbase.org/dashboard`.
 
-Stage 2 has no blockers left either. So the next task is a genuine choice, and these are the
-honest options in the order I would take them:
+Expect `/api/ai/ask` to return 503 from the homelab: Ollama binds to localhost on the
+workstation, so the assistant is unreachable from there and the card says so. That is the
+correct failure, not a deployment problem.
 
-**(a) Finish Stage 2's deployment work.** CI checks, Docker Compose, provisioning
-`agrocer-stg01`, and the **HTTPS decision that still blocks PWA install on a phone** — a LAN
-address over plain HTTP is not a secure context, so the service worker will not register.
-`docs/staging.md` compares the options and recommends Tailscale. This is the last thing
-standing between the app and actually living on the kitchen wall, which is the point of it.
+**Then Stage 2 is complete** and Stage 4 is the next stage — recipes, consumption learning,
+budgeting and specials, with Phase 6's recipe providers the natural entry point.
 
-**(b) Phase 10 — pantry-aware meal planning.** "Plan five dinners, keep extra groceries under
-$120, add what is missing to the list." The tools exist; what is missing is a planning tool
-and, for the last part, either multi-item proposals or a plan-shaped confirmation. Note this
-needs the multi-item limitation below solved first, or it can only ever add one thing.
+**Known limitations, in the order they will bite:**
 
-**(c) Stage 4 groundwork** — recipes, consumption learning, budgeting, specials. Large, and
-Phase 6's recipe providers are the natural entry point.
-
-**Known limitations worth fixing whenever they get in the way:**
-
-- **Multi-item proposals.** "Add milk and eggs" proposes milk, and eggs go unmentioned —
-  Ollama returns no prose alongside a tool call, so there is nowhere to say it. Prompting was
-  tried and cannot work. Needs a list-shaped confirmation UI. This blocks the useful half of
-  Phase 10.
-- **The Ask card at phone width** is still unverified; the browser tooling would not resize
-  below desktop width across three sessions.
-- **`initialState` still seeds the Stage 1 demo fixtures.** The dashboard cards now gate on
-  `hydrated`, but any new screen that forgets to will show a convincing fake list.
+- **Multi-item AI proposals.** "Add milk and eggs" proposes milk and cannot mention eggs —
+  Ollama returns no prose alongside a tool call. Needs a list-shaped confirmation. This blocks
+  the useful half of Phase 10.
+- **Reaching Ollama from the homelab.** A tunnel between the two hosts or an authenticated
+  proxy. Never `OLLAMA_HOST=0.0.0.0`.
+- **The Ask card at phone width** is still unverified across four sessions; the browser tooling
+  will not resize below desktop width.
+- **`initialState` still seeds the Stage 1 demo fixtures.** The dashboard cards gate on
+  `hydrated` now, but any new screen that forgets to will show a convincing fake list.
+- **No automated backups yet.** `docs/backup.md` has the verified commands; a weekly cron on
+  the homelab is the obvious next step once it is running.
 
 Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
 no optimistic UI.
@@ -565,7 +595,14 @@ Two costs still deliberately unpaid:
 - **`middleware.ts` must stay in the project root**, and its matcher must keep excluding
   `sw.js` and `manifest.webmanifest`, or the service worker cannot register (ADR-011).
 - **`getUser()`, not `getSession()`**, anywhere a server decides who is asking.
-- **RLS stays enabled on all seven tables.** Deny-all is the intended state until auth brings a
+- **`inventory_events` is append-only, and `pantry_item_id` is `ON DELETE SET NULL`.** Do not
+  "tidy" that to `CASCADE`: deleting a pantry item is precisely when its history matters, and
+  the denormalised `item_name` is there for the same reason.
+- **`docker-compose.yml` binds to `127.0.0.1:3000`, not the LAN.** Publishing it to the network
+  would serve family data over plain HTTP with the session cookie in clear (ADR-019).
+- **The compose file deliberately does not mention `AGROCER_AUTH`**, so authentication cannot
+  be switched off by editing a value that reads as harmless.
+- **RLS stays enabled on all nine tables.** Deny-all is the intended state until auth brings a
   user to grant to (ADR-016). Do not disable it to "fix" a query — the app bypasses RLS
   already, so an RLS error means something is connecting as the wrong role, which is the bug.
 - `src/ai/types.ts` — the `AiProvider` contract (ADR-014). A second provider satisfies it; it

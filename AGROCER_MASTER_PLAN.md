@@ -364,25 +364,37 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] persistent products — route handlers + HTTP repository, verified end to end
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
 - [x] persistent meal plans — route handlers + HTTP repository, verified end to end
-- [ ] meal feedback history
-- [ ] audit-friendly inventory events
-- [ ] migrations
-- [ ] backup/restore plan
-- [ ] Docker Compose deployment
-- [ ] CI checks
-- [ ] staging deployment pipeline
+- [x] meal feedback history — `meal_feedback` (migration `0004`), repository, `/api/feedback`.
+      Append-and-read only: history, not state. No UI yet; Stage 4 owns rating a meal
+- [x] audit-friendly inventory events — `inventory_events` (migration `0004`), written
+      automatically by the pantry repository so the log cannot drift from what happened.
+      `ON DELETE SET NULL` plus a denormalised name, so the history outlives the item
+- [x] migrations — `0000`–`0005`; `npm run db:migrate` and `npm run db:generate` are both
+      clean no-ops against the live database
+- [x] backup/restore plan — `docs/backup.md`, with the commands actually run against the live
+      project. Note a full dump contains `auth.users`, so it is a credential store
+- [x] Docker Compose deployment — Stage 2 compose + Dockerfile build args for the
+      `NEXT_PUBLIC_*` values, which are compiled into the bundle rather than read at runtime
+- [x] CI checks — `.github/workflows/ci.yml`: typecheck, lint, test, build, plus integration
+      tests and an RLS check that fails if the publishable key can read anything
+- [ ] staging deployment pipeline — the runbook is `docs/deploy.md`; the deploy itself is
+      Ash's, since it needs the homelab host
 
 Inherited from Stage 1 (ADR-012) — the container and runbook already exist, so this is
 provisioning rather than build work:
 
-- [ ] provision the `agrocer-stg01` VM (spec in section 12)
-- [ ] deploy the existing `agrocer:stage1` image via `docker compose up -d --build`
-- [ ] **decide the HTTPS approach** — Tailscale, Caddy with an internal CA, or a real domain.
-      A LAN address over plain HTTP is not a secure context, so without this the service
-      worker will not register and the PWA cannot be installed on a phone. `docs/staging.md`
-      compares the options; Tailscale is the standing recommendation.
-- [ ] open Agrocer from a phone on the home network and install it
-- [ ] confirm it stays reachable with the Ryzen desktop powered off (ADR-007)
+- [x] **HTTPS decided (ADR-019)** — the existing Cloudflare Tunnel `homelab` on
+      `ashnetbase.org`, which Ash already runs for `chat`, `vault` and `status`. Real
+      certificate, so a secure context, so the PWA installs. No inbound port. Free.
+      Tailscale rejected only because the tunnel already exists; AWS rejected on cost for
+      something the homelab already does
+- [ ] **Ash: add the `home.ashnetbase.org` hostname to the tunnel** — Zero Trust → Tunnels →
+      `homelab` → Public Hostnames, service `HTTP` → `localhost:3000`. See `docs/deploy.md`
+- [ ] **Ash: `docker compose up -d --build` on the homelab host**
+- [ ] open Agrocer from a phone and install it — this is what HTTPS was blocking
+- [ ] confirm it stays reachable with the Ryzen desktop powered off (ADR-007). Note the AI
+      assistant will *not* work from there: Ollama binds to localhost on the workstation, so
+      `/api/ai/ask` returns 503 `unreachable`, which is the correct failure
 
 ### Not yet
 
@@ -616,6 +628,59 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Stage 2's build work finished: history tables, CI, deployment (Claude Code)
+
+**Stage:** Stage 2 — everything that does not need Ash's hardware
+**Status:** The build half is complete and verified. The deploy itself is Ash's, and the
+remaining checkboxes say so rather than being marked done optimistically.
+
+**Two history tables (migration `0004`, policies in `0005`).** Both settled now because Stage 2
+is where the data model is settled and history cannot be backfilled — you cannot record last
+month's dinners after the fact.
+
+- `inventory_events` is written **by the pantry repository itself**, not by the route
+  handlers, so the log cannot drift from reality by somebody forgetting to write one. It never
+  throws: an audit trail that can fail a user's pantry update is worse than a gap in it.
+  Two decisions make it outlive what it describes — `pantry_item_id` is `ON DELETE SET NULL`
+  rather than `CASCADE`, and `item_name` is denormalised. Deleting an item is exactly when its
+  history becomes useful.
+- `meal_feedback` is append-and-read only. No update, no delete: a record of what the family
+  thought last Tuesday is history, not state. Four coarse ratings rather than five stars,
+  because a numeric scale invites precision nobody has about a Tuesday dinner. No UI — Stage 4
+  owns that — but the API exists so the path is real rather than a gap discovered later.
+
+**Verified against the live database, not fixtures.** Create → adjust +3 → delete produced
+exactly `created (after 2)`, `adjusted (delta 3, after 5)`, `removed (after 0)`, all three
+still naming "Audit test rice" with the item gone and the foreign key nulled. Feedback
+round-tripped, and a bad rating and a malformed date were both refused with 400. Nine
+integration tests now, up from six.
+
+**CI** (`.github/workflows/ci.yml`): typecheck, lint, test and build on every push and PR, plus
+integration tests and — the one worth having — an RLS job that fails if the publishable key can
+read anything. That is the check that would have caught the exposure closed in ADR-016, and it
+is there so a future migration cannot quietly reopen it. The build job uses obvious placeholder
+`NEXT_PUBLIC_*` values, which also proves the build does not secretly depend on a live project.
+Confirmed by building locally with `.env.local` moved aside.
+
+**Deployment.** The Dockerfile gained build args, because `NEXT_PUBLIC_*` is compiled into the
+client bundle rather than read at runtime — an image built with the wrong values cannot be
+fixed by restarting it. Compose now binds to `127.0.0.1:3000` rather than the LAN: only
+`cloudflared` needs to reach it, and publishing to the LAN would put an app holding family data
+on every device on the network over plain HTTP, where the session cookie travels in clear.
+The healthcheck moved from `/` to `/sign-in`, since `/` now redirects.
+
+**`docs/backup.md`**, with commands actually run against the live project rather than written
+from memory. The finding worth recording: a full `pg_dump` includes `auth.users`, so a backup
+is a credential store and must be treated as one. `backups/`, `*.sql.gz` and `*.dump` are now
+gitignored. A `--schema=public` variant is documented for when you would rather not hold
+password hashes, with the cost spelled out — restoring from it needs every account recreated
+and re-claimed.
+
+**One repair.** Migration `0003`'s snapshot was hand-copied from `0002` when it was registered
+manually, so both claimed the same id and `db:generate` refused to run with a collision. The
+chain is fixed and `db:generate` is a clean no-op again. Worth knowing before hand-registering
+another migration: the journal entry is not enough, the snapshot's `id`/`prevId` chain matters.
 
 ## 2026-08-29 — The first write tool, behind a confirmation gate (Claude Code)
 
@@ -1962,6 +2027,48 @@ eventually, and adding a shopping item is about as low-risk as a write gets. But
 write tool sets the pattern every later one inherits, and "the model decided to change
 something" is not a behaviour to establish casually. If a tool should ever bypass the gate,
 that is a decision to record here, not a flag to add quietly.
+
+
+## ADR-019 — HTTPS via the existing Cloudflare Tunnel; the container binds to localhost
+
+**Status:** Accepted (2026-08-29, Ash's infrastructure)
+
+This closes the standing blocker that `docs/staging.md` had left open since Stage 1: a LAN
+address over plain HTTP is not a secure context, so the service worker will not register and
+the PWA cannot be installed on a phone (ADR-011).
+
+**The deciding fact is that the infrastructure already exists.** Ash runs a Cloudflare Tunnel
+named `homelab` on `ashnetbase.org`, already serving `chat`, `vault`, `status` and `api.chat`.
+Agrocer becomes one more hostname on it. That is a five-minute change to something already
+working, against hours of setup for any alternative.
+
+**What it gives, that the alternatives do not all give:**
+
+- A real, publicly trusted certificate — so a secure context, so the PWA installs.
+- A stable name that works identically on the wall tablet, a phone on the home network, and a
+  phone on mobile data. Tailscale would have required the tablet and every phone to be on the
+  tailnet.
+- **No inbound port on the router.** `cloudflared` dials out; nothing is exposed at home.
+- Free, at this scale.
+
+**Tailscale was the standing recommendation and is now rejected** — only because the tunnel
+already exists. It remains the better answer for anyone without one, and the comparison stays
+in `docs/staging.md` rather than being deleted.
+
+**AWS was considered and rejected.** It costs money for something the homelab already does,
+and the database is already managed elsewhere (ADR-013). The existing SES setup on
+`noreply.ashnetbase.org` stays useful for outbound email in Phase 11 — that is a separate
+concern from hosting.
+
+**The container binds to `127.0.0.1:3000`, not to the LAN.** Only `cloudflared` on the same
+host needs to reach it. Publishing to the LAN as well would put an app holding family data on
+every device on the network over plain HTTP, where the session cookie travels in clear — which
+would undo much of what ADR-016 and ADR-017 just bought.
+
+**Cloudflare Access is deliberately NOT placed in front of it.** The application has its own
+authentication now, and Access would add a second sign-in on a kitchen wall tablet, plus an
+interstitial that interferes with service-worker registration and `fetch` calls to `/api/*`.
+Revisit only if the app is ever exposed to people outside the household.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

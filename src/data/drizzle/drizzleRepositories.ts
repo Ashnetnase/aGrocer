@@ -8,6 +8,7 @@ import type { DayKey, Slot } from '@/domain/schemas/common';
 import { initialsOf } from '@/domain/services/household';
 import type {
   AgrocerRepositories,
+  FeedbackRepository,
   HouseholdRepository,
   MealsRepository,
   PantryRepository,
@@ -19,6 +20,8 @@ import {
   households,
   householdMembers,
   meals,
+  inventoryEvents,
+  mealFeedback,
   pantryItems,
   planEntries,
   products,
@@ -29,6 +32,7 @@ import {
   toHousehold,
   toHouseholdMember,
   toMeal,
+  toMealFeedback,
   toPantryItem,
   toPlan,
   toProduct,
@@ -52,6 +56,35 @@ import {
  * thing standing between two households' data.
  */
 export function createDrizzleRepositories(db: Database, householdId: string): AgrocerRepositories {
+  /**
+   * Appends to the pantry audit trail.
+   *
+   * Called from inside the repository rather than from the route handlers, so the log cannot
+   * drift from reality by somebody forgetting to write one. It never throws: an audit trail
+   * that can fail a user's pantry update is worse than a gap in the audit trail, so a failure
+   * is logged and swallowed.
+   */
+  async function recordInventoryEvent(event: {
+    pantryItemId: string | null;
+    itemName: string;
+    kind: 'created' | 'adjusted' | 'updated' | 'removed';
+    quantityDelta?: number;
+    quantityAfter?: number;
+  }): Promise<void> {
+    try {
+      await db.insert(inventoryEvents).values({
+        householdId,
+        pantryItemId: event.pantryItemId,
+        itemName: event.itemName,
+        kind: event.kind,
+        quantityDelta: event.quantityDelta ?? null,
+        quantityAfter: event.quantityAfter ?? null,
+      });
+    } catch (error) {
+      console.error('[inventory-events] could not record', event.kind, event.itemName, error);
+    }
+  }
+
   const pantry: PantryRepository = {
     async list() {
       const rows = await db
@@ -68,6 +101,12 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
         .values({ ...draft, householdId, note: draft.note ?? null })
         .returning();
       if (!row) throw new Error('Insert returned no pantry row');
+      await recordInventoryEvent({
+        pantryItemId: row.id,
+        itemName: row.name,
+        kind: 'created',
+        quantityAfter: row.quantity,
+      });
       return toPantryItem(row);
     },
 
@@ -77,6 +116,14 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
         .set({ ...patch, ...(patch.note === undefined ? {} : { note: patch.note ?? null }), updatedAt: new Date() })
         .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)))
         .returning();
+      if (row) {
+        await recordInventoryEvent({
+          pantryItemId: row.id,
+          itemName: row.name,
+          kind: 'updated',
+          quantityAfter: row.quantity,
+        });
+      }
       return row ? toPantryItem(row) : undefined;
     },
 
@@ -91,13 +138,65 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
         })
         .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)))
         .returning();
+      if (row) {
+        await recordInventoryEvent({
+          pantryItemId: row.id,
+          itemName: row.name,
+          kind: 'adjusted',
+          quantityDelta: delta,
+          quantityAfter: row.quantity,
+        });
+      }
       return row ? toPantryItem(row) : undefined;
     },
 
     async remove(id: string) {
-      await db
+      // Deleted with `returning()` so the name survives into the event. Without it the audit
+      // trail would record that something was removed and be unable to say what.
+      const [row] = await db
         .delete(pantryItems)
-        .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)));
+        .where(and(eq(pantryItems.id, id), eq(pantryItems.householdId, householdId)))
+        .returning();
+      if (row) {
+        await recordInventoryEvent({
+          // The row is gone, so the foreign key must be null — the event outlives the item.
+          pantryItemId: null,
+          itemName: row.name,
+          kind: 'removed',
+          quantityAfter: 0,
+        });
+      }
+    },
+  };
+
+  const feedback: FeedbackRepository = {
+    async list(mealId?: string) {
+      const rows = await db
+        .select()
+        .from(mealFeedback)
+        .where(
+          mealId
+            ? and(eq(mealFeedback.householdId, householdId), eq(mealFeedback.mealId, mealId))
+            : eq(mealFeedback.householdId, householdId),
+        )
+        .orderBy(desc(mealFeedback.ateOn), desc(mealFeedback.createdAt));
+      return rows.map(toMealFeedback);
+    },
+
+    async add(draft) {
+      const [row] = await db
+        .insert(mealFeedback)
+        .values({
+          householdId,
+          mealId: draft.mealId,
+          memberId: draft.memberId ?? null,
+          rating: draft.rating,
+          note: draft.note ?? null,
+          ateOn: draft.ateOn,
+        })
+        .returning();
+      if (!row) throw new Error('Insert returned no feedback row');
+      return toMealFeedback(row);
     },
   };
 
@@ -373,6 +472,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
 
   return {
     pantry,
+    feedback,
     shopping,
     meals: mealsRepo,
     products: productsRepo,

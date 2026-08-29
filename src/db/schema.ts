@@ -67,6 +67,17 @@ export const memberColourEnum = pgEnum('member_colour', [
 
 export const mealTagEnum = pgEnum('meal_tag', ['Quick', 'Kids', 'Budget', 'Favourite', 'Weekend']);
 
+/** What happened to a pantry item. `consumed` is reserved for Stage 4's usage tracking. */
+export const inventoryEventKindEnum = pgEnum('inventory_event_kind', [
+  'created',
+  'adjusted',
+  'updated',
+  'removed',
+]);
+
+/** Deliberately four coarse steps. A five-star scale invites precision nobody has. */
+export const mealRatingEnum = pgEnum('meal_rating', ['loved', 'liked', 'ok', 'disliked']);
+
 /* -------------------------------------------------------------------------- */
 /* Households                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -272,5 +283,84 @@ export const planEntries = pgTable(
     pk: primaryKey({ columns: [table.householdId, table.day, table.slot] }),
     /** Makes the cascade from `meals` cheap, and answers "where is this meal planned?". */
     mealIdx: index('plan_entries_meal_idx').on(table.mealId),
+  }),
+).enableRLS();
+
+/* -------------------------------------------------------------------------- */
+/* History — written for later stages to learn from, not read by any screen yet */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * An append-only record of every change to the pantry.
+ *
+ * Written automatically by the pantry repository, so it cannot drift from what actually
+ * happened by somebody forgetting to log. Nothing updates or deletes a row here: that is what
+ * makes it an audit trail rather than a second copy of the pantry.
+ *
+ * Two decisions make it survive the thing it describes:
+ *
+ *   - `pantry_item_id` is `ON DELETE SET NULL`, not `CASCADE`. Deleting a pantry item must
+ *     not erase the history of it — that is exactly the moment the history becomes useful.
+ *   - `item_name` is denormalised. Once the item is gone its name is gone too, and
+ *     "quantity went from 2 to 0" without a name is not an audit trail.
+ *
+ * Stage 4 reads this for consumption learning and low-stock prediction.
+ */
+export const inventoryEvents = pgTable(
+  'inventory_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    pantryItemId: uuid('pantry_item_id').references(() => pantryItems.id, {
+      onDelete: 'set null',
+    }),
+    /** Kept even when the item is deleted. See above. */
+    itemName: text('item_name').notNull(),
+    kind: inventoryEventKindEnum('kind').notNull(),
+    /** Signed, for `adjusted`. Null for the others, where a delta means nothing. */
+    quantityDelta: integer('quantity_delta'),
+    /** The quantity after the change, so a reader never has to replay the whole log. */
+    quantityAfter: integer('quantity_after'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    /** The query this exists for: "what happened in this household, most recent first". */
+    householdIdx: index('inventory_events_household_idx').on(table.householdId, table.createdAt),
+  }),
+).enableRLS();
+
+/**
+ * What the family thought of a meal they ate.
+ *
+ * Feeds Stage 3's family-feedback learning and Stage 4's consumption learning. There is no UI
+ * for it yet — Stage 4 owns that — but the table and its API exist now because Stage 2 is
+ * where the data model is settled, and retrofitting history is impossible: you cannot record
+ * last month's dinners after the fact.
+ *
+ * `member_id` is nullable and `ON DELETE SET NULL`: "the family liked this" is a useful
+ * record even when nobody says who, and it must outlive a member leaving the household.
+ */
+export const mealFeedback = pgTable(
+  'meal_feedback',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    mealId: uuid('meal_id')
+      .notNull()
+      .references(() => meals.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id').references(() => householdMembers.id, { onDelete: 'set null' }),
+    rating: mealRatingEnum('rating').notNull(),
+    note: text('note'),
+    /** When it was eaten, not when it was rated — those differ, and the first is the useful one. */
+    ateOn: date('ate_on').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    mealIdx: index('meal_feedback_meal_idx').on(table.mealId),
+    householdIdx: index('meal_feedback_household_idx').on(table.householdId, table.ateOn),
   }),
 ).enableRLS();

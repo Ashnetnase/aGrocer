@@ -1,27 +1,64 @@
-# Stage 1 deployment for agrocer-stg01.
+# Agrocer deployment (Stage 2).
 #
-# One service and no database: Stage 1 keeps all family data in the browser's
-# localStorage. Postgres joins this file in Stage 2.
+# One service. There is no Postgres here on purpose: the database is Supabase (ADR-013), so
+# this container is stateless and can be destroyed and rebuilt without losing anything.
+#
+# HTTPS comes from the existing Cloudflare Tunnel rather than from this file (ADR-019). The
+# container listens on localhost only; `cloudflared` reaches it from the same host and
+# terminates TLS at Cloudflare's edge. Nothing is published to the LAN and no port is opened
+# on the router.
+#
+# Copy `.env.example` to `.env` beside this file and fill it in. Compose reads `.env`
+# automatically; it is gitignored, like `.env.local`.
 
 services:
   agrocer:
     build:
       context: .
       dockerfile: Dockerfile
-    image: agrocer:stage1
+      # NEXT_PUBLIC_* is inlined at build time, so these are build args rather than
+      # environment. Changing them means rebuilding, not restarting.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set it in .env}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?set it in .env}
+    image: agrocer:stage2
     container_name: agrocer
     restart: unless-stopped
+
     ports:
-      # Bound to the VM's LAN address so phones on the home network can reach it.
-      - '3000:3000'
+      # 127.0.0.1 deliberately. Only `cloudflared` on this host needs to reach it, and
+      # binding to the LAN would put an app holding family data on every device on the
+      # network — including over plain HTTP, where the session cookie travels in clear.
+      - '127.0.0.1:3000:3000'
+
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: '1'
-    # Modest ceilings suited to the 2 vCPU / 3 GB staging VM.
+
+      # Secrets, runtime-only. `:?` fails the run loudly rather than starting a container
+      # that will 500 on its first request.
+      DATABASE_URL: ${DATABASE_URL:?set it in .env}
+      SUPABASE_URL: ${SUPABASE_URL:?set it in .env}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+
+      # Auth is enforced unless this is exactly "off" (ADR-017). It is not set here at all,
+      # so it cannot be switched off by editing a value someone skim-reads as harmless.
+
+      # The five features read and write Postgres.
+      NEXT_PUBLIC_AGROCER_SERVER_DATA: '1'
+
+      # Local AI. Ollama binds to localhost on the workstation, so from this container it is
+      # unreachable and the assistant returns 503 `unreachable` — the correct failure, not a
+      # crash. Reaching it from here is a separate decision; see docs/deploy.md.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+
+    # Modest ceilings suited to a small homelab VM.
     deploy:
       resources:
         limits:
           memory: 512M
+
     logging:
       driver: json-file
       options:

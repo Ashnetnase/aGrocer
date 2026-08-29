@@ -3,11 +3,13 @@ import type { Meal, Plan } from '@/domain/schemas/meal';
 import type { PantryItem } from '@/domain/schemas/pantry';
 import type { Product } from '@/domain/schemas/product';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
+import type { MealFeedback } from '@/domain/schemas/feedback';
 import type {
   households,
   householdMembers,
   meals,
   pantryItems,
+  mealFeedback,
   planEntries,
   products,
   shoppingItems,
@@ -33,6 +35,7 @@ type ProductRow = typeof products.$inferSelect;
 type ShoppingItemRow = typeof shoppingItems.$inferSelect;
 type MealRow = typeof meals.$inferSelect;
 type PlanEntryRow = typeof planEntries.$inferSelect;
+type MealFeedbackRow = typeof mealFeedback.$inferSelect;
 
 /* -------------------------------------------------------------------------- */
 /* Money                                                                       */
@@ -154,4 +157,21 @@ export function toPlan(rows: PlanEntryRow[]): Plan {
     plan[row.day] = { ...plan[row.day], [row.slot]: row.mealId };
   }
   return plan;
+}
+
+/**
+ * `ate_on` is a Postgres `date`, which the driver hands back as a `yyyy-mm-dd` string — no
+ * timezone, which is right: a dinner belongs to a calendar day, not an instant. `created_at`
+ * is a real timestamp and becomes ISO.
+ */
+export function toMealFeedback(row: MealFeedbackRow): MealFeedback {
+  return {
+    id: row.id,
+    mealId: row.mealId,
+    memberId: row.memberId ?? undefined,
+    rating: row.rating,
+    note: optionalText(row.note),
+    ateOn: row.ateOn,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

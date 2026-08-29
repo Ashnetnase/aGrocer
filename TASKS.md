@@ -146,12 +146,25 @@ reconciling: the phase list assumes work that the stage list already completed.
 - [x] client-side 401 handling — a lapsed session now redirects to `/sign-in?next=…` from every
       fetch path including the assistant; 403 deliberately does not redirect. Verified live by
       expiring the cookie on an open dashboard
-- [ ] meal feedback history
-- [ ] audit-friendly inventory events
-- [ ] backup/restore plan
-- [ ] Docker Compose deployment
-- [ ] CI checks
-- [ ] staging deployment pipeline
+- [x] meal feedback history — `meal_feedback`, repository, `/api/feedback`. Append-and-read
+      only. No UI yet; Stage 4 owns rating a meal
+- [x] audit-friendly inventory events — `inventory_events`, written by the pantry repository
+      itself so it cannot drift. Survives deletion of the item it describes
+- [x] migrations — `0000`–`0005`, `db:migrate` and `db:generate` both clean no-ops
+- [x] backup/restore plan — `docs/backup.md`, commands verified against the live project.
+      **A full dump contains `auth.users` — password hashes. Treat it as a credential store**
+- [x] Docker Compose deployment — Stage 2 compose, Dockerfile build args, binds to loopback
+- [x] CI checks — `.github/workflows/ci.yml`, including an RLS job that fails if the
+      publishable key can read anything
+- [~] staging deployment pipeline — runbook written (`docs/deploy.md`); the deploy is Ash's
+
+**Ash's remaining Stage 2 steps** (they need the homelab host; see `docs/deploy.md`):
+
+- [x] **HTTPS decided** — the existing Cloudflare Tunnel on `ashnetbase.org` (ADR-019)
+- [ ] add the `home.ashnetbase.org` public hostname to the `homelab` tunnel
+- [ ] `docker compose up -d --build` on the homelab host
+- [ ] install the PWA on a phone — the thing HTTPS was blocking
+- [ ] confirm it stays reachable with the workstation off (ADR-007)
 
 Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 

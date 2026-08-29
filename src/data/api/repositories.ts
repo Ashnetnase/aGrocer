@@ -5,6 +5,7 @@ import { apiMealsRepository } from './mealsRepository';
 import { apiPantryRepository } from './pantryRepository';
 import { apiProductsRepository } from './productsRepository';
 import { apiShoppingRepository } from './shoppingRepository';
+import { apiFeedbackRepository } from './feedbackRepository';
 
 /**
  * Every feature over HTTP (ADR-003).
@@ -22,6 +23,7 @@ export const apiRepositories: AgrocerRepositories = {
   meals: apiMealsRepository,
   products: apiProductsRepository,
   household: apiHouseholdRepository,
+  feedback: apiFeedbackRepository,
 
   /**
    * Stage 1's `reset()` restored the demo data in localStorage. Re-seeding the database is

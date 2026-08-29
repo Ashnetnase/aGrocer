@@ -1,5 +1,10 @@
 # Staging: `agrocer-stg01`
 
+> **Superseded for HTTPS by [`deploy.md`](./deploy.md) and ADR-019.** The comparison of
+> Tailscale, Caddy and a real domain below is kept because the reasoning is still sound for
+> anyone without a tunnel — but Ash already runs a Cloudflare Tunnel, which is what Agrocer
+> now uses. The VM setup and Docker steps here remain accurate.
+
 Stage 1 staging runs Agrocer as a single container on the second Lenovo ThinkCentre
 Proxmox node (ADR-008). It must stay up when the Ryzen desktop is off (ADR-007).
 

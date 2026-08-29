@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from '@/db/schema';
-import { households } from '@/db/schema';
+import { households, inventoryEvents } from '@/db/schema';
 import type { Database } from '@/db/client';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { createDrizzleRepositories } from './drizzleRepositories';
@@ -159,5 +159,85 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
 
   it('refuses reset() against a shared database', async () => {
     await expect(repos.reset()).rejects.toThrow(/not supported against the database/);
+  });
+
+  it('records every pantry change, and the history outlives the item', async () => {
+    const item = await repos.pantry.create({
+      name: 'Audit rice',
+      category: 'Pantry',
+      quantity: 2,
+      unit: 'kg',
+      state: 'good',
+      note: undefined,
+    });
+    await repos.pantry.adjustQuantity(item.id, 3);
+    await repos.pantry.remove(item.id);
+
+    // Scoped by name, not just by household: earlier tests in this file also touch the
+    // pantry, and their changes are audited too — which is itself the behaviour working.
+    const events = await db
+      .select()
+      .from(inventoryEvents)
+      .where(
+        and(
+          eq(inventoryEvents.householdId, householdId),
+          eq(inventoryEvents.itemName, 'Audit rice'),
+        ),
+      )
+      .orderBy(inventoryEvents.createdAt);
+
+    expect(events.map((event) => event.kind)).toEqual(['created', 'adjusted', 'removed']);
+    expect(events[1]?.quantityDelta).toBe(3);
+    expect(events[1]?.quantityAfter).toBe(5);
+
+    // The point of the whole table: the name is still readable with the item deleted, and
+    // the foreign key has gone null rather than taking the history with it.
+    expect(events.every((event) => event.itemName === 'Audit rice')).toBe(true);
+    expect(events.every((event) => event.pantryItemId === null)).toBe(true);
+  });
+
+  it('round-trips meal feedback and keeps it newest first', async () => {
+    const meal = await repos.meals.create({
+      name: 'Feedback test pie',
+      minutes: 30,
+      serves: 4,
+      tags: [],
+      image: undefined,
+      description: '',
+      ingredients: [],
+    });
+
+    await repos.feedback.add({ mealId: meal.id, rating: 'ok', ateOn: '2026-08-20' });
+    const loved = await repos.feedback.add({
+      mealId: meal.id,
+      rating: 'loved',
+      note: 'Seconds all round',
+      ateOn: '2026-08-27',
+    });
+
+    const history = await repos.feedback.list(meal.id);
+    expect(history).toHaveLength(2);
+    expect(history[0]?.id).toBe(loved.id);
+    expect(history[0]?.note).toBe('Seconds all round');
+    // Optional in the domain, NULL in storage — the mapper must not surface null.
+    expect(history[1]?.note).toBeUndefined();
+    expect(history[1]?.memberId).toBeUndefined();
+  });
+
+  it('deletes a meal’s feedback with the meal, since it cannot be read without it', async () => {
+    const meal = await repos.meals.create({
+      name: 'Cascade test',
+      minutes: 10,
+      serves: 2,
+      tags: [],
+      image: undefined,
+      description: '',
+      ingredients: [],
+    });
+    await repos.feedback.add({ mealId: meal.id, rating: 'disliked', ateOn: '2026-08-25' });
+
+    await repos.meals.remove(meal.id);
+
+    expect(await repos.feedback.list(meal.id)).toEqual([]);
   });
 });
