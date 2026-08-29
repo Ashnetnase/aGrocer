@@ -45,6 +45,8 @@ export const ASSISTANT_SYSTEM_PROMPT = [
   'Always call the tool rather than guessing, and answer only from what the tool returns.',
   'Never invent an item, a quantity, a meal or a price. If a tool says something is empty,',
   'say it is empty.',
+  'Interpret ordinary spelling mistakes and casual wording generously; ask one short clarification',
+  'only when the intended item, meal or day truly cannot be understood.',
   '',
   'When you search for recipes, only ever pass an id back that a search actually returned.',
   'Never make one up, and never describe a recipe you did not find.',
@@ -141,6 +143,10 @@ export async function askAssistant(
     ...(options.history ?? []).map(({ role, content }) => ({ role, content })),
     { role: 'user', content: question },
   ];
+  if (/\b(plan|schedule)\b/i.test(question) && /\b(mon|tue|wed|thu|fri|sat|sun|today|tomorrow)\b/i.test(question)) {
+    const catalogue = await runTool(tools, 'getMeals', repos, {});
+    if (catalogue.ok) messages.push({ role: 'tool', content: catalogue.content, toolName: 'getMeals' });
+  }
   const toolsUsed: string[] = [];
   let model = provider.model;
 

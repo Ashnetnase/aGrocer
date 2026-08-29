@@ -86,7 +86,7 @@ export function AskCard({ className }: { className?: string }) {
     if (state.status === 'answered') answerRef.current?.scrollTo({ top: 0 });
   }, [state]);
 
-  async function ask(text: string) {
+  async function ask(text: string, fromVoice = false) {
     const trimmed = text.trim();
     if (trimmed === '') return;
 
@@ -102,7 +102,7 @@ export function AskCard({ className }: { className?: string }) {
         { role: 'user', content: trimmed },
         { role: 'assistant', content: answer.reply },
       ].slice(-8) as AskHistoryMessage[];
-      speakText(answer.reply, setSpeaking);
+      if (fromVoice) speakText(answer.reply, setSpeaking);
       setState({
         status: 'answered',
         question: trimmed,
@@ -300,7 +300,7 @@ export function AskCard({ className }: { className?: string }) {
             type="button"
             aria-label={listening ? 'Stop listening' : 'Ask using your voice'}
             title={listening ? 'Stop listening' : 'Ask using your voice'}
-            onClick={() => toggleListening(setQuestion, setListening, recognition, ask)}
+            onClick={() => toggleListening(setQuestion, setListening, recognition, (text) => ask(text, true))}
             disabled={busy}
             className={cn(
               'flex min-h-[3.25rem] shrink-0 items-center justify-center rounded-2xl px-4 text-base font-bold transition-colors',
