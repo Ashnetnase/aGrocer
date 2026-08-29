@@ -102,6 +102,9 @@ the dashboard now also supports one-shot browser speech recognition: tap the mic
 and the transcript is submitted and read back locally. No audio is uploaded by Agrocer. A future
 larger-scale option can replace this with local transcription and voice-to-voice inference.
 
+Pantry reorder suggestions are now surfaced from recent inventory events. They are advisory only;
+the API and Pantry screen never add shopping items automatically.
+
 - The localStorage implementation is intact and runs when the server-data flag is off. It is
   not dead code: it is the no-database path and what the provider's tests use. It is selected
   at startup, not an automatic runtime fallback after a database failure.

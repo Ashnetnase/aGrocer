@@ -640,6 +640,12 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-29 - Pantry reorder suggestions (Codex)
+
+Recent inventory events now feed an authenticated, read-only suggestion endpoint and Pantry UI.
+It flags repeated use and recently empty items; no shopping item is created automatically.
+Typecheck, lint and unit tests pass (279 tests).
+
 ## 2026-08-29 - AI voice talk-back (Codex)
 
 Ask AshHome now supports a one-shot browser speech-recognition input and automatically reads the
