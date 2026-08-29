@@ -66,13 +66,16 @@ export function AskCard({ className }: { className?: string }) {
   const [state, setState] = useState<State>({ status: 'idle' });
   const inFlight = useRef<AbortController | null>(null);
   const history = useRef<AskHistoryMessage[]>([]);
+  const recognition = useRef<SpeechRecognitionLike | null>(null);
   const answerRef = useRef<HTMLDivElement>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
 
   // A wall tablet stays mounted for weeks, but the route can still be left mid-question.
   useEffect(
     () => () => {
       inFlight.current?.abort();
+      recognition.current?.stop();
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     },
     [],
@@ -99,6 +102,7 @@ export function AskCard({ className }: { className?: string }) {
         { role: 'user', content: trimmed },
         { role: 'assistant', content: answer.reply },
       ].slice(-8) as AskHistoryMessage[];
+      speakText(answer.reply, setSpeaking);
       setState({
         status: 'answered',
         question: trimmed,
@@ -293,6 +297,20 @@ export function AskCard({ className }: { className?: string }) {
             className="min-h-[3.25rem] w-full rounded-2xl border border-line bg-canvas px-4 text-lg text-ink outline-none transition-colors placeholder:text-muted focus:border-moss-600"
           />
           <button
+            type="button"
+            aria-label={listening ? 'Stop listening' : 'Ask using your voice'}
+            title={listening ? 'Stop listening' : 'Ask using your voice'}
+            onClick={() => toggleListening(setQuestion, setListening, recognition, ask)}
+            disabled={busy}
+            className={cn(
+              'flex min-h-[3.25rem] shrink-0 items-center justify-center rounded-2xl px-4 text-base font-bold transition-colors',
+              listening ? 'bg-clay-600 text-white' : 'bg-canvas text-ink hover:bg-moss-50',
+              busy && 'cursor-not-allowed opacity-50',
+            )}
+          >
+            <span aria-hidden>{listening ? '■' : '🎙️'}</span>
+          </button>
+          <button
             type="submit"
             disabled={busy || question.trim() === ''}
             className={cn(
@@ -335,6 +353,67 @@ function speak(text: string, setSpeaking: (speaking: boolean) => void) {
   utterance.onerror = () => setSpeaking(false);
   setSpeaking(true);
   window.speechSynthesis.speak(utterance);
+}
+
+function speakText(text: string, setSpeaking: (speaking: boolean) => void) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.onend = () => setSpeaking(false);
+  utterance.onerror = () => setSpeaking(false);
+  setSpeaking(true);
+  window.speechSynthesis.speak(utterance);
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function toggleListening(
+  setQuestion: (question: string) => void,
+  setListening: (listening: boolean) => void,
+  recognitionRef: { current: SpeechRecognitionLike | null },
+  ask: (question: string) => Promise<void>,
+) {
+  if (recognitionRef.current) {
+    recognitionRef.current.stop();
+    recognitionRef.current = null;
+    setListening(false);
+    return;
+  }
+  if (typeof window === 'undefined') return;
+  const SpeechRecognition = (window as Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
+    ?? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setQuestion('Voice input is not supported in this browser.');
+    return;
+  }
+  const instance = new SpeechRecognition();
+  instance.lang = 'en-NZ';
+  instance.interimResults = false;
+  instance.maxAlternatives = 1;
+  instance.onresult = (event) => {
+    const transcript = event.results[0]?.[0]?.transcript?.trim();
+    if (transcript) {
+      setQuestion(transcript);
+      void ask(transcript);
+    }
+  };
+  instance.onerror = () => setListening(false);
+  instance.onend = () => {
+    recognitionRef.current = null;
+    setListening(false);
+  };
+  recognitionRef.current = instance;
+  setListening(true);
+  instance.start();
 }
 
 function proposalConfirmLabel(proposal: AskProposal): string {
