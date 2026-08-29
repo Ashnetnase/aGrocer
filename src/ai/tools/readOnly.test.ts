@@ -282,4 +282,12 @@ describe('getReorderSuggestions', () => {
   it('reports when there is no history yet', async () => {
     expect((await run('getReorderSuggestions', fakeRepositories({}))).content).toBe('There are no reorder suggestions yet.');
   });
+
+  it('turns recent event history into a plain-language advisory', async () => {
+    const repos = fakeRepositories({});
+    repos.inventoryEvents.list = async () => [
+      { itemName: 'Milk', kind: 'adjusted', quantityDelta: -1, quantityAfter: 0, createdAt: new Date() },
+    ];
+    expect((await run('getReorderSuggestions', repos)).content).toContain('Milk recently ran out');
+  });
 });
