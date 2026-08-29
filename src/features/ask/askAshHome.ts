@@ -82,22 +82,32 @@ export interface AskAnswer {
   durationMs: number;
 }
 
+export interface AskHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 /**
  * Asks one question. Each call is independent — no conversation history is kept, here or
  * anywhere else. The application owns permanent state; a chat log on a shared wall tablet
  * is not state anybody asked for.
  *
+ * The optional transcript is short-lived browser context, never permanent household state.
  * Throws an `AskFailure`-shaped error object rather than an `Error`, so the caller renders a
  * sentence instead of parsing one.
  */
-export async function askAshHome(question: string, signal?: AbortSignal): Promise<AskAnswer> {
+export async function askAshHome(
+  question: string,
+  signal?: AbortSignal,
+  history: AskHistoryMessage[] = [],
+): Promise<AskAnswer> {
   let response: Response;
   try {
     response = await fetch('/api/ai/ask', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal,
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, ...(history.length > 0 ? { history } : {}) }),
     });
   } catch (error) {
     // An aborted request is the card being unmounted or the question being replaced. It is

@@ -74,6 +74,8 @@ interface AgrocerActions {
    * so nothing here would otherwise know the list had changed.
    */
   refreshShopping: () => Promise<void>;
+  /** Re-reads the meal catalogue and plan after an assistant recipe save. */
+  refreshMeals: () => Promise<void>;
 }
 
 type AgrocerValue = AgrocerState & AgrocerActions;
@@ -296,6 +298,7 @@ export function AgrocerProvider({
       },
 
       refreshShopping,
+      refreshMeals,
     }),
     [
       repositories,

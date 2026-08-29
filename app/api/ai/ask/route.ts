@@ -19,7 +19,10 @@ import { failed, parseJson } from '@/server/http';
 
 export const dynamic = 'force-dynamic';
 
-const postBodySchema = z.object({ question: z.string().trim().min(1).max(1_000) });
+const postBodySchema = z.object({
+  question: z.string().trim().min(1).max(1_000),
+  history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(1_000) })).max(8).optional(),
+});
 
 const statusByKind: Record<AiErrorKind, number> = {
   unreachable: 503,
@@ -34,7 +37,7 @@ export async function POST(request: Request) {
     const body = await parseJson(request, postBodySchema);
     if (!body.ok) return body.response;
 
-    const answer = await askAssistant(body.data.question, await serverRepositories());
+    const answer = await askAssistant(body.data.question, await serverRepositories(), { history: body.data.history });
 
     return NextResponse.json({
       reply: answer.reply,

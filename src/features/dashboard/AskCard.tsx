@@ -8,6 +8,7 @@ import {
   describeToolsUsed,
   type AskFailure,
   type AskProposal,
+  type AskHistoryMessage,
 } from '@/features/ask/askAshHome';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { cn } from '@/lib/utils';
@@ -29,14 +30,13 @@ import { DashboardCard } from './DashboardCard';
  * should be able to tell at a glance whether they are reading their own data or the model's
  * general knowledge.
  *
- * Since slice 9b it can also *propose* one change: adding a shopping item. It never performs
+ * Since slice 9b it can also propose gated shopping changes and recipe saves. It never performs
  * it. The proposal appears as a sentence with Add and Cancel, and only Add calls the server.
  * On a shared kitchen wall, where anyone passing can talk to the tablet, a model that changed
  * the list on its own say-so would be a bad idea however good the model was.
  *
- * Deliberately no conversation history. Each question stands alone: a shared tablet in a
- * family room should not accumulate a transcript nobody chose to keep, and the application,
- * not the model, owns anything worth remembering.
+ * Conversation context is short and session-only. It resets when this card is left or cleared;
+ * it is never stored in the database or browser storage.
  */
 
 const EXAMPLES = [
@@ -61,10 +61,11 @@ type State =
   | { status: 'failed'; question: string; failure: AskFailure };
 
 export function AskCard({ className }: { className?: string }) {
-  const { refreshShopping } = useAgrocer();
+  const { refreshShopping, refreshMeals } = useAgrocer();
   const [question, setQuestion] = useState('');
   const [state, setState] = useState<State>({ status: 'idle' });
   const inFlight = useRef<AbortController | null>(null);
+  const history = useRef<AskHistoryMessage[]>([]);
   const answerRef = useRef<HTMLDivElement>(null);
 
   // A wall tablet stays mounted for weeks, but the route can still be left mid-question.
@@ -85,7 +86,12 @@ export function AskCard({ className }: { className?: string }) {
 
     setState({ status: 'asking', question: trimmed });
     try {
-      const answer = await askAshHome(trimmed, controller.signal);
+      const answer = await askAshHome(trimmed, controller.signal, history.current);
+      history.current = [
+        ...history.current,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: answer.reply },
+      ].slice(-8) as AskHistoryMessage[];
       setState({
         status: 'answered',
         question: trimmed,
@@ -109,8 +115,13 @@ export function AskCard({ className }: { className?: string }) {
       // The write went through `/api/ai/confirm`, not a repository method, so nothing else
       // knows the list changed. Without this the Shopping card sits next to a card saying
       // "Added Milk" while still showing an empty list — one source of truth, visibly broken.
-      await refreshShopping();
-      setState({ status: 'done', question, result });
+      await Promise.all([refreshShopping(), refreshMeals()]);
+      const savedRecipe = proposal.actions.some((action) => action.tool === 'addRecipeToMeals');
+      setState({
+        status: 'done',
+        question,
+        result: savedRecipe ? `${result} Open Meals and choose Plan dinner.` : result,
+      });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       setState({ status: 'failed', question, failure: error as AskFailure });
@@ -215,7 +226,7 @@ export function AskCard({ className }: { className?: string }) {
                 : 'Confirm these changes?'}
             </p>
             <ul
-              aria-label="Proposed shopping-list changes"
+              aria-label="Proposed household changes"
               className="mt-2 max-h-32 space-y-1 overflow-y-auto text-base text-ink"
             >
               {state.proposal.actions.map((action, index) => (
@@ -232,7 +243,7 @@ export function AskCard({ className }: { className?: string }) {
                 className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-2xl bg-moss-700 px-5 text-base font-bold text-white transition-colors hover:bg-moss-800"
               >
                 <CheckIcon className="h-5 w-5" strokeWidth={2.5} aria-hidden />
-                {state.proposal.actions.length === 1 ? 'Add it' : 'Add all'}
+                {proposalConfirmLabel(state.proposal)}
               </button>
               <button
                 type="button"
@@ -246,7 +257,7 @@ export function AskCard({ className }: { className?: string }) {
         ) : null}
 
         {state.status === 'confirming' ? (
-          <p className="shrink-0 text-base font-semibold text-muted">Adding…</p>
+          <p className="shrink-0 text-base font-semibold text-muted">Applying…</p>
         ) : null}
 
         <form
@@ -278,7 +289,27 @@ export function AskCard({ className }: { className?: string }) {
             Ask
           </button>
         </form>
+        {history.current.length > 0 && !busy ? (
+          <button
+            type="button"
+            onClick={() => {
+              history.current = [];
+              setState({ status: 'idle' });
+            }}
+            className="self-start text-sm font-semibold text-muted underline underline-offset-2 hover:text-ink"
+          >
+            New conversation
+          </button>
+        ) : null}
       </div>
     </DashboardCard>
   );
+}
+
+function proposalConfirmLabel(proposal: AskProposal): string {
+  const recipeCount = proposal.actions.filter((action) => action.tool === 'addRecipeToMeals').length;
+  const shoppingCount = proposal.actions.filter((action) => action.tool === 'addShoppingItem').length;
+  if (recipeCount > 0 && shoppingCount === 0) return recipeCount === 1 ? 'Save recipe' : 'Save recipes';
+  if (shoppingCount > 0 && recipeCount === 0) return shoppingCount === 1 ? 'Add it' : 'Add all';
+  return proposal.actions.length === 1 ? 'Confirm' : 'Confirm all';
 }

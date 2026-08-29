@@ -90,6 +90,11 @@ What actually runs today:
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
 - A Docker image builds and has been smoke-tested; a staging runbook exists at `docs/staging.md`.
 
+**AI recipe tools and session memory (2026-08-29):** live qwen3:8b verification confirmed recipe
+search can chain into a gated save. Dashboard confirmation now refreshes Meals and shopping.
+The Ask card sends at most eight user/assistant messages as short session-only context; it is
+validated server-side and never persisted.
+
 Alternative persistence path:
 
 - The localStorage implementation is intact and runs when the server-data flag is off. It is
@@ -654,6 +659,9 @@ Added 2026-08-29 for meal feedback UI:
   where they disagree.
 
 ## NEXT TASK
+
+The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check
+through the tunnel; then the next code slice is voice talk-back (`speechSynthesis`).
 
 ### Do this first — the AI recipe tools are unverified
 

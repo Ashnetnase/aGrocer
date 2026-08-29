@@ -72,6 +72,9 @@ export const ASSISTANT_SYSTEM_PROMPT = [
   'You also have no access to the family calendar, chores, reminders or school information.',
   'If asked about those, say you cannot see them yet. Never guess a date or an event.',
   '',
+  'You may receive a short session-only conversation before the current question. Use it for',
+  'context, but do not treat it as a household record or as evidence that a tool already ran.',
+  '',
   'General cooking, food and household questions you can answer normally, without tools.',
 ].join('\n');
 
@@ -112,6 +115,7 @@ export interface AssistantOptions {
   tools?: Record<string, AiTool>;
   /** Injected in tests. Defaults to the write allow-list. */
   writeTools?: Record<string, AiWriteTool>;
+  history?: Array<Pick<AiMessage, 'role' | 'content'>>;
 }
 
 export async function askAssistant(
@@ -132,6 +136,7 @@ export async function askAssistant(
 
   const messages: AiMessage[] = [
     { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
+    ...(options.history ?? []).map(({ role, content }) => ({ role, content })),
     { role: 'user', content: question },
   ];
   const toolsUsed: string[] = [];

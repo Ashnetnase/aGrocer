@@ -640,6 +640,13 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-29 - AI recipe save refresh and short session memory (Codex)
+
+Live qwen3:8b verification confirmed recipe search chaining into gated recipe saving. The
+dashboard refreshes Meals after confirmation. Ask AshHome now carries at most eight validated
+user/assistant messages for the current session only; no chat history is persisted. Typecheck,
+lint and unit tests pass (277 tests).
+
 ## 2026-08-29 — Stage 2 COMPLETE: deployed, verified, installed (Claude Code)
 
 **Stage:** Stage 2 — Definition of Done satisfied
