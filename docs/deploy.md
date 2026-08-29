@@ -182,7 +182,7 @@ assumed on 2026-08-29. There are two Ollama instances on this network and neithe
 | Where | Version | Models | Why not |
 | ----- | ------- | ------ | ------- |
 | Workstation `192.168.1.222` | 0.33.1 | `qwen3:8b`, `qwen3:4b` | Bound to `127.0.0.1`; confirmed unreachable on its LAN address |
-| `192.168.1.14` (behind `api.chat`) | 0.7.1 | `phi3:mini`, `llama3:8b` | Reachable, but has neither model the assistant was built and tested against, and 0.7.1 is far older |
+| `192.168.1.14` (behind `api.chat`) | 0.7.1 | `phi3:mini`, `llama3:8b` | **Ash's own test instance on Proxmox, unrelated to Agrocer.** Not a candidate — no GPU, and it is not the production Ollama. Leave it alone |
 
 So `/api/ai/ask` returns 503 `unreachable` and the card says "The assistant is offline. It runs
 on the home PC — check that is on." That is the correct failure, not a deployment fault.

@@ -2278,11 +2278,13 @@ was understood, and this ADR corrects it.
 | Host | GPU | Ollama | Models |
 | ---- | --- | ------ | ------ |
 | Workstation `192.168.1.222` | **RTX 5070 12 GB** | 0.33.1, bound to `127.0.0.1` | `qwen3:8b`, `qwen3:4b` |
-| `ashnetserv1` `192.168.1.14` (Proxmox) | none | 0.7.1, on the LAN | `phi3:mini`, `llama3:8b` |
+| `ashnetserv1` `192.168.1.14` (Proxmox) | none | 0.7.1, on the LAN | `phi3:mini`, `llama3:8b` — **Ash's test instance, not Agrocer's** |
 
-So "pull `qwen3:8b` onto the always-on server" is not an option: an 8B model on CPU answers in
-tens of seconds, and the questions this serves are asked standing at a wall tablet. The GPU is
-where it is, and the assistant has to reach it there.
+So "pull `qwen3:8b` onto the always-on server" is not an option, for two reasons rather than
+one: an 8B model on CPU answers in tens of seconds, and — confirmed by Ash on 2026-08-29 —
+that instance is **his own test box, nothing to do with Agrocer**. The production Ollama is
+the workstation's, and there is no second candidate. The GPU is where it is, and the
+assistant has to reach it there.
 
 **The decision: bind the workstation's Ollama to the LAN, and firewall it to the Agrocer host
 alone.** `OLLAMA_HOST=0.0.0.0:11434` plus an inbound rule on TCP 11434 scoped to a single

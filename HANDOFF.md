@@ -351,7 +351,7 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
 | Host | Address | Role |
 | ---- | ------- | ---- |
 | Workstation (this machine) | `192.168.1.222` | RTX 5070, Ollama **0.33.1** (`qwen3:8b`, `qwen3:4b`), bound to `127.0.0.1`. Development. Not 24/7 (ADR-007) |
-| `ashnetserv1` | `192.168.1.14` | Proxmox, **no GPU**. Ollama **0.7.1** (`phi3:mini`, `llama3:8b`). Published at `api.chat.ashnetbase.org` |
+| `ashnetserv1` | `192.168.1.14` | Proxmox, **no GPU**. Ollama **0.7.1** — **Ash's own test instance, not Agrocer's and not a candidate.** Published at `api.chat.ashnetbase.org`. Do not point the app at it |
 | **Agrocer host** (hostname `portainer`) | `192.168.1.49` | `vaultwarden` 8080, `uptime-kuma` 3001, `portainer` 8000/9443, `ngix-npm-1` 80/81/443, **and `cloudflared`**. **Port 3000 is free** |
 | chat box | `192.168.1.37` | Runs `chat` (8080) |
 | `cloudflared` | **on `192.168.1.49`** | A container on `cloudflare-tunnel_default`, started `["tunnel","run"]` — token in an env var, so routing lives in the Zero Trust dashboard. Tunnel `homelab`, ID `7a9f3afc-7fed-4e64-84a5-034cc130374d`, healthy |
@@ -663,9 +663,18 @@ budget target, complete-coverage meal costs, and append-only feedback capture. *
 **Host decided 2026-08-29: `192.168.1.49`**, the box already serving `vault` (8080) and
 `status` (3001). Every address below is now concrete rather than a placeholder.
 
-1. **Deploy.** The tunnel route `home.ashnetbase.org` exists but points at `localhost:3000`;
-   it must be `http://192.168.1.49:3000`. Then `git clone`, `.env`,
-   `docker compose up -d --build` on that host. `docs/deploy.md`.
+1. ~~**Deploy.**~~ **DONE 2026-08-29 and verified from outside the network.**
+   `https://home.ashnetbase.org` — `/` redirects to `/sign-in`, `/sign-in` 200,
+   `/api/shopping` 401 (`{"error":"Sign in to continue"}`), `/dashboard` redirects,
+   `/sw.js` and `/manifest.webmanifest` 200 over a real certificate.
+   **Still outstanding: install the PWA on a phone** (on mobile data, to prove the tunnel
+   rather than the LAN). That is the last unticked item in Stage 2's Definition of Done, so
+   the stage stays IN PROGRESS until it is confirmed.
+
+   **Also outstanding: rotate the database password.** It was exposed in a chat transcript on
+   2026-08-29 via an editor selection of `.env.local`. Supabase → Project Settings → Database
+   → Reset database password, then update `.env.local` here, `.env` on `192.168.1.49`
+   (doubling any `$`), and `docker compose up -d`. No rebuild — `DATABASE_URL` is runtime.
 2. **Ollama for production** (ADR-020): `OLLAMA_HOST=0.0.0.0:11434` on the workstation, an
    inbound rule on TCP 11434 scoped to **`192.168.1.49` only**, a DHCP reservation for
    `192.168.1.222`, and `OLLAMA_BASE_URL=http://192.168.1.222:11434` in the homelab `.env`.
