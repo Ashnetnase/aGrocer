@@ -2,10 +2,11 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ClockIcon, UsersIcon } from 'lucide-react';
+import { AlertTriangleIcon, ClockIcon, UsersIcon } from 'lucide-react';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { usePlannerWeek } from '@/providers/useToday';
 import { findMeal, mealFor } from '@/domain/services/meals';
+import { describeIngredient, matchMealToPantry } from '@/domain/services/recipeMatch';
 import { DashboardCard } from './DashboardCard';
 
 /**
@@ -15,14 +16,19 @@ import { DashboardCard } from './DashboardCard';
  * Stage 1 demo fixtures, which include a planned dinner — so without the gate the wall
  * announces a meal nobody planned.
  *
- * Cost and the missing-ingredient warning are deliberately absent: both need ingredient-level
- * matching against products and pantry, which belongs with the recipe work rather than being
- * approximated here. A wrong number on the kitchen wall is worse than no number.
+ * **The missing-ingredient warning is real as of Stage 4**, built on pantry-to-recipe
+ * matching. It answers the question the card is looked at for: can we actually make this
+ * tonight?
+ *
+ * Cost is still deliberately absent. The warning needs only to know whether an ingredient is
+ * *present*; a cost needs quantities and prices per ingredient, which the free-text
+ * ingredient list cannot give. A wrong number on the kitchen wall is worse than no number.
  */
 export function TonightCard() {
-  const { meals, plan, hydrated } = useAgrocer();
+  const { meals, plan, pantry, hydrated } = useAgrocer();
   const week = usePlannerWeek();
   const tonight = findMeal(meals, mealFor(plan, week.todayKey, 'dinner'));
+  const match = tonight ? matchMealToPantry(tonight, pantry) : undefined;
 
   return (
     <DashboardCard
@@ -61,6 +67,32 @@ export function TonightCard() {
                 <UsersIcon className="h-5 w-5" /> Serves {tonight.serves}
               </span>
             </p>
+
+            {/*
+              Only ever shown when there is something to say. A card that reports "0 missing"
+              every night trains the family to stop reading it, and then it is useless on the
+              one night it matters.
+            */}
+            {match && match.missing.length > 0 ? (
+              <p className="mt-3 flex items-start gap-2 text-base font-bold text-clay-600">
+                <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+                <span>
+                  Need {match.missing.map(describeIngredient).join(', ')}
+                </span>
+              </p>
+            ) : null}
+
+            {match && match.missing.length === 0 && match.low.length > 0 ? (
+              <p className="mt-3 text-base font-semibold text-muted">
+                Running low on {match.low.map(describeIngredient).join(', ')}
+              </p>
+            ) : null}
+
+            {match && match.canCook && match.low.length === 0 && match.totalCount > 0 ? (
+              <p className="mt-3 text-base font-semibold text-moss-700">
+                Everything&rsquo;s in
+              </p>
+            ) : null}
           </div>
         </div>
       ) : (

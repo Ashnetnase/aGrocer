@@ -17,7 +17,7 @@ and the read-only tools), taken 2026-08-28/29 at Ash's request to bring the AI i
 
 Stage 1 closed as a dev-complete milestone (ADR-012). Staging deployment moved into Stage 2.
 
-**Stage 2's build work is complete** as of 2026-08-29. RLS (ADR-016), authentication
+**Stage 2's build work is complete** and **Stage 4 has begun** as of 2026-08-29. RLS (ADR-016), authentication
 (ADR-017), the AI ladder through slice 9b (ADR-018), history tables, CI, and a deployment
 runbook. **What is left is Ash's, not another agent's:** adding one hostname to the Cloudflare
 Tunnel and running `docker compose up` on the homelab host — see NEXT TASK.
@@ -83,7 +83,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 | Family schedule   | **Mock** — one example row. Needs Phase 12.                        |
 | Reminders         | **Mock** — one example row. Needs Phase 11.                        |
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
-| Tonight's meal    | **Real** — the weekly plan, with image, time and serves.           |
+| Tonight's meal    | **Real** — the plan, plus a missing-ingredient warning from the pantry. |
 | Chores            | **Mock** — one example row. Needs Phase 12.                        |
 | Ask AshHome       | **Real** — reads list/pantry/plan; proposes list additions, gated. |
 
@@ -100,9 +100,11 @@ example chore for a real one.
 - **Notification ingestion:** not started. No email ingestion, no `SchoolNotification` type.
 - **Calendar integration:** not started. No calendar feed, import or family calendar model.
 
-Cost note: `Tonight's meal` deliberately omits approximate cost and the missing-ingredient
-warning. Both need ingredient-level matching against products and pantry, which belongs with
-the recipe work. A wrong number on the kitchen wall is worse than no number.
+Cost note: `Tonight's meal` now shows the missing-ingredient warning (Stage 4's
+pantry-to-recipe matching). **Approximate cost is still deliberately absent** — the warning
+needs only to know whether an ingredient is present, while a cost needs quantities and prices
+per ingredient, which free-text ingredients cannot give. A wrong number on the kitchen wall is
+worse than no number.
 
 ## Completed
 
@@ -134,6 +136,8 @@ the recipe work. A wrong number on the kitchen wall is worse than no number.
 - **Supabase Auth** (ADR-017): `src/auth/` (config, server and browser clients),
   `middleware.ts`, `/sign-in`, sign-out on Settings, `household_members.user_id` (migration
   `0002`), `authenticated` RLS policies (migration `0003`), and `npm run db:claim`.
+- **Pantry-to-recipe matching** (Stage 4) — `src/domain/services/recipeMatch.ts`, surfaced on
+  the Tonight's meal card. Presence only, not quantities.
 - **History tables** — `inventory_events` (written automatically by the pantry repository)
   and `meal_feedback` (append-and-read only), migrations `0004`/`0005`, plus `/api/feedback`.
 - **CI** — `.github/workflows/ci.yml`: typecheck, lint, test, build, integration tests, and an
@@ -224,6 +228,10 @@ Recent and important:
 - `src/features/auth/` — `SignInScreen`, `SignOutButton`, and `describeSignInError`, whose
   tests pin that a wrong password and an unknown email read identically.
 - `scripts/claim.ts` + `npm run db:claim` — links an account to a member. Never creates one.
+- `src/domain/services/recipeMatch.ts` — pantry-to-recipe matching. **Stricter than
+  `matchProduct`'s prefix test on purpose:** a pantry name matches only when a quantity or
+  nothing follows it, so "Rice vinegar" does not match "Rice". A wrong price is a rounding
+  error; a wrong "you have this" sends somebody to the stove without an onion.
 - `src/data/api/authFailure.ts` — `handleUnauthorized()`, the one place a 401 becomes a
   redirect, plus `NotInHouseholdError` for the 403 that must not redirect. `setAuthRedirect()`
   is the test seam.
@@ -468,6 +476,14 @@ Added 2026-08-29 for the end of Stage 2's build work:
 - `npm run db:migrate` and `npm run db:generate` are both clean no-ops.
 - **`pg_dump` verified** against the live project via Docker — 200 KB, all 7 public tables plus
   `auth`, and RLS state and policies included. Test artefacts deleted.
+
+Added 2026-08-29 for pantry-to-recipe matching (Stage 4):
+
+- 212 tests across 16 files, up from 194/15. Sixteen are new, and most are about *false*
+  positives — "Rice vinegar" must not match "Rice" — rather than about matching more things.
+- **Verified against the real pantry.** Spaghetti Bolognese planned for tonight produced
+  "Need Tomatoes, Onion": correct, since Tomatoes are marked `out` and there is no onion. The
+  test plan entry was cleared afterwards, so nothing is planned that Ash did not choose.
 - Wall dashboard checked in Chrome at a real 1280×800 kiosk viewport: the page itself does not
   scroll, no card clips its content, and checking an item off on the dashboard persisted to
   Supabase — the same row the phone view reads.
@@ -553,8 +569,17 @@ Expect `/api/ai/ask` to return 503 from the homelab: Ollama binds to localhost o
 workstation, so the assistant is unreachable from there and the card says so. That is the
 correct failure, not a deployment problem.
 
-**Then Stage 2 is complete** and Stage 4 is the next stage — recipes, consumption learning,
-budgeting and specials, with Phase 6's recipe providers the natural entry point.
+**Stage 2's build work is done, so Stage 4 has begun** — pantry-to-recipe matching landed
+first, because most of the rest of that stage depends on knowing whether the household has an
+ingredient. Sensible next pieces, in rough order of value:
+
+- **Weekly budget target and meal cost estimation.** The budget half of Phase 7 is still
+  unbuilt and it is core Agrocer. Cost estimation is the harder half: it needs structured
+  ingredient quantities, which changes how a recipe is entered. Worth deciding whether the
+  family will accept that before building it.
+- **Low-stock and staple-reorder prediction.** `inventory_events` is already accumulating the
+  history these need, and nothing reads it yet.
+- **Multi-item AI proposals**, which unblocks Phase 10's pantry-aware planning.
 
 **Known limitations, in the order they will bite:**
 

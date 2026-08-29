@@ -23,7 +23,8 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] Phase 3 — PostgreSQL family data model *(the Agrocer half; kids/school not modelled)*
 - [x] Phase 4 — Agrocer shopping lists, favourites and history
 - [x] Phase 5 — pantry/freezer inventory
-- [ ] Phase 6 — recipe providers and family recipes
+- [~] Phase 6 — recipe providers and family recipes *(pantry-to-recipe matching done;
+      discovery, import and providers not started)*
 - [~] Phase 7 — meals, meal planning and grocery budgeting *(planning done, budgeting not)*
 - [x] Phase 8 — local Ollama AI service *(slices 8a and 8b done: provider abstraction,
       `/api/ai/chat`, and the "Ask AshHome" card. Still no tools and no writes — that is Phase 9)*
@@ -206,7 +207,18 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
       because Ollama returns no prose alongside a tool call. Needs a list-shaped confirmation
 - [ ] streaming responses (deliberately deferred; a whole answer is fine for a wall tablet)
 
-## Stage 4 — Recipes, consumption learning, budget and specials — `[ ]` NOT STARTED
+## Stage 4 — Recipes, consumption learning, budget and specials — `[~]` IN PROGRESS
+
+- [x] **pantry-to-recipe matching** (`src/domain/services/recipeMatch.ts`) — started here
+      because most of the rest of the stage depends on it. Surfaced as the Tonight's meal
+      card's missing-ingredient warning, which had been deferred since Phase 1
+- [ ] meal cost estimation — needs structured ingredient quantities, which is the reason
+      matching checks presence only
+- [ ] recipe discovery/search, recipe import
+- [ ] low-stock and staple-reorder prediction — `inventory_events` is already accumulating
+      the history these need
+- [ ] weekly budget target
+- [ ] product alternatives, specials provider, waste/use-soon, notifications
 
 *AshHome Phase 6.*
 

@@ -443,7 +443,8 @@ Use one orchestrator with tools first. Do not create many autonomous agents unle
 
 ## Stage 4 — Recipes, consumption learning, budget and specials
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS (started 2026-08-29)** — pantry-to-recipe matching first, because it is
+the item most of the rest depends on.
 
 ### Goal
 
@@ -453,8 +454,9 @@ Make Agrocer smarter using household history and external grocery information.
 
 - [ ] recipe discovery/search
 - [ ] recipe import
-- [ ] pantry-to-recipe matching
-- [ ] consumption history
+- [x] pantry-to-recipe matching — `src/domain/services/recipeMatch.ts`, surfaced as the
+      Tonight's meal card's missing-ingredient warning. Presence only, not quantities
+- [~] consumption history — `inventory_events` accumulates it (Stage 2); nothing reads it yet
 - [ ] low-stock prediction
 - [ ] staple reorder prediction
 - [ ] weekly budget target
@@ -628,6 +630,56 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Stage 4 begins: pantry-to-recipe matching (Claude Code)
+
+**Stage:** Stage 4
+**Status:** Matching complete and verified. It is the keystone, not the whole stage.
+
+Started here rather than at the top of the scope list, because most of Stage 4 depends on
+knowing whether the household has an ingredient: pantry-to-recipe matching, meal cost
+estimation, waste and use-soon recommendations, and Phase 10's pantry-aware planning all need
+it. Recipe discovery and import, the first two items listed, need an external provider and
+depend on nothing.
+
+**It also closes something deferred twice.** The Tonight's meal card has carried a note since
+Phase 1 that its missing-ingredient warning was absent because it needed ingredient-level
+matching. It now exists, and the card says "Need Tomatoes, Onion".
+
+**No schema change, and no new burden on whoever types a recipe in.** `meal.ingredients` stays
+free text. Matching leans on the convention people already write in — name first, quantity
+after — so "Beef mince 500g" matches the pantry's "Beef mince".
+
+**The rule is stricter than the prefix test `matchProduct` already uses for pricing**, and
+that difference is the interesting part. A plain prefix match says "Rice vinegar 100ml"
+matches Rice, and the family is told they can make a stir-fry they cannot. So a pantry name
+matches only when what follows it is a **quantity or nothing**: `rice → 2 cups` matches,
+`rice → vinegar` does not. A wrong price is a rounding error; a wrong "you have this" sends
+somebody to the stove without an onion. Two tests exist purely to hold that line.
+
+The cost, stated in the code: an ingredient written quantity-first ("2 cups rice") will not
+match. It fails towards "check the cupboard" rather than towards a false promise, which is the
+right direction.
+
+**Quantities are deliberately not checked.** "Beef mince 500g" against 200g in the freezer
+reads as in stock. Doing better needs ingredients stored as structured amounts, which changes
+how a recipe is entered — a real cost, worth paying when meal cost estimation needs it, and
+that item is still open for exactly this reason.
+
+**Other decisions worth keeping.** `out` counts as missing rather than low: it is a row in the
+pantry but nothing in the cupboard, and for cooking tonight those are the same. The card shows
+nothing when nothing is wrong — a card that reports "0 missing" every night trains the family
+to stop reading it, and then it is useless on the night it matters.
+
+**Verified against the real pantry**, not fixtures. Spaghetti Bolognese planned for tonight
+produced "Need Tomatoes, Onion" — correct: Tomatoes are marked `out` and there is no onion.
+16 new tests, most of them about false positives rather than about matching more things.
+212 tests total, up from 194.
+
+One refinement from seeing it on the wall: an unmatched ingredient first rendered as written,
+so it read "Need Tomatoes, Onion 1". Trailing words beginning with a digit are now trimmed,
+using the same name-first convention the matcher relies on — and never the whole name, so
+"Soy sauce" survives.
 
 ## 2026-08-29 — Stage 2's build work finished: history tables, CI, deployment (Claude Code)
 
