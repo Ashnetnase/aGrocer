@@ -130,6 +130,14 @@ const reorderSuggestions: AiTool = {
   },
 };
 
+const useSoon: AiTool = {
+  spec: { name: 'getUseSoon', description: 'Read pantry items marked use soon or ageing. Use this for waste-reduction meal suggestions.', parameters: NO_ARGUMENTS },
+  async execute(repos) {
+    const items = (await repos.pantry.list()).filter((item) => item.state === 'soon');
+    return items.length === 0 ? 'Nothing in the pantry is marked use soon.' : `Use soon: ${items.map((item) => `${item.name} (${item.quantity} ${item.unit})`).join(', ')}.`;
+  },
+};
+
 function describeItem(item: { name: string; quantity: number; unit: string }): string {
   return item.quantity > 1 ? `${item.name} ×${item.quantity} ${item.unit}` : item.name;
 }
@@ -192,5 +200,6 @@ export const READ_ONLY_TOOLS: Record<string, AiTool> = {
   getMealPlan: mealPlan,
   getMeals: mealCatalogue,
   getReorderSuggestions: reorderSuggestions,
+  getUseSoon: useSoon,
   searchRecipes: searchRecipes as AiTool,
 };

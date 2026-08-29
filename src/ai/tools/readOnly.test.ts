@@ -108,6 +108,7 @@ describe('the allow-list', () => {
       'getMealPlan',
       'getMeals',
       'getReorderSuggestions',
+      'getUseSoon',
       'searchRecipes',
     ]);
   });
@@ -289,5 +290,12 @@ describe('getReorderSuggestions', () => {
       { itemName: 'Milk', kind: 'adjusted', quantityDelta: -1, quantityAfter: 0, createdAt: new Date() },
     ];
     expect((await run('getReorderSuggestions', repos)).content).toContain('Milk recently ran out');
+  });
+});
+
+describe('getUseSoon', () => {
+  it('lists ageing pantry items for waste-reduction advice', async () => {
+    const { content } = await run('getUseSoon', fakeRepositories({ pantry: [pantryItem({ name: 'Spinach', state: 'soon', quantity: 1, unit: 'bag' })] }));
+    expect(content).toBe('Use soon: Spinach (1 bag).');
   });
 });
