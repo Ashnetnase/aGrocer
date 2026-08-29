@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
  */
 export function ShoppingModeScreen() {
   const router = useRouter();
-  const { shopping, toggleShoppingItem, clearChecked } = useAgrocer();
+  const { shopping, household, toggleShoppingItem, clearChecked } = useAgrocer();
   const [showTrolley, setShowTrolley] = useState(false);
 
   const { remaining, checked, total, trolleyTotal, progress } = useMemo(
@@ -42,6 +42,9 @@ export function ShoppingModeScreen() {
             </h1>
             <p className="mt-0.5 text-sm text-moss-100">
               {nzd(trolleyTotal)} in trolley · {nzd(total)} estimated
+              {household.settings.weeklyBudget != null
+                ? ` / ${nzd(household.settings.weeklyBudget)} budget`
+                : ''}
             </p>
           </div>
           <button

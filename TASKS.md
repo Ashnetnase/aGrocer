@@ -25,7 +25,8 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] Phase 5 — pantry/freezer inventory
 - [~] Phase 6 — recipe providers and family recipes *(pantry-to-recipe matching done;
       discovery, import and providers not started)*
-- [~] Phase 7 — meals, meal planning and grocery budgeting *(planning done, budgeting not)*
+- [~] Phase 7 — meals, meal planning and grocery budgeting *(planning and the weekly budget
+      target are done; meal cost estimation remains)*
 - [x] Phase 8 — local Ollama AI service *(slices 8a and 8b done: provider abstraction,
       `/api/ai/chat`, and the "Ask AshHome" card. Still no tools and no writes — that is Phase 9)*
 - [x] Phase 9 — controlled AI tool/action system *(9a read tools + 9b the first write tool,
@@ -203,8 +204,9 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 - [x] confirmation gate for AI writes (ADR-018) — the pattern every later write tool inherits
 - [ ] confirmation gate for the *other* sensitive actions once they exist (email, deletions,
       anything spending money)
-- [ ] multi-item proposals — "add milk and eggs" proposes milk only and cannot mention eggs,
-      because Ollama returns no prose alongside a tool call. Needs a list-shaped confirmation
+- [x] multi-item proposals — one proposal carries every write call from the model turn; the
+      dashboard lists each server-generated description behind one Add all / Cancel choice,
+      and `/api/ai/confirm` validates the complete list before a batch write
 - [ ] streaming responses (deliberately deferred; a whole answer is fine for a wall tablet)
 
 ## Stage 4 — Recipes, consumption learning, budget and specials — `[~]` IN PROGRESS
@@ -217,7 +219,8 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 - [ ] recipe discovery/search, recipe import
 - [ ] low-stock and staple-reorder prediction — `inventory_events` is already accumulating
       the history these need
-- [ ] weekly budget target
+- [x] weekly budget target — optional household setting persisted locally and in Postgres;
+      shopping views show the current list estimate against it
 - [ ] product alternatives, specials provider, waste/use-soon, notifications
 
 *AshHome Phase 6.*

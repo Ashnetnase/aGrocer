@@ -17,6 +17,7 @@ export const householdSeed: Household = {
     householdName: 'The Ashfords',
     shopLabel: 'New World Thursday',
     currency: 'NZD',
+    weeklyBudget: null,
     pinDemoDate: false,
     pinnedDate: toIsoDate(new Date()),
     showBreakfastAndLunch: false,

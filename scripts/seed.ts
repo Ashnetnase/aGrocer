@@ -55,6 +55,8 @@ async function main() {
         name: settings.householdName,
         shopLabel: settings.shopLabel,
         currency: settings.currency,
+        weeklyBudgetCents:
+          settings.weeklyBudget == null ? null : priceToCents(settings.weeklyBudget),
         pinDemoDate: settings.pinDemoDate,
         pinnedDate: settings.pinnedDate,
         showBreakfastAndLunch: settings.showBreakfastAndLunch,

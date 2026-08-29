@@ -427,13 +427,14 @@ Add a controlled AI assistant that uses tools over Agrocer's structured data.
 - [ ] get meal history
 - [ ] get recipes
 - [ ] get budget
-- [ ] build/update shopping list — **slice 9b, and it needs Auth + RLS first**
+- [~] build/update shopping list — additions work with confirmation, including multi-item
+      requests; editing/removing items is not implemented
 - [ ] meal suggestions
 - [ ] weekly plan suggestions
 - [ ] family feedback learning
-- [ ] human confirmation for important actions
+- [x] human confirmation for AI writes, including one confirmation over a complete action list
 - [ ] cost controls
-- [ ] prompt/evaluation tests
+- [x] prompt/tool-loop tests for the implemented read and shopping-add capabilities
 
 ### Architecture principle
 
@@ -459,7 +460,8 @@ Make Agrocer smarter using household history and external grocery information.
 - [~] consumption history — `inventory_events` accumulates it (Stage 2); nothing reads it yet
 - [ ] low-stock prediction
 - [ ] staple reorder prediction
-- [ ] weekly budget target
+- [x] weekly budget target — optional NZD household setting, compared with the current list
+      estimate on shopping, shopping mode, and the wall dashboard
 - [ ] meal cost estimation
 - [ ] product alternatives
 - [ ] supermarket price/specials provider abstraction
@@ -630,6 +632,54 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Weekly grocery budget target (Codex)
+
+**Stage:** Stage 4 / AshHome Phase 7
+**Status:** Complete and verified.
+
+Households can now set an optional weekly grocery budget in Settings. Blank means no target;
+Agrocer does not invent a default for a family of five. The value is validated as positive NZD,
+stored as integer cents in `households.weekly_budget_cents`, and supported by both localStorage
+and Drizzle repositories. Older local settings remain valid because the new field is optional
+at the schema boundary.
+
+The Shopping screen compares the current whole-list estimate with the target, showing dollars
+left or dollars over plus a capped progress bar. Shopping Mode shows estimated total against
+the target, and the wall Shopping card shows `$estimate / $target`. This is a target against
+the current list, not historical spend tracking and not meal cost estimation.
+
+Migration `drizzle/0006_useful_ser_duncan.sql` was generated, reviewed, and applied to the live
+Supabase project. It adds one nullable integer column and leaves existing households unset.
+
+**Verified:** `npm run check` (228 tests across 18 files), `npm run test:db` (10 tests,
+including set/clear budget round-trip), `npm run db:rls` (all 9 tables protected; publishable
+key reads zero rows), `npm run build`, and clean no-op reruns of `db:generate` / `db:migrate`.
+Visual browser verification remained unavailable because no browser connection was present.
+
+## 2026-08-29 — Multi-item AI proposals preserve the whole request (Codex)
+
+**Stage:** Stage 3 / AshHome Phase 9
+**Status:** Complete and verified.
+
+"Add milk and eggs" no longer stops at the first write call. `askAssistant` collects every
+validated write call from the model's turn into one ordered `AssistantProposal.actions` list,
+without executing any of them. The dashboard shows every server-generated
+`AiWriteTool.describe` sentence behind one Add all / Cancel choice.
+
+`POST /api/ai/confirm` accepts that list, validates every tool name and argument before
+resolving repositories, and refuses the entire request if any action is invalid. Confirmed
+shopping additions use the existing `shopping.addMany` repository path, so the current
+multi-item action is one batch operation rather than a sequence that can silently stop halfway.
+
+The real qwen3:8b provider was exercised directly with "Add milk and eggs to the shopping
+list". It returned Milk and Eggs as two actions, both quantity one, and no write occurred.
+The tool specification no longer invites the model to guess supermarket categories, and it
+explicitly treats "eggs" as one shopping-list unit rather than twelve individual eggs.
+
+**Verified:** `npm run check` (221 tests across 17 files), `npm run test:db` (9 tests),
+`npm run db:rls` (9 tables protected; publishable key reads zero rows), and `npm run build`.
+The browser visual check could not run because no in-app or extension browser was connected.
 
 ## 2026-08-29 — Stage 4 begins: pantry-to-recipe matching (Claude Code)
 
@@ -2079,6 +2129,15 @@ eventually, and adding a shopping item is about as low-risk as a write gets. But
 write tool sets the pattern every later one inherits, and "the model decided to change
 something" is not a behaviour to establish casually. If a tool should ever bypass the gate,
 that is a decision to record here, not a flag to add quietly.
+
+**Amended 2026-08-29: one confirmation may cover an explicit action list.** Ollama can emit
+several write calls in one turn but normally emits no prose with them. Returning on the first
+call silently dropped the rest of requests such as "add milk and eggs". An
+`AssistantProposal` therefore carries every validated action from that turn. Every displayed
+line still comes from the corresponding tool's `describe` function, never from model prose.
+The confirmation route validates the complete list before any repository is resolved and uses
+the write tool's batch executor where available. One invalid action refuses the whole list;
+partial confirmation is not an acceptable fallback.
 
 
 ## ADR-019 — HTTPS via the existing Cloudflare Tunnel; the container binds to localhost

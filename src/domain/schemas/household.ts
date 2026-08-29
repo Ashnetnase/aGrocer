@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, nameSchema } from './common';
+import { idSchema, nameSchema, priceSchema } from './common';
 
 export const memberRoleSchema = z.enum(['Adult', 'Child']);
 export type MemberRole = z.infer<typeof memberRoleSchema>;
@@ -40,6 +40,8 @@ export const settingsSchema = z.object({
   /** Shown in the shopping screen subtitle, e.g. "New World Thursday". */
   shopLabel: z.string().trim().max(40),
   currency: z.literal('NZD'),
+  /** Blank/null means the household has not chosen a weekly grocery target yet. */
+  weeklyBudget: priceSchema.min(1, 'Enter at least $1').nullable().optional(),
   /** When true the planner pins to `pinnedDate` instead of the real today (ADR-005). */
   pinDemoDate: z.boolean(),
   /** ISO yyyy-mm-dd. Only meaningful while `pinDemoDate` is true. */

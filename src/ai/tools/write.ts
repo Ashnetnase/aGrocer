@@ -29,6 +29,8 @@ export interface AiWriteTool<TArgs = unknown> {
   /** The sentence a person reads before confirming. Must name every effect. */
   describe(args: TArgs): string;
   execute(args: TArgs, repos: AgrocerRepositories): Promise<string>;
+  /** Executes several confirmed calls as one repository operation where the tool supports it. */
+  executeMany?(args: TArgs[], repos: AgrocerRepositories): Promise<string>;
 }
 
 const addShoppingItemArgs = z.object({
@@ -56,11 +58,10 @@ const addShoppingItem: AiWriteTool<AddShoppingItemArgs> = {
       type: 'object',
       properties: {
         name: { type: 'string', description: 'The item, e.g. "Milk". One item per call.' },
-        quantity: { type: 'integer', description: 'How many. Omit for one.' },
-        category: {
-          type: 'string',
-          enum: [...categorySchema.options],
-          description: 'Supermarket section. Omit rather than guessing.',
+        quantity: {
+          type: 'integer',
+          description:
+            'Shopping-list quantity explicitly requested by the user. Omit for one. Do not infer pack contents: "eggs" means one item, not 12 eggs.',
         },
       },
       required: ['name'],
@@ -85,6 +86,24 @@ const addShoppingItem: AiWriteTool<AddShoppingItemArgs> = {
     });
     // `add` merges by name, so the quantity returned may exceed the quantity asked for.
     return `Added ${item.name} (now ×${item.quantity}) to the shopping list.`;
+  },
+  async executeMany(argsList, repos) {
+    const items = await repos.shopping.addMany(
+      argsList.map((args) => ({
+        name: args.name,
+        category: args.category ?? 'Pantry',
+        quantity: args.quantity ?? 1,
+        unit: 'each',
+        price: 0,
+        priority: false,
+      })),
+    );
+    const names = items.map((item) => `${item.name} (now ×${item.quantity})`);
+    const summary =
+      names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    return `Added ${summary} to the shopping list.`;
   },
 };
 

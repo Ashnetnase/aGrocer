@@ -81,10 +81,19 @@ export function FormNumberField<TValues extends FieldValues>({
   label,
   placeholder,
   step = '0.01',
-}: BaseProps<TValues> & { placeholder?: string; step?: string }) {
+  description,
+  emptyValue,
+}: BaseProps<TValues> & {
+  placeholder?: string;
+  step?: string;
+  description?: string;
+  /** Use null for optional persisted values whose absence must survive JSON serialization. */
+  emptyValue?: null;
+}) {
   const id = useId();
   const { field, fieldState } = useController({ control, name });
   const errorId = `${id}-error`;
+  const descriptionId = `${id}-description`;
 
   return (
     <div>
@@ -99,13 +108,17 @@ export function FormNumberField<TValues extends FieldValues>({
         value={field.value === undefined || field.value === null || Number.isNaN(field.value) ? '' : field.value}
         onChange={(event) => {
           const raw = event.target.value;
-          field.onChange(raw === '' ? undefined : Number(raw));
+          field.onChange(raw === '' ? emptyValue : Number(raw));
         }}
         onBlur={field.onBlur}
         ref={field.ref}
         placeholder={placeholder}
         aria-invalid={fieldState.invalid || undefined}
-        aria-describedby={fieldState.error ? errorId : undefined}
+        aria-describedby={
+          [description ? descriptionId : undefined, fieldState.error ? errorId : undefined]
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         className={cn(
           'h-12 w-full rounded-2xl border bg-canvas px-4 text-[15px] text-ink placeholder:text-muted focus:bg-surface focus:outline-none focus:ring-2',
           fieldState.error
@@ -113,6 +126,11 @@ export function FormNumberField<TValues extends FieldValues>({
             : 'border-line focus:border-moss-400 focus:ring-moss-100',
         )}
       />
+      {description ? (
+        <p id={descriptionId} className="mt-1.5 text-xs text-muted">
+          {description}
+        </p>
+      ) : null}
       <FieldError id={errorId} message={fieldState.error?.message} />
     </div>
   );

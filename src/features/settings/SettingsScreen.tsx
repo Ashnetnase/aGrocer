@@ -9,7 +9,11 @@ import { settingsSchema, type Settings } from '@/domain/schemas/household';
 import { describeHousehold } from '@/domain/services/household';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { FormTextField, FormToggleCard } from '@/components/agrocer/form/FormFields';
+import {
+  FormNumberField,
+  FormTextField,
+  FormToggleCard,
+} from '@/components/agrocer/form/FormFields';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { SignOutButton } from '@/features/auth/SignOutButton';
 
@@ -69,6 +73,14 @@ export function SettingsScreen() {
             name="shopLabel"
             label="Usual shop"
             placeholder="e.g. New World Thursday"
+          />
+          <FormNumberField
+            control={form.control}
+            name="weeklyBudget"
+            label="Weekly grocery budget (NZD)"
+            placeholder="e.g. 250"
+            emptyValue={null}
+            description="Optional. Agrocer compares the current shopping-list estimate with this target."
           />
 
           <FormToggleCard

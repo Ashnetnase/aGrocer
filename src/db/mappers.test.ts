@@ -213,6 +213,7 @@ describe('toSettings and toHousehold', () => {
     name: 'The Ashfords',
     shopLabel: 'New World Thursday',
     currency: 'NZD',
+    weeklyBudgetCents: 25_000,
     pinDemoDate: false,
     pinnedDate: '2026-08-23',
     showBreakfastAndLunch: false,
@@ -234,6 +235,11 @@ describe('toSettings and toHousehold', () => {
 
   it('maps the household name onto settings.householdName', () => {
     expect(toSettings(householdRow).householdName).toBe('The Ashfords');
+  });
+
+  it('maps the weekly budget from integer cents', () => {
+    expect(toSettings(householdRow).weeklyBudget).toBe(250);
+    expect(toSettings({ ...householdRow, weeklyBudgetCents: null }).weeklyBudget).toBeNull();
   });
 
   it('produces a household the domain schema accepts', () => {

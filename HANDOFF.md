@@ -22,7 +22,8 @@ What remains splits in two, and NEXT TASK keeps them apart:
 
 - **Ash's** — the deploy itself, the Ollama firewall rule, and four other infrastructure items.
   None of them are code.
-- **The next agent's** — Stage 4, starting with multi-item AI proposals.
+- **The next agent's** — Stage 4, deciding the structured-ingredient UX required for meal
+  cost estimation.
 
 Stage 2 cannot be marked COMPLETE until the deploy and PWA install are done, per `CLAUDE.md`.
 
@@ -51,12 +52,13 @@ What actually runs today:
   and 9a). `POST /api/ai/ask` runs the local qwen3:8b with three read-only tools —
   `getShoppingList`, `getPantry`, `getMealPlan` — behind an explicit allow-list (ADR-015). The
   card labels which data an answer came from ("Checked your pantry").
-  Since slice 9b it can also **propose one change** — adding a shopping item — which a person
-  confirms with Add it / Cancel before anything is written (ADR-018). It cannot change anything
+  Since slice 9b it can also **propose shopping-list additions**. Multi-item requests now carry
+  every action into one confirmation list; Add all / Cancel appears before anything is written
+  (ADR-018). It cannot change anything
   else, and cannot see the calendar, chores, reminders or school information. The system prompt (`src/ai/assistant.ts`) tells it to answer only from
   what a tool returned and never to invent; the card repeats the limits in a footnote.
-  Verified against the real database: sixteen pantry rows returned correctly grouped, an
-  empty shopping list reported as empty, a request to add items declined.
+  Verified against the real provider: "Add milk and eggs" proposes both, quantity one, and
+  performs no write until confirmation.
 - Two AI scripts, easy to confuse: `npm run ai:check` talks straight to Ollama (the original
   connectivity spike); `npm run ai:chat` goes through `/api/ai/chat` and proves the whole
   path, so it needs `npm run dev` running.
@@ -68,6 +70,9 @@ What actually runs today:
   quantity, planning a dinner, starring a product, and reading the household all persist.
 - Without that flag the whole app runs on localStorage and needs no database at all.
   `AgrocerProvider` picks via `repositoriesForEnvironment()`.
+- **Weekly grocery budget target is real.** Settings accepts an optional positive NZD target;
+  Shopping shows estimate/remaining/over, Shopping Mode shows estimate against target, and the
+  wall Shopping card shows estimate / target. Migration `0006` is applied to Supabase.
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
 - A Docker image builds and has been smoke-tested; a staging runbook exists at `docs/staging.md`.
 
@@ -143,6 +148,8 @@ worse than no number.
   `0002`), `authenticated` RLS policies (migration `0003`), and `npm run db:claim`.
 - **Pantry-to-recipe matching** (Stage 4) — `src/domain/services/recipeMatch.ts`, surfaced on
   the Tonight's meal card. Presence only, not quantities.
+- **Weekly grocery budget target** (Stage 4) — optional household setting across localStorage,
+  HTTP, and Drizzle; persisted as nullable integer cents and surfaced in shopping views.
 - **History tables** — `inventory_events` (written automatically by the pantry repository)
   and `meal_feedback` (append-and-read only), migrations `0004`/`0005`, plus `/api/feedback`.
 - **CI** — `.github/workflows/ci.yml`: typecheck, lint, test, build, integration tests, and an
@@ -519,6 +526,28 @@ Added 2026-08-29 for pantry-to-recipe matching (Stage 4):
 Confirmed after the integration run: every table is back to 0 rows. The tests create a
 throwaway household and delete it, and the foreign keys cascade.
 
+Added 2026-08-29 for multi-item AI proposals:
+
+- `npm run check` — 221 tests across 17 files. New coverage pins multi-call aggregation,
+  refusal of partial/malformed lists, browser payload shape, route allow-list enforcement,
+  and the repository batch-add path.
+- Real qwen3:8b check: "Add milk and eggs" returned two proposal actions, both quantity one,
+  with no database write. The model tool spec no longer exposes a category for it to guess.
+- `npm run test:db` — 9 integration tests; `npm run db:rls` — all 9 tables protected and the
+  publishable key reads zero rows; `npm run build` — clean.
+- Visual browser verification was unavailable because no in-app or extension browser was
+  connected. No alternative browser automation surface was substituted.
+
+Added 2026-08-29 for the weekly grocery budget target:
+
+- Migration `0006_useful_ser_duncan` applied to live Supabase; clean `db:generate` and
+  `db:migrate` reruns.
+- `npm run check` — 228 tests across 18 files. `npm run test:db` — 10 integration tests,
+  including setting and clearing a decimal NZD target through Drizzle.
+- `npm run db:rls` — all 9 tables protected and the publishable key reads zero rows.
+  `npm run build` — clean.
+- Visual browser verification remained unavailable because no browser was connected.
+
 ## Known Problems
 
 - `products` has no repository method that creates rows — the contract exposes only `list`,
@@ -574,8 +603,8 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-Handing over to Codex on 2026-08-29. Read `AGENTS.md`, then this file, then
-`AGROCER_MASTER_PLAN.md`. Everything below is current as of commit `c61518e` on
+Read `AGENTS.md`, then this file, then `AGROCER_MASTER_PLAN.md`. Everything below is current
+after the multi-item proposal work begun from commit `f060ee7` on
 `stage-2/database-schema` (20+ commits ahead of `main`; nothing has been merged).
 
 ### State in one paragraph
@@ -583,9 +612,10 @@ Handing over to Codex on 2026-08-29. Read `AGENTS.md`, then this file, then
 Stage 2's build work is complete: Postgres behind route handlers, Supabase Auth enforced on
 every route, RLS on all nine tables, history tables, CI, and a deployment runbook. The AI
 ladder is complete through slice 9b — the assistant reads the shopping list, pantry and meal
-plan through a read-only tool allow-list, and can *propose* adding a shopping item behind a
-confirmation gate. Stage 4 has begun with pantry-to-recipe matching. **212 unit tests across
-16 files, 9 integration tests, build clean, `npm run db:rls` green.**
+plan through a read-only tool allow-list, and can *propose* one or several shopping items behind
+one list-shaped confirmation gate. Stage 4 now has pantry-to-recipe matching and the weekly
+budget target. **228 unit tests across 18 files, 10 integration tests, build clean,
+`npm run db:rls` green.**
 
 ### Blocked on Ash — not code, do not attempt
 
@@ -608,17 +638,16 @@ confirmation gate. Stage 4 has begun with pantry-to-recipe matching. **212 unit 
 
 ### Code work, in the order I would take it
 
-**(a) Multi-item AI proposals.** "Add milk and eggs" proposes milk and cannot mention eggs,
-because Ollama returns no prose alongside a tool call — prompting for it was tried and
-provably cannot work (see the comment in `src/ai/assistant.ts`). Needs the proposal to carry a
-*list*, and a confirmation UI shaped for one. **This blocks the useful half of Phase 10**
-("plan five dinners and add what's missing"), so it is the highest-leverage item.
+**(a) Multi-item AI proposals — DONE 2026-08-29.** "Add milk and eggs" now produces one
+proposal containing both server-described actions, Add all confirms them through one batch
+write, and any invalid action refuses the whole list. Verified against the real qwen3:8b
+provider without writing to the database.
 
-**(b) Weekly budget target.** The unbuilt half of Phase 7 and core Agrocer — the module is
-described as "grocery, pantry, meal-planning and grocery-budget". Self-contained: a target on
-household settings, spend against it from the shopping list.
+**(b) Weekly budget target — DONE 2026-08-29.** Optional household setting persisted locally
+and in Postgres; shopping views compare the current list estimate with it. This is a target,
+not historical spend tracking.
 
-**(c) Meal cost estimation.** Harder, and it has a prerequisite worth deciding before starting:
+**NEXT TASK: (c) Meal cost estimation decision.** It has a prerequisite worth deciding before starting:
 it needs ingredients as structured quantities, which changes how a recipe is entered.
 `recipeMatch.ts` deliberately checks presence only for this reason. Ask Ash before committing
 to a UX change.
@@ -704,4 +733,6 @@ Both bit twice in one session. Check them before debugging the code.
 
 ## Last Updated
 
-2026-08-29 — handed over to Codex at commit `c61518e`, branch `stage-2/database-schema`.
+2026-08-29 — multi-item AI proposals and the weekly grocery budget target completed by Codex
+on `stage-2/database-schema`. Migration `0006` is applied; this handoff records the committed
+branch checkpoint pushed to `origin/stage-2/database-schema`. Nothing was merged to `main`.

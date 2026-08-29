@@ -456,6 +456,12 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
         .set({
           ...(patch.householdName === undefined ? {} : { name: patch.householdName }),
           ...(patch.shopLabel === undefined ? {} : { shopLabel: patch.shopLabel }),
+          ...(patch.weeklyBudget === undefined
+            ? {}
+            : {
+                weeklyBudgetCents:
+                  patch.weeklyBudget === null ? null : priceToCents(patch.weeklyBudget),
+              }),
           ...(patch.pinDemoDate === undefined ? {} : { pinDemoDate: patch.pinDemoDate }),
           ...(patch.pinnedDate === undefined ? {} : { pinnedDate: patch.pinnedDate }),
           ...(patch.showBreakfastAndLunch === undefined

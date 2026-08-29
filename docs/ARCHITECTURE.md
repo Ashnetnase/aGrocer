@@ -81,9 +81,15 @@ the bulk of the test suite.
 ## Database
 
 Drizzle ORM over postgres-js on Supabase managed PostgreSQL (ADR-013), project `agrocer` in
-ap-southeast-2. Seven tables in `src/db/schema.ts`: `households`, `household_members`,
-`pantry_items`, `products`, `shopping_items`, `meals`, `plan_entries`. Migration
-`drizzle/0000_mysterious_black_cat.sql` is applied, and `npm run db:seed` creates one household.
+ap-southeast-2. Nine tables in `src/db/schema.ts`: `households`, `household_members`,
+`pantry_items`, `products`, `shopping_items`, `meals`, `plan_entries`, `inventory_events`, and
+`meal_feedback`. Migrations `0000`–`0006` are applied; `0006` adds the nullable
+`households.weekly_budget_cents` target. `npm run db:seed` creates one household.
+
+The weekly grocery budget is household settings data, not a separate ledger. Zod accepts a
+positive NZD target or no target; repositories map NZD to nullable integer cents. Shopping
+compares the current list estimate with it and reports remaining/over. Historical spend and
+meal cost estimation do not exist yet.
 
 **RLS is not yet enabled** — see `TASKS.md`. It ships with authentication, because enabling it
 without policies blocks all access.
@@ -149,8 +155,8 @@ route rather than a flag (ADR-010). A hand-written service worker provides offli
 
 ## AI service
 
-Current, as of 2026-08-29 (ADR-014, ADR-015). Provider abstraction, two routes, and read-only
-tools. No writes.
+Current, as of 2026-08-29 (ADR-014, ADR-015, ADR-018). Provider abstraction, two assistant
+routes, read-only tools, and confirmed shopping-list additions.
 
 ```
 src/features/dashboard/      "Ask AshHome" card on the wall dashboard
@@ -224,7 +230,11 @@ if they live in different places. It is not a secret and not a security boundary
 is the security boundary.
 
 The assistant can read the shopping list, pantry and meal plan, and can *propose* adding one
-shopping item. It cannot change anything else, and cannot see the family calendar, chores,
+or several shopping items. All write calls from one model turn become one ordered proposal;
+the dashboard lists every server-generated action description behind one confirmation. The
+assistant loop executes none of them. `/api/ai/confirm` re-validates the complete list and uses
+the shopping repository's batch-add path; one invalid action refuses the whole proposal. It
+cannot change anything else, and cannot see the family calendar, chores,
 reminders or school information, because none of that exists as data yet. The prompt tells it to answer only from what a tool returned and never
 to invent an item, a quantity or a date; the card repeats the limits in a footnote and labels
 which data an answer came from. On a kitchen wall, an assistant that appears to know what is in
@@ -232,9 +242,8 @@ the freezer and is guessing is worse than one that admits it cannot look.
 
 No conversation history is kept, here or anywhere else: each question stands alone.
 
-Deliberately absent, each belonging to a named later phase: write tools with a confirmation gate
-(slice 9b, gated on Auth + RLS), conversation persistence (the application owns state, not the
-model), and streaming.
+Deliberately absent, each belonging to a named later phase: shopping edits/removals and other
+write tools, conversation persistence (the application owns state, not the model), and streaming.
 
 Two scripts, easy to confuse: `npm run ai:check` talks straight to Ollama and proves the machine
 can reach it; `npm run ai:chat` goes through `/api/ai/chat` and proves the whole path, so it needs
@@ -245,7 +254,7 @@ can reach it; `npm run ai:chat` goes through `/api/ai/chat` and proves the whole
 `npm run dev` · `build` · `start` · `lint` · `typecheck` · `test` · `check` (all three).
 Database: `db:generate` · `db:migrate` · `db:studio` · `db:seed`.
 `npm run test:db` runs the integration suite against the real database. Tests are Vitest:
-112 unit tests across 8 files, plus 6 integration tests excluded from the default run.
+228 unit tests across 18 files, plus 10 integration tests excluded from the default run.
 Docker image builds; staging runbook in `docs/staging.md`.
 
 ---

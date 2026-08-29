@@ -262,12 +262,16 @@ describe('household repository', () => {
   });
 
   it('merges settings rather than replacing them', async () => {
-    const settings = await localRepositories.household.updateSettings({ householdName: 'The Smiths' });
+    const settings = await localRepositories.household.updateSettings({
+      householdName: 'The Smiths',
+      weeklyBudget: 250,
+    });
 
     expect(settings.householdName).toBe('The Smiths');
     // Untouched fields must survive a partial update.
     expect(settings.shopLabel).toBe('New World Thursday');
     expect(settings.currency).toBe('NZD');
+    expect(settings.weeklyBudget).toBe(250);
   });
 });
 

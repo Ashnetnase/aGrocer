@@ -45,9 +45,12 @@ export const ASSISTANT_SYSTEM_PROMPT = [
   'returns. Never invent an item, a quantity, a meal or a price. If a tool says something is',
   'empty, say it is empty.',
   '',
-  'You can propose ONE change: adding an item to the shopping list. You do not add it',
-  'yourself — the family sees what you propose and confirms it. So say you have asked them',
-  'to confirm, not that you have added it. Propose one item per call.',
+  'You can propose adding items to the shopping list. You do not add them yourself — the',
+  'family sees every item you propose and confirms the whole list. So say you have asked',
+  'them to confirm, not that you have added anything. Make one tool call for every requested',
+  'item in the same turn; all of those calls will be shown together for confirmation.',
+  'Only include a quantity or category when the person explicitly said it. "Eggs" means one',
+  'shopping-list item, not twelve individual eggs. Never infer pack contents or an aisle.',
   '',
   'You cannot change anything else: not the pantry, not meals, not the meal plan, and you',
   'cannot edit or remove anything. If asked, say plainly that you cannot and suggest the',
@@ -72,11 +75,16 @@ export const ASSISTANT_SYSTEM_PROMPT = [
  * already POST to `/api/shopping` directly. What it buys is that nothing changes until
  * somebody has read `description` and pressed a button.
  */
-export interface AssistantProposal {
+export interface AssistantProposalAction {
   tool: string;
   /** The sentence shown on the confirmation. Built server-side, never written by the model. */
   description: string;
   args: unknown;
+}
+
+export interface AssistantProposal {
+  /** Every change covered by the one confirmation. None has happened yet. */
+  actions: AssistantProposalAction[];
 }
 
 export interface AssistantAnswer {
@@ -146,13 +154,14 @@ export async function askAssistant(
     // follow have nothing to attach to.
     messages.push({ role: 'assistant', content: result.content });
 
+    const proposedActions: AssistantProposalAction[] = [];
+    let rejectedWrite = false;
+
     for (const call of result.toolCalls) {
       const writeTool = writeTools[call.name];
       if (writeTool) {
-        // The gate. A write tool is never executed here — the loop stops and hands the
-        // proposal back for a person to confirm. Returning early rather than continuing the
-        // conversation is deliberate: a second proposal in the same turn would give the
-        // family two things to agree to and one button.
+        // The gate. A write tool is never executed here. Every valid call in this turn is
+        // collected into one proposal, so one confirmation covers exactly the list shown.
         const args = writeTool.schema.safeParse(call.arguments);
         if (!args.success) {
           // The model got the arguments wrong. Tell it so, and let it try again within the
@@ -163,30 +172,45 @@ export async function askAssistant(
             content: `Those arguments are not valid for ${call.name}. Check what it needs and try once more.`,
             toolName: call.name,
           });
+          rejectedWrite = true;
           continue;
         }
-
-        return {
-          // Ollama returns empty content alongside a tool call, so in practice the reply is
-          // almost always the generated description. Known consequence: asked for "milk and
-          // eggs", the model proposes milk and there is no prose in which to mention eggs.
-          // Prompting around it does not work — there is no content to put it in. Fixing it
-          // properly means proposing a list, which needs a different confirmation UI.
-          reply: result.content || writeTool.describe(args.data) + '?',
-          toolsUsed,
-          proposal: {
-            tool: call.name,
-            description: writeTool.describe(args.data),
-            args: args.data,
-          },
-          model,
-          durationMs: Date.now() - startedAt,
-        };
+        proposedActions.push({
+          tool: call.name,
+          description: writeTool.describe(args.data),
+          args: args.data,
+        });
+        continue;
       }
 
       const run = await runTool(tools, call.name, repos);
       if (run.ok) toolsUsed.push(run.name);
       messages.push({ role: 'tool', content: run.content, toolName: run.name });
+    }
+
+    if (proposedActions.length > 0 && !rejectedWrite) {
+      return {
+        // Do not repeat the model's prose beside a confirmation. It has previously claimed a
+        // different quantity from the arguments; only the fixed intro and tool descriptions
+        // are safe to place next to the button that grants intent.
+        reply: 'I have prepared these shopping-list changes for you to confirm.',
+        toolsUsed,
+        proposal: { actions: proposedActions },
+        model,
+        durationMs: Date.now() - startedAt,
+      };
+    }
+
+    if (rejectedWrite && proposedActions.length > 0) {
+      // Do not offer a partial proposal. Tell the model to reissue every item so the next
+      // confirmation either represents the full request or represents nothing.
+      for (const action of proposedActions) {
+        messages.push({
+          role: 'tool',
+          content: `No proposal was created because another requested change was invalid. Call ${action.tool} again for this item.`,
+          toolName: action.tool,
+        });
+      }
     }
   }
 

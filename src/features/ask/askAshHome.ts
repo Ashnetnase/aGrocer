@@ -63,12 +63,14 @@ export function describeAskFailure(status: number, kind?: string): AskFailure {
   }
 }
 
-/** A change the assistant has asked for. Nothing has happened until it is confirmed. */
+/** Changes the assistant has asked for. Nothing has happened until the list is confirmed. */
 export interface AskProposal {
-  tool: string;
-  /** Written by the server from validated arguments, never by the model. Safe to display. */
-  description: string;
-  args: unknown;
+  actions: Array<{
+    tool: string;
+    /** Written by the server from validated arguments, never by the model. Safe to display. */
+    description: string;
+    args: unknown;
+  }>;
 }
 
 export interface AskAnswer {
@@ -135,24 +137,34 @@ export async function askAshHome(question: string, signal?: AbortSignal): Promis
 }
 
 /**
- * A proposal is only shown if it has a description to show. A confirm button over a blank
- * sentence is the one thing worse than no confirmation at all.
+ * A proposal is only shown when every action has a description. Silently dropping one bad
+ * action would recreate the exact partial-confirmation bug this list shape exists to prevent.
  */
 function readProposal(raw: unknown): AskProposal | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const candidate = raw as Record<string, unknown>;
-  if (typeof candidate.tool !== 'string' || typeof candidate.description !== 'string') {
-    return undefined;
-  }
-  if (candidate.description.trim() === '') return undefined;
-  return { tool: candidate.tool, description: candidate.description, args: candidate.args };
+  if (!Array.isArray(candidate.actions) || candidate.actions.length === 0) return undefined;
+  const actions = candidate.actions.flatMap((rawAction) => {
+    if (!rawAction || typeof rawAction !== 'object') return [];
+    const action = rawAction as Record<string, unknown>;
+    if (
+      typeof action.tool !== 'string' ||
+      typeof action.description !== 'string' ||
+      action.description.trim() === ''
+    ) {
+      return [];
+    }
+    return [{ tool: action.tool, description: action.description, args: action.args }];
+  });
+  // Never display a partial confirmation if any action was malformed in transit.
+  return actions.length === candidate.actions.length ? { actions } : undefined;
 }
 
 /**
  * Carries out a proposal the family confirmed.
  *
- * Sends the tool and arguments back exactly as received — the server re-validates both, so
- * this does not need to understand what any of them mean.
+ * Sends every tool and its arguments back exactly as received — the server re-validates the
+ * complete list before writing, so this does not need to understand what any of them mean.
  */
 export async function confirmProposal(
   proposal: AskProposal,
@@ -164,7 +176,9 @@ export async function confirmProposal(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal,
-      body: JSON.stringify({ tool: proposal.tool, args: proposal.args }),
+      body: JSON.stringify({
+        actions: proposal.actions.map(({ tool, args }) => ({ tool, args })),
+      }),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;

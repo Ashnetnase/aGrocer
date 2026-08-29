@@ -91,6 +91,8 @@ export const households = pgTable('households', {
   name: text('name').notNull(),
   shopLabel: text('shop_label').notNull().default(''),
   currency: text('currency').notNull().default('NZD'),
+  /** Integer cents; NULL means no weekly target has been configured. */
+  weeklyBudgetCents: integer('weekly_budget_cents'),
   pinDemoDate: boolean('pin_demo_date').notNull().default(false),
   /**
    * Only meaningful while `pin_demo_date` is true (ADR-005), but NOT NULL because

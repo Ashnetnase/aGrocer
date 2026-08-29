@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { CheckIcon, PlusIcon } from 'lucide-react';
 import { useAgrocer } from '@/providers/AgrocerProvider';
-import { summariseShopping } from '@/domain/services/shopping';
+import { summariseShopping, summariseShoppingBudget } from '@/domain/services/shopping';
 import { nzd, pluralise } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DashboardCard } from './DashboardCard';
@@ -32,8 +32,9 @@ import { DashboardCard } from './DashboardCard';
 const VISIBLE = 6;
 
 export function ShoppingCard({ className }: { className?: string }) {
-  const { shopping, toggleShoppingItem, hydrated, loadFailed } = useAgrocer();
+  const { shopping, household, toggleShoppingItem, hydrated, loadFailed } = useAgrocer();
   const summary = summariseShopping(shopping);
+  const budget = summariseShoppingBudget(summary.total, household.settings.weeklyBudget);
   const visible = shopping.slice(0, VISIBLE);
   const hidden = shopping.length - visible.length;
 
@@ -43,7 +44,9 @@ export function ShoppingCard({ className }: { className?: string }) {
       title="Shopping"
       meta={
         hydrated && shopping.length
-          ? `${pluralise(summary.remaining.length, 'item')} left · ${nzd(summary.total)}`
+          ? `${pluralise(summary.remaining.length, 'item')} left · ${nzd(summary.total)}${
+              budget ? ` / ${nzd(budget.target)}` : ''
+            }`
           : undefined
       }
       action={

@@ -1,0 +1,1 @@
+ALTER TABLE "households" ADD COLUMN "weekly_budget_cents" integer;

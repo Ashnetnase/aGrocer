@@ -60,6 +60,14 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     expect(household.members).toEqual([]);
   });
 
+  it('round-trips and clears the weekly grocery budget', async () => {
+    const set = await repos.household.updateSettings({ weeklyBudget: 250.5 });
+    expect(set.weeklyBudget).toBe(250.5);
+
+    const cleared = await repos.household.updateSettings({ weeklyBudget: null });
+    expect(cleared.weeklyBudget).toBeNull();
+  });
+
   it('round-trips a shopping item through add, toggle and clearChecked', async () => {
     const added = await repos.shopping.add({
       name: 'Wholegrain bread',

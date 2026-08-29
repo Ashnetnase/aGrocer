@@ -104,6 +104,7 @@ const initialState: AgrocerState = {
       householdName: '',
       shopLabel: '',
       currency: 'NZD',
+      weeklyBudget: null,
       pinDemoDate: false,
       pinnedDate: toIsoDate(new Date()),
       showBreakfastAndLunch: false,

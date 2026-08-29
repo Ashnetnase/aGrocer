@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { askAshHome, describeAskFailure, describeToolsUsed } from './askAshHome';
+import { askAshHome, confirmProposal, describeAskFailure, describeToolsUsed } from './askAshHome';
 
 /**
  * What matters here is what a family member ends up reading. Every failure the route can
@@ -62,6 +62,66 @@ describe('askAshHome', () => {
     const answer = await askAshHome('How long for a chicken?');
 
     expect(answer.toolsUsed).toEqual([]);
+  });
+
+  it('keeps every valid action in a multi-item proposal', async () => {
+    mockFetch(async () =>
+      json({
+        reply: 'Please confirm.',
+        proposal: {
+          actions: [
+            { tool: 'addShoppingItem', description: 'Add Milk to the shopping list', args: { name: 'Milk' } },
+            { tool: 'addShoppingItem', description: 'Add Eggs to the shopping list', args: { name: 'Eggs' } },
+          ],
+        },
+      }),
+    );
+
+    const answer = await askAshHome('Add milk and eggs');
+
+    expect(answer.proposal?.actions).toHaveLength(2);
+    expect(answer.proposal?.actions.map((action) => action.description)).toEqual([
+      'Add Milk to the shopping list',
+      'Add Eggs to the shopping list',
+    ]);
+  });
+
+  it('drops the whole proposal if one action is malformed instead of showing a partial list', async () => {
+    mockFetch(async () =>
+      json({
+        reply: 'Please confirm.',
+        proposal: {
+          actions: [
+            { tool: 'addShoppingItem', description: 'Add Milk to the shopping list', args: { name: 'Milk' } },
+            { tool: 'addShoppingItem', description: '', args: { name: 'Eggs' } },
+          ],
+        },
+      }),
+    );
+
+    const answer = await askAshHome('Add milk and eggs');
+
+    expect(answer.proposal).toBeUndefined();
+  });
+
+  it('sends every confirmed action back without trusting display descriptions', async () => {
+    const fetchSpy = mockFetch(async () => json({ result: 'Added both.' }));
+
+    const result = await confirmProposal({
+      actions: [
+        { tool: 'addShoppingItem', description: 'Add Milk', args: { name: 'Milk' } },
+        { tool: 'addShoppingItem', description: 'Add Eggs', args: { name: 'Eggs' } },
+      ],
+    });
+
+    expect(result).toBe('Added both.');
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      actions: [
+        { tool: 'addShoppingItem', args: { name: 'Milk' } },
+        { tool: 'addShoppingItem', args: { name: 'Eggs' } },
+      ],
+    });
   });
 
   it('reports an offline home PC as something a person can act on', async () => {

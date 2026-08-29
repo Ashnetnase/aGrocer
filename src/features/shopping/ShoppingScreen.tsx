@@ -4,7 +4,11 @@ import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBasketIcon } from 'lucide-react';
 import type { ShoppingItem, ShoppingItemDraft } from '@/domain/schemas/shopping';
-import { groupByCategory, summariseShopping } from '@/domain/services/shopping';
+import {
+  groupByCategory,
+  summariseShopping,
+  summariseShoppingBudget,
+} from '@/domain/services/shopping';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { EmptyState } from '@/components/agrocer/EmptyState';
@@ -12,6 +16,7 @@ import { FloatingAddButton } from '@/components/agrocer/FloatingAddButton';
 import { ShoppingRow } from './components/ShoppingRow';
 import { ShoppingItemSheet } from './components/ShoppingItemSheet';
 import { nzd } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export function ShoppingScreen() {
   const router = useRouter();
@@ -30,6 +35,7 @@ export function ShoppingScreen() {
   const [editing, setEditing] = useState<ShoppingItem | null>(null);
 
   const { remaining, checked, total, progress } = useMemo(() => summariseShopping(shopping), [shopping]);
+  const budget = summariseShoppingBudget(total, household.settings.weeklyBudget);
   const groups = useMemo(() => groupByCategory(shopping), [shopping]);
 
   const openAdd = () => {
@@ -63,6 +69,27 @@ export function ShoppingScreen() {
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas">
             <div className="h-full rounded-full bg-moss-500" style={{ width: `${progress}%` }} />
           </div>
+          {budget ? (
+            <div className="mt-3 rounded-2xl bg-canvas px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3 text-sm font-semibold">
+                <span className="text-muted">Weekly budget {nzd(budget.target)}</span>
+                <span className={budget.over ? 'text-berry-600' : 'text-moss-700'}>
+                  {budget.over
+                    ? `${nzd(Math.abs(budget.remaining))} over`
+                    : `${nzd(budget.remaining)} left`}
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
+                <div
+                  className={cn(
+                    'h-full rounded-full',
+                    budget.over ? 'bg-berry-500' : 'bg-moss-500',
+                  )}
+                  style={{ width: `${budget.progress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => router.push('/shopping/mode')}

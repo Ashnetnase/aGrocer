@@ -227,13 +227,36 @@ describe('the write gate', () => {
 
     expect(addRan).toBe(false);
     expect(answer.proposal).toEqual({
-      tool: 'addThing',
-      description: 'Add Milk to the list',
-      args: { name: 'Milk' },
+      actions: [
+        {
+          tool: 'addThing',
+          description: 'Add Milk to the list',
+          args: { name: 'Milk' },
+        },
+      ],
     });
   });
 
-  it('stops the loop on a proposal rather than asking the model again', async () => {
+  it('collects every write call into one proposal without executing any of them', async () => {
+    const { provider } = scriptedProvider([
+      result({
+        toolCalls: [
+          { name: 'addThing', arguments: { name: 'Milk' } },
+          { name: 'addThing', arguments: { name: 'Eggs' } },
+        ],
+      }),
+    ]);
+
+    const answer = await askAssistant('add milk and eggs', repos, { provider, tools, writeTools });
+
+    expect(addRan).toBe(false);
+    expect(answer.proposal?.actions.map((action) => action.description)).toEqual([
+      'Add Milk to the list',
+      'Add Eggs to the list',
+    ]);
+  });
+
+  it('stops the loop after collecting a proposal rather than asking the model again', async () => {
     // Only one turn is scripted: a second call would throw.
     const { provider, requests } = scriptedProvider([
       result({ toolCalls: [{ name: 'addThing', arguments: { name: 'Milk' } }] }),
@@ -255,7 +278,7 @@ describe('the write gate', () => {
     const answer = await askAssistant('add bread', repos, { provider, tools, writeTools });
 
     // What the family confirms is the server's sentence, whatever the model claimed.
-    expect(answer.proposal?.description).toBe('Add Bread to the list');
+    expect(answer.proposal?.actions[0]?.description).toBe('Add Bread to the list');
   });
 
   it('refuses malformed arguments and lets the model retry, without proposing anything', async () => {
@@ -280,6 +303,29 @@ describe('the write gate', () => {
 
     const answer = await askAssistant('add eggs', repos, { provider, tools, writeTools });
 
-    expect(answer.reply).toBe('Add Eggs to the list?');
+    expect(answer.reply).toMatch(/prepared.*confirm/i);
+  });
+
+  it('does not return a partial proposal when one of several calls is malformed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { provider } = scriptedProvider([
+      result({
+        toolCalls: [
+          { name: 'addThing', arguments: { name: 'Milk' } },
+          { name: 'addThing', arguments: { name: '' } },
+        ],
+      }),
+      result({ content: 'Please tell me the second item again.' }),
+    ]);
+
+    const answer = await askAssistant('add milk and something', repos, {
+      provider,
+      tools,
+      writeTools,
+    });
+
+    expect(answer.proposal).toBeUndefined();
+    expect(addRan).toBe(false);
+    warn.mockRestore();
   });
 });

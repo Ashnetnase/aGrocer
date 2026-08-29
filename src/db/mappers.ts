@@ -124,6 +124,8 @@ export function toSettings(row: HouseholdRow): Settings {
     // `currency` is `z.literal('NZD')`. The column is free text so a later
     // multi-currency change is a migration rather than a schema rewrite.
     currency: 'NZD',
+    weeklyBudget:
+      row.weeklyBudgetCents === null ? null : centsToPrice(row.weeklyBudgetCents),
     pinDemoDate: row.pinDemoDate,
     pinnedDate: row.pinnedDate,
     showBreakfastAndLunch: row.showBreakfastAndLunch,

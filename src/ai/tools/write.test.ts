@@ -121,4 +121,24 @@ describe('executing it', () => {
 
     expect(result).toBe('Added Milk (now ×3) to the shopping list.');
   });
+
+  it('adds several confirmed items through the repository batch path', async () => {
+    const addMany = vi.fn(async () => [added(), added({ id: 's2', name: 'Eggs', quantity: 2 })]);
+    const repositories = {
+      shopping: { addMany },
+    } as unknown as AgrocerRepositories;
+
+    const result = await tool.executeMany?.(
+      [{ name: 'Milk' }, { name: 'Eggs', quantity: 2, category: 'Dairy' }],
+      repositories,
+    );
+
+    expect(addMany).toHaveBeenCalledWith([
+      expect.objectContaining({ name: 'Milk', quantity: 1, category: 'Pantry', price: 0 }),
+      expect.objectContaining({ name: 'Eggs', quantity: 2, category: 'Dairy', price: 0 }),
+    ]);
+    expect(result).toBe(
+      'Added Milk (now ×1) and Eggs (now ×2) to the shopping list.',
+    );
+  });
 });
