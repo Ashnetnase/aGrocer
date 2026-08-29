@@ -92,7 +92,7 @@ reconciling: the phase list assumes work that the stage list already completed.
 - [x] Docker image built and smoke-tested
 - [x] visual confirmation against the Magic Patterns design
 
-## Stage 2 — Real backend and household data — `[~]` IN PROGRESS
+## Stage 2 — Real backend and household data — `[x]` COMPLETE (2026-08-29)
 
 *Roughly AshHome Phases 2–3.*
 
@@ -165,10 +165,12 @@ reconciling: the phase list assumes work that the stage list already completed.
 **Ash's remaining Stage 2 steps** (they need the homelab host; see `docs/deploy.md`):
 
 - [x] **HTTPS decided** — the existing Cloudflare Tunnel on `ashnetbase.org` (ADR-019)
-- [ ] add the `home.ashnetbase.org` public hostname to the `homelab` tunnel
-- [ ] `docker compose up -d --build` on the homelab host
-- [ ] install the PWA on a phone — the thing HTTPS was blocking
-- [ ] confirm it stays reachable with the workstation off (ADR-007)
+- [x] `home.ashnetbase.org` added to the `homelab` tunnel → `192.168.1.49:3000`
+- [x] `docker compose up -d --build` on `192.168.1.49`, verified from outside the network
+- [x] **PWA installed on a phone** — the thing HTTPS was blocking since Stage 1
+- [x] reachable with the workstation off; only the AI assistant depends on it (ADR-020)
+- [x] Settings now links to the wall dashboard, and its Data section no longer claims the
+      household's data never leaves the phone
 
 Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 

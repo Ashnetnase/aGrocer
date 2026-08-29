@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronRightIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
+import { ChevronRightIcon, LayoutDashboardIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
 import { settingsSchema, type Settings } from '@/domain/schemas/household';
 import { describeHousehold } from '@/domain/services/household';
 import { useAgrocer } from '@/providers/AgrocerProvider';
+import { usesServerData } from '@/data/api/repositories';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import {
   FormNumberField,
@@ -20,6 +21,8 @@ import { SignOutButton } from '@/features/auth/SignOutButton';
 export function SettingsScreen() {
   const { household, updateSettings, resetDemoData } = useAgrocer();
   const [confirmReset, setConfirmReset] = useState(false);
+  // Read once: it is a build-time constant, not something that changes while the app runs.
+  const serverData = usesServerData();
   const [saved, setSaved] = useState(false);
 
   const form = useForm<Settings>({
@@ -116,22 +119,65 @@ export function SettingsScreen() {
           </button>
         </form>
 
+        {/*
+          The way in to the wall dashboard.
+
+          It lives in Settings rather than the bottom nav because it is an interface *mode*
+          (`CLAUDE.md`: mobile, standard app, wall dashboard), not a peer of Pantry and
+          Shopping — and because the person who needs it is setting up a tablet, which is
+          when you open Settings. Until this existed the only route in was typing the URL,
+          while the dashboard had linked back to the app all along.
+        */}
+        <section aria-labelledby="modes" className="mt-8">
+          <h2
+            id="modes"
+            className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted"
+          >
+            Wall dashboard
+          </h2>
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <p className="text-sm leading-relaxed text-muted">
+              A full-screen view built for a tablet on the kitchen wall: today&rsquo;s shopping,
+              tonight&rsquo;s meal and the family assistant, readable from across the room.
+              Same data as here.
+            </p>
+            <Link
+              href="/dashboard"
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line"
+            >
+              <LayoutDashboardIcon className="h-4 w-4" /> Open the wall dashboard
+            </Link>
+          </div>
+        </section>
+
         <section aria-labelledby="data" className="mt-8">
           <h2 id="data" className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
             Data
           </h2>
+          {/*
+            Both halves of this section were wrong once the backend landed.
+
+            The text said nothing left the phone, which stopped being true the day the app
+            started reading Postgres — a false privacy claim is worse than none. And the reset
+            button called `reset()`, which the server repositories refuse by design, so it
+            surfaced an error rather than doing anything. Re-seeding a shared database is
+            `npm run db:seed`, deliberately not something a screen can trigger.
+          */}
           <div className="rounded-2xl border border-line bg-surface p-4">
             <p className="text-sm leading-relaxed text-muted">
-              Agrocer stores your pantry, list, planner and household on this device. Nothing leaves your
-              phone until the Agrocer backend arrives.
+              {serverData
+                ? 'Your pantry, list, planner and household are stored in the household database, so every device in the family sees the same thing. Only signed-in members of this household can read it.'
+                : 'Agrocer is storing your pantry, list, planner and household on this device only. Nothing is shared with other devices until the household database is switched on.'}
             </p>
-            <button
-              type="button"
-              onClick={() => setConfirmReset(true)}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-berry-600 transition-colors duration-150 ease-out hover:bg-berry-50"
-            >
-              <RotateCcwIcon className="h-4 w-4" /> Reset to demo data
-            </button>
+            {serverData ? null : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-berry-600 transition-colors duration-150 ease-out hover:bg-berry-50"
+              >
+                <RotateCcwIcon className="h-4 w-4" /> Reset to demo data
+              </button>
+            )}
           </div>
         </section>
 

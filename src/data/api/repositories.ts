@@ -44,8 +44,10 @@ export const apiRepositories: AgrocerRepositories = {
  * One flag covers every feature: per-feature flags would multiply the combinations needing
  * testing without buying anything, since they share a single database.
  */
+export function usesServerData(): boolean {
+  return process.env.NEXT_PUBLIC_AGROCER_SERVER_DATA === '1';
+}
+
 export function repositoriesForEnvironment(): AgrocerRepositories {
-  return process.env.NEXT_PUBLIC_AGROCER_SERVER_DATA === '1'
-    ? apiRepositories
-    : localRepositories;
+  return usesServerData() ? apiRepositories : localRepositories;
 }

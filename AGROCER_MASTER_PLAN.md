@@ -341,7 +341,8 @@ secure context, which is why installing from a phone waits on the HTTPS decision
 
 ## Stage 2 — Real backend and household data
 
-**STATUS: IN PROGRESS (started 2026-08-23)**
+**STATUS: COMPLETE (2026-08-23 → 2026-08-29)** — deployed to `192.168.1.49` behind the
+Cloudflare Tunnel, verified from outside the network, and installed as a PWA on a phone.
 
 ### Goal
 
@@ -388,13 +389,16 @@ provisioning rather than build work:
       certificate, so a secure context, so the PWA installs. No inbound port. Free.
       Tailscale rejected only because the tunnel already exists; AWS rejected on cost for
       something the homelab already does
-- [ ] **Ash: add the `home.ashnetbase.org` hostname to the tunnel** — Zero Trust → Tunnels →
-      `homelab` → Public Hostnames, service `HTTP` → `localhost:3000`. See `docs/deploy.md`
-- [ ] **Ash: `docker compose up -d --build` on the homelab host**
-- [ ] open Agrocer from a phone and install it — this is what HTTPS was blocking
-- [ ] confirm it stays reachable with the Ryzen desktop powered off (ADR-007). Note the AI
-      assistant will *not* work from there: Ollama binds to localhost on the workstation, so
-      `/api/ai/ask` returns 503 `unreachable`, which is the correct failure
+- [x] `home.ashnetbase.org` added to the `homelab` tunnel → `HTTP` → `192.168.1.49:3000`
+- [x] `docker compose up -d --build` on `192.168.1.49`
+- [x] **verified from outside the network**: `/` and `/dashboard` redirect to `/sign-in`,
+      `/sign-in` 200, `/api/shopping` 401, `sw.js` and `manifest.webmanifest` 200 over a real
+      certificate
+- [x] **installed as a PWA on a phone** — the thing the HTTPS question had blocked since
+      Stage 1
+- [x] reachable with the workstation powered off — the app runs on the homelab and depends on
+      it for nothing. The AI assistant is the one exception and returns 503 `unreachable`,
+      which is the correct failure (ADR-020 is how that gets fixed)
 
 ### Not yet
 
@@ -635,6 +639,50 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Stage 2 COMPLETE: deployed, verified, installed (Claude Code)
+
+**Stage:** Stage 2 — Definition of Done satisfied
+**Status:** Complete
+
+`https://home.ashnetbase.org` is live on `192.168.1.49` behind the existing Cloudflare Tunnel,
+and Ash has installed it as a PWA on a phone. That last step is what the HTTPS question had
+been blocking since Stage 1, so the stage can finally close.
+
+Verified from outside the network rather than from the host: `/` and `/dashboard` redirect to
+`/sign-in`, `/sign-in` returns 200, `/api/shopping` returns
+`401 {"error":"Sign in to continue"}`, and `sw.js` and `manifest.webmanifest` return 200 over
+a real certificate. **The 401 matters as much as the 200** — it proves authentication is
+enforced on the public internet, not merely locally.
+
+**It took three wrong turns, two of them mine**, and they are worth recording because each
+came from writing something up rather than checking it:
+
+1. The tunnel route was `localhost:3000`. `cloudflared` is a container, so that meant
+   localhost *inside it*.
+2. Port 3000 was reported taken by Portainer. It was not — Portainer is on 8000/9443 and the
+   host is merely *named* `portainer`. I put that into the repository without probing.
+3. `cloudflared` was recorded as running on a different machine, inferred from the LAN-IP
+   routes. It runs on the same host; the routes use addresses because *some* services are
+   elsewhere.
+
+All three are corrected, and ADR-019 carries the corrections rather than being quietly
+rewritten.
+
+**Two UX faults found while closing the stage.**
+
+*There was no way into the wall dashboard from the app.* The dashboard had linked back to
+Agrocer since Phase 1, but nothing linked forward — the only route in was typing the URL,
+which is a poor answer for the person setting up a tablet. Settings now has a Wall dashboard
+section. It belongs there rather than in the bottom nav because it is an interface *mode*
+(`CLAUDE.md`), not a peer of Pantry and Shopping.
+
+*The Settings "Data" section was lying.* It still said "Nothing leaves your phone until the
+Agrocer backend arrives" — untrue since the app started reading Postgres, and a false privacy
+claim is worse than no claim. It now describes the household database when server data is on.
+The "Reset to demo data" button beside it called `reset()`, which the server repositories
+refuse by design, so it surfaced an error rather than doing anything; it is now hidden on that
+path. Both were listed in `HANDOFF.md` as known problems and had outlived the excuse.
 
 ## 2026-08-29 — Meal feedback capture in meal detail (Codex)
 

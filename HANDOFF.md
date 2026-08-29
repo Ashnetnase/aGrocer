@@ -11,7 +11,9 @@ Agent instructions: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex and others).
 
 ## Current Stage
 
-**Stage 2 — Real backend and household data**: build work **complete** as of 2026-08-29.
+**Stage 2 — Real backend and household data: COMPLETE 2026-08-29.** Deployed to
+`192.168.1.49` behind the Cloudflare Tunnel, verified from outside the network, and installed
+as a PWA on a phone — the last item in its Definition of Done.
 **Stage 3 / AshHome Phases 8–9** complete through slice 9b — all four AI slices landed
 2026-08-28/29 at Ash's request to bring the AI in "in stages". **Stage 4 is in progress**:
 pantry matching, weekly budget, meal-cost estimation, and feedback capture are complete.
@@ -24,7 +26,7 @@ What remains splits in two, and NEXT TASK keeps them apart:
   None of them are code.
 - **The next agent's** — Stage 4 recipe import; prediction/learning should wait for real history.
 
-Stage 2 cannot be marked COMPLETE until the deploy and PWA install are done, per `CLAUDE.md`.
+Stage 4 is the active stage. Stage 3 is complete through slice 9b.
 
 Branch: `stage-2/database-schema`. Main branch: `main`.
 
@@ -663,15 +665,12 @@ budget target, complete-coverage meal costs, and append-only feedback capture. *
 **Host decided 2026-08-29: `192.168.1.49`**, the box already serving `vault` (8080) and
 `status` (3001). Every address below is now concrete rather than a placeholder.
 
-1. ~~**Deploy.**~~ **DONE 2026-08-29 and verified from outside the network.**
+1. ~~**Deploy.**~~ **DONE 2026-08-29 — deployed, verified from outside, and installed as a
+   PWA on a phone. Stage 2 is COMPLETE.**
    `https://home.ashnetbase.org` — `/` redirects to `/sign-in`, `/sign-in` 200,
    `/api/shopping` 401 (`{"error":"Sign in to continue"}`), `/dashboard` redirects,
    `/sw.js` and `/manifest.webmanifest` 200 over a real certificate.
-   **Still outstanding: install the PWA on a phone** (on mobile data, to prove the tunnel
-   rather than the LAN). That is the last unticked item in Stage 2's Definition of Done, so
-   the stage stays IN PROGRESS until it is confirmed.
-
-   **Also outstanding: rotate the database password.** It was exposed in a chat transcript on
+   **Still outstanding: rotate the database password.** It was exposed in a chat transcript on
    2026-08-29 via an editor selection of `.env.local`. Supabase → Project Settings → Database
    → Reset database password, then update `.env.local` here, `.env` on `192.168.1.49`
    (doubling any `$`), and `docker compose up -d`. No rebuild — `DATABASE_URL` is runtime.
