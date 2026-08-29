@@ -473,7 +473,7 @@ Make Agrocer smarter using household history and external grocery information.
 - [~] product alternatives
 - [ ] supermarket price/specials provider abstraction
 - [ ] waste/use-soon recommendations
-- [ ] notifications
+- [x] notifications — authenticated in-app advisory endpoint
 
 ---
 
