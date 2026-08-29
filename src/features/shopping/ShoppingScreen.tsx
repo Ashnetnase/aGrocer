@@ -17,6 +17,7 @@ import { ShoppingRow } from './components/ShoppingRow';
 import { ShoppingItemSheet } from './components/ShoppingItemSheet';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import type { TrolleyLine } from '@/shopping/types';
 
 export function ShoppingScreen() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export function ShoppingScreen() {
 
   const [sheetOpen, setSheetOpen] = useState(searchParams.get('add') === '1');
   const [editing, setEditing] = useState<ShoppingItem | null>(null);
+  const [trolley, setTrolley] = useState<TrolleyLine[] | null>(null);
+  const [preparing, setPreparing] = useState(false);
 
   const { remaining, checked, total, progress } = useMemo(() => summariseShopping(shopping), [shopping]);
   const budget = summariseShoppingBudget(total, household.settings.weeklyBudget);
@@ -46,6 +49,18 @@ export function ShoppingScreen() {
   const handleSave = (draft: ShoppingItemDraft) => {
     if (editing) void updateShoppingItem(editing.id, draft);
     else void addShoppingItem(draft);
+  };
+
+  const prepareNewWorld = async () => {
+    setPreparing(true);
+    try {
+      const response = await fetch('/api/trolley/prepare', { method: 'POST' });
+      if (!response.ok) throw new Error('Could not prepare trolley');
+      const data = (await response.json()) as { lines: TrolleyLine[] };
+      setTrolley(data.lines);
+    } finally {
+      setPreparing(false);
+    }
   };
 
   return (
@@ -98,10 +113,37 @@ export function ShoppingScreen() {
           >
             <ShoppingBasketIcon className="h-[18px] w-[18px]" /> Start shopping mode
           </button>
+          <button
+            type="button"
+            onClick={() => void prepareNewWorld()}
+            disabled={shopping.length === 0 || preparing}
+            className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl border border-moss-200 bg-white text-sm font-bold text-moss-700 disabled:opacity-50"
+          >
+            {preparing ? 'Preparing…' : 'Prepare New World trolley'}
+          </button>
         </div>
       </ScreenHeader>
 
       <main className="no-scrollbar relative flex-1 overflow-y-auto px-5 pb-24 pt-4">
+        {trolley ? (
+          <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-ink">New World trolley review</h2>
+                <p className="text-xs text-muted">Check matches in New World before adding anything to your trolley. Checkout stays manual.</p>
+              </div>
+              <button type="button" className="text-xs font-bold text-muted" onClick={() => setTrolley(null)}>Close</button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {trolley.map((line) => (
+                <div key={line.shoppingItem.id} className="rounded-xl bg-white px-3 py-2 text-sm">
+                  <div className="flex justify-between gap-3"><span>{line.shoppingItem.quantity} {line.shoppingItem.unit} {line.shoppingItem.name}</span><span className={line.status === 'matched' ? 'text-moss-700' : 'text-berry-600'}>{line.status === 'matched' ? 'Matched' : 'Needs review'}</span></div>
+                  {line.match ? <p className="mt-1 text-xs text-muted">Suggested: {line.match.name}{line.match.price !== undefined ? ` · $${line.match.price.toFixed(2)}` : ''}</p> : <p className="mt-1 text-xs text-muted">{line.reason}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {shopping.length === 0 ? (
           <EmptyState
             icon={ShoppingBasketIcon}
