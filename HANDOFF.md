@@ -11,16 +11,20 @@ Agent instructions: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex and others).
 
 ## Current Stage
 
-**Stage 2 — Real backend and household data** (IN PROGRESS, started 2026-08-23), plus the
-first three slices of **Stage 3 / AshHome Phases 8–9** (the AI service, the "Ask AshHome" card
-and the read-only tools), taken 2026-08-28/29 at Ash's request to bring the AI in "in stages".
+**Stage 2 — Real backend and household data**: build work **complete** as of 2026-08-29.
+**Stage 3 / AshHome Phases 8–9** complete through slice 9b — all four AI slices landed
+2026-08-28/29 at Ash's request to bring the AI in "in stages". **Stage 4 has begun**, with
+pantry-to-recipe matching.
 
-Stage 1 closed as a dev-complete milestone (ADR-012). Staging deployment moved into Stage 2.
+Stage 1 closed as a dev-complete milestone (ADR-012).
 
-**Stage 2's build work is complete** and **Stage 4 has begun** as of 2026-08-29. RLS (ADR-016), authentication
-(ADR-017), the AI ladder through slice 9b (ADR-018), history tables, CI, and a deployment
-runbook. **What is left is Ash's, not another agent's:** adding one hostname to the Cloudflare
-Tunnel and running `docker compose up` on the homelab host — see NEXT TASK.
+What remains splits in two, and NEXT TASK keeps them apart:
+
+- **Ash's** — the deploy itself, the Ollama firewall rule, and four other infrastructure items.
+  None of them are code.
+- **The next agent's** — Stage 4, starting with multi-item AI proposals.
+
+Stage 2 cannot be marked COMPLETE until the deploy and PWA install are done, per `CLAUDE.md`.
 
 Branch: `stage-2/database-schema`. Main branch: `main`.
 
@@ -90,9 +94,10 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
 
-- **RLS:** enabled on all 7 tables since 2026-08-29 (ADR-016), with `authenticated` policies
-  added alongside auth (ADR-017). `anon` is granted nothing.
-- **Authentication:** enforced (ADR-017). No account created yet — that step is Ash's.
+- **RLS:** enabled on **all nine tables** since 2026-08-29 (ADR-016), one `authenticated`
+  policy each (ADR-017, and `0005` for the two history tables). `anon` is granted nothing.
+  Verify any time with `npm run db:rls`.
+- **Authentication:** enforced (ADR-017), and Ash's account is live and signing in.
 - **Kids/School module:** not started. No child profiles, activities or school data exist. The
   Kids card reads `household_members` where `role = 'Child'`.
 - **Hero integration:** not started. No Hero credentials, tokens or endpoints exist anywhere in
@@ -313,9 +318,23 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
 
 ## Environment / Services
 
-- **Deployment target: the homelab host, behind the existing Cloudflare Tunnel `homelab` on
-  `ashnetbase.org`** (ADR-019). Planned hostname `home.ashnetbase.org` → `HTTP` →
-  `localhost:3000`. The container binds to loopback only. `docs/deploy.md` is the runbook.
+### The home network, as actually measured on 2026-08-29
+
+| Host | Address | Role |
+| ---- | ------- | ---- |
+| Workstation (this machine) | `192.168.1.222` | RTX 5070, Ollama **0.33.1** (`qwen3:8b`, `qwen3:4b`), bound to `127.0.0.1`. Development. Not 24/7 (ADR-007) |
+| `ashnetserv1` | `192.168.1.14` | Proxmox, **no GPU**. Ollama **0.7.1** (`phi3:mini`, `llama3:8b`). Published at `api.chat.ashnetbase.org` |
+| homelab services box | `192.168.1.49` | Runs `vault` (8080) and `status` (3001). The likely Agrocer host |
+| chat box | `192.168.1.37` | Runs `chat` (8080) |
+| `cloudflared` | its own machine | Tunnel `homelab`, ID `7a9f3afc-7fed-4e64-84a5-034cc130374d`, healthy |
+
+- **Deployment: the Cloudflare Tunnel `homelab` on `ashnetbase.org`** (ADR-019).
+  `home.ashnetbase.org` → `HTTP` → **`http://<agrocer-host-ip>:3000`** — a LAN IP, **not**
+  `localhost`. `cloudflared` runs on a different machine and routes to every service by
+  address, which is how the first deploy attempt 502'd. The container publishes `3000:3000`
+  to the LAN accordingly. `docs/deploy.md` is the runbook.
+- The DNS record and the tunnel route exist and were verified from outside: TLS valid, 502
+  returned, which is correct while nothing is listening.
 - `agrocer-stg01` as a separate VM is no longer the plan; `docs/staging.md` is kept for its
   VM and Docker steps and is annotated as superseded on HTTPS.
 
@@ -336,9 +355,15 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
   Variables `AI_PROVIDER` (defaults `ollama`), `OLLAMA_BASE_URL` and `OLLAMA_MODEL` are
   documented in `.env.example`; the defaults in the code match, so `.env.local` needs no entry
   for either script or the route to run. All three are **server-only** — never `NEXT_PUBLIC_`.
-  **Ollama binds to localhost deliberately and must stay that way.** The check therefore only
-  works from this machine. Reaching it from the staging VM is a later, separate decision —
-  a tunnel or an authenticated proxy, not `OLLAMA_HOST=0.0.0.0`.
+  Ollama is currently bound to `127.0.0.1`, so the assistant works **only on this machine**.
+  **ADR-020 settles how the deployed app reaches it:** bind the workstation's Ollama to the
+  LAN and firewall TCP 11434 to the Agrocer host alone. Earlier notes in this file said
+  "never `OLLAMA_HOST=0.0.0.0`" without qualification — that was right about the danger and
+  wrong about the mechanism. Ollama has no authentication at all, so *reachability* is the
+  entire control, and a source-scoped rule addresses it with fewer moving parts than a tunnel
+  for traffic that never leaves the house. A bare `0.0.0.0` with no rule is still wrong.
+  Pulling `qwen3:8b` onto `ashnetserv1` instead is **not** viable: no GPU, and 8B on CPU
+  answers in tens of seconds.
   Open WebUI runs separately in Docker and is untouched by any of this.
 - Never record credentials in this file.
 
@@ -549,61 +574,78 @@ throwaway household and delete it, and the foreign keys cascade.
 
 ## NEXT TASK
 
-**Stage 2's build work is done. What remains is Ash's, and needs the homelab host.**
-`docs/deploy.md` is the runbook; the short version:
+Handing over to Codex on 2026-08-29. Read `AGENTS.md`, then this file, then
+`AGROCER_MASTER_PLAN.md`. Everything below is current as of commit `c61518e` on
+`stage-2/database-schema` (20+ commits ahead of `main`; nothing has been merged).
 
-1. **Cloudflare Zero Trust → Networks → Tunnels → `homelab` → Public Hostnames → Add.**
-   Subdomain `home`, domain `ashnetbase.org`, service type **HTTP**, URL `localhost:3000`.
-   HTTP is right — the hop from `cloudflared` to the container is over loopback on the same
-   machine; TLS terminates at Cloudflare's edge.
-2. **Copy the repository to the homelab host**, create `.env` beside `docker-compose.yml` with
-   `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL` and
-   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Do **not** set `AGROCER_AUTH`.
-3. `docker compose up -d --build`.
-4. From a phone **on mobile data** (which proves it is the tunnel, not the LAN): open
-   `https://home.ashnetbase.org`, sign in, then install it to the home screen. That install is
-   the thing the HTTPS question had been blocking since Stage 1.
-5. Point the wall tablet at `https://home.ashnetbase.org/dashboard`.
+### State in one paragraph
 
-Expect `/api/ai/ask` to return 503 from the homelab: Ollama binds to localhost on the
-workstation, so the assistant is unreachable from there and the card says so. That is the
-correct failure, not a deployment problem.
+Stage 2's build work is complete: Postgres behind route handlers, Supabase Auth enforced on
+every route, RLS on all nine tables, history tables, CI, and a deployment runbook. The AI
+ladder is complete through slice 9b — the assistant reads the shopping list, pantry and meal
+plan through a read-only tool allow-list, and can *propose* adding a shopping item behind a
+confirmation gate. Stage 4 has begun with pantry-to-recipe matching. **212 unit tests across
+16 files, 9 integration tests, build clean, `npm run db:rls` green.**
 
-**Stage 2's build work is done, so Stage 4 has begun** — pantry-to-recipe matching landed
-first, because most of the rest of that stage depends on knowing whether the household has an
-ingredient. Sensible next pieces, in rough order of value:
+### Blocked on Ash — not code, do not attempt
 
-- **Weekly budget target and meal cost estimation.** The budget half of Phase 7 is still
-  unbuilt and it is core Agrocer. Cost estimation is the harder half: it needs structured
-  ingredient quantities, which changes how a recipe is entered. Worth deciding whether the
-  family will accept that before building it.
-- **Low-stock and staple-reorder prediction.** `inventory_events` is already accumulating the
-  history these need, and nothing reads it yet.
-- **Multi-item AI proposals**, which unblocks Phase 10's pantry-aware planning.
+1. **Deploy.** The tunnel route `home.ashnetbase.org` exists but points at `localhost:3000`;
+   it must be `http://<agrocer-host-ip>:3000` (likely `192.168.1.49`). Then `git clone`,
+   `.env`, `docker compose up -d --build` on that host. `docs/deploy.md`.
+2. **Ollama for production** (ADR-020): `OLLAMA_HOST=0.0.0.0:11434` on the workstation, a
+   firewall rule on TCP 11434 scoped to the Agrocer host, a DHCP reservation for
+   `192.168.1.222`, and `OLLAMA_BASE_URL` in the homelab `.env`.
+3. **`api.chat.ashnetbase.org` publishes an unauthenticated Ollama to the internet.** Anyone
+   who guesses the hostname gets free inference. Cloudflare Access, one email policy.
+4. **The account password is weak** (`test123!`, set 2026-08-29 during setup) on the account
+   holding the children's names. Change it in the Supabase dashboard.
+5. **CI secrets** — `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` as GitHub
+   Actions secrets. The workflow skips cleanly without them; with them the integration tests
+   and the RLS check actually run.
+6. **Cloudflare Claude Code plugin** — Ash asked for it; `claude plugin marketplace add
+   cloudflare/skills` and `claude plugin install cloudflare@cloudflare` were **blocked by the
+   permission classifier**, so Ash must run them.
 
-**Known limitations, in the order they will bite:**
+### Code work, in the order I would take it
 
-- **Multi-item AI proposals.** "Add milk and eggs" proposes milk and cannot mention eggs —
-  Ollama returns no prose alongside a tool call. Needs a list-shaped confirmation. This blocks
-  the useful half of Phase 10.
-- **Reaching Ollama from the homelab.** A tunnel between the two hosts or an authenticated
-  proxy. Never `OLLAMA_HOST=0.0.0.0`.
-- **The Ask card at phone width** is still unverified across four sessions; the browser tooling
-  will not resize below desktop width.
-- **`initialState` still seeds the Stage 1 demo fixtures.** The dashboard cards gate on
-  `hydrated` now, but any new screen that forgets to will show a convincing fake list.
-- **No automated backups yet.** `docs/backup.md` has the verified commands; a weekly cron on
-  the homelab is the obvious next step once it is running.
+**(a) Multi-item AI proposals.** "Add milk and eggs" proposes milk and cannot mention eggs,
+because Ollama returns no prose alongside a tool call — prompting for it was tried and
+provably cannot work (see the comment in `src/ai/assistant.ts`). Needs the proposal to carry a
+*list*, and a confirmation UI shaped for one. **This blocks the useful half of Phase 10**
+("plan five dinners and add what's missing"), so it is the highest-leverage item.
 
-Deferred, and fine to leave deferred: every write still refetches the whole list, and there is
-no optimistic UI.
+**(b) Weekly budget target.** The unbuilt half of Phase 7 and core Agrocer — the module is
+described as "grocery, pantry, meal-planning and grocery-budget". Self-contained: a target on
+household settings, spend against it from the shopping list.
 
-Two costs still deliberately unpaid:
+**(c) Meal cost estimation.** Harder, and it has a prerequisite worth deciding before starting:
+it needs ingredients as structured quantities, which changes how a recipe is entered.
+`recipeMatch.ts` deliberately checks presence only for this reason. Ask Ash before committing
+to a UX change.
 
-- **Every write refetches the whole list.** Free against localStorage, a round trip to Sydney
-  now. Fine for a family-sized list; revisit if a list grows.
-- **No optimistic UI.** A toggle or a stepper waits for the server, so it feels slower than
-  Stage 1 did. Most visible on the pantry steppers, where taps come in bursts.
+**(d) Low-stock / staple-reorder prediction.** `inventory_events` has been accumulating the
+history since 2026-08-29 and nothing reads it yet. Give it a few weeks of real data first —
+predictions from three rows will be worse than none.
+
+### Smaller known gaps
+
+- **The Ask card at phone width is unverified** across four sessions. The browser tooling here
+  would not resize below desktop width. Someone with a phone should just look at it.
+- **Every write refetches the whole list, and there is no optimistic UI.** Free against
+  localStorage, a round trip to Sydney now. Most visible on the pantry steppers.
+- **No automated backups.** `docs/backup.md` has verified commands; a weekly cron on the
+  homelab is the obvious step once it is running. Note a full dump contains `auth.users`.
+- **`meal_feedback` has no UI.** The table, repository and `/api/feedback` exist; rating a
+  meal is Stage 4's job.
+
+### Two traps that have each cost an hour
+
+- **A dev server started right after `npm run build` serves a stale `.next`** and answers HTML
+  for routes that exist. Delete `.next`, restart.
+- **The Stage 1 service worker caches the bundle**, so a dashboard change can look like it did
+  not apply when it is already compiled. Unregister it and clear `agrocer-shell-v1`.
+
+Both bit twice in one session. Check them before debugging the code.
 
 ## Do Not Accidentally Change
 
@@ -623,8 +665,10 @@ Two costs still deliberately unpaid:
 - **`inventory_events` is append-only, and `pantry_item_id` is `ON DELETE SET NULL`.** Do not
   "tidy" that to `CASCADE`: deleting a pantry item is precisely when its history matters, and
   the denormalised `item_name` is there for the same reason.
-- **`docker-compose.yml` binds to `127.0.0.1:3000`, not the LAN.** Publishing it to the network
-  would serve family data over plain HTTP with the session cookie in clear (ADR-019).
+- **`docker-compose.yml` publishes `3000:3000` to the LAN, and must.** It briefly bound to
+  loopback, which was safer and simply did not work: `cloudflared` is on another machine and
+  routes by IP. The cost — the session cookie in clear on that LAN hop — is stated in ADR-019
+  along with the clean fix (co-locate with `cloudflared`, route by container name).
 - **The compose file deliberately does not mention `AGROCER_AUTH`**, so authentication cannot
   be switched off by editing a value that reads as harmless.
 - **RLS stays enabled on all nine tables.** Deny-all is the intended state until auth brings a
@@ -649,9 +693,15 @@ Two costs still deliberately unpaid:
   `ASSISTANT_SYSTEM_PROMPT`, the Ask card's `note`, and its example chips. They are consistent
   on purpose, and they were all rewritten together when 9a changed what was true. Change all
   three together, and never leave one claiming access the model does not have.
-- **Ollama stays bound to `127.0.0.1`.** Ash's standing instruction. Reaching it from the
-  staging VM is a tunnel or an authenticated proxy, never `OLLAMA_HOST=0.0.0.0`.
+- **Ollama's exposure is a firewall question, not a binding question** (ADR-020). It may be
+  bound to the LAN *with* a source-scoped rule on TCP 11434; it may never be left on
+  `0.0.0.0` without one, because Ollama has no authentication of its own. Earlier revisions of
+  this file said "stays bound to 127.0.0.1, never 0.0.0.0" — superseded, and the reason is
+  that the GPU is in the workstation while the always-on server has none.
+- **`initialState` in `AgrocerProvider` holds nothing.** It used to hold the Stage 1 demo
+  fixtures, and the wall dashboard showed a fake shopping list until the fetch resolved. Do
+  not put seed data back in it to make a screen "look right" before it has loaded.
 
 ## Last Updated
 
-2026-08-29
+2026-08-29 — handed over to Codex at commit `c61518e`, branch `stage-2/database-schema`.
