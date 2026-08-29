@@ -831,9 +831,10 @@ Both bit again this session. Check them before debugging code.
 
 ## Last Updated
 
-2026-08-29, on `stage-2/database-schema`. Migrations through `0007` are applied. Nothing has
+2026-08-30, on `stage-2/database-schema`. Migrations through `0007` are applied. Nothing has
 been merged to `main`, which is ~30 commits behind.
 
-The **AI recipe tools** (`searchRecipes`, `addRecipeToMeals`) are the newest work and the one
-part whose live model behaviour has **not** been checked — see the top of NEXT TASK. Everything
-else here has been exercised against the real model, the real database, or the deployed app.
+Stage 5 now has a review-only trolley preparation slice: `src/shopping/*` provides manual matching,
+an explicit New World adapter seam, and `/api/trolley/prepare` plus a Shopping-screen review panel.
+It never logs into New World or checks out. The next implementation dependency is an official New
+World product feed/API (or a user-supplied catalogue); until then unmatched lines remain manual.

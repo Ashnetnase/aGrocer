@@ -479,7 +479,8 @@ Make Agrocer smarter using household history and external grocery information.
 
 ## Stage 5 — New World / supermarket trolley preparation
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS (2026-08-30)** — review-only trolley preparation is implemented; retailer
+product feeds and cart APIs remain intentionally unconfigured.
 
 ### Goal
 
@@ -487,10 +488,10 @@ Prepare a supermarket trolley for human review without autonomous payment.
 
 ### Planned scope
 
-- [ ] `ShoppingProvider` abstraction
-- [ ] manual provider
-- [ ] New World provider
-- [ ] product matching
+- [x] `ShoppingProvider` abstraction (`src/shopping/types.ts`)
+- [x] manual provider and matching/review service
+- [~] New World provider seam (safe unconfigured adapter; no private-page scraping)
+- [x] product matching with unresolved-item review status
 - [ ] substitutions
 - [ ] quantity reconciliation
 - [ ] browser-assisted cart preparation if permitted/viable
