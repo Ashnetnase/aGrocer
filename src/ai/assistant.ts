@@ -151,6 +151,11 @@ export async function askAssistant(
   const toolsUsed: string[] = [];
   let model = provider.model;
 
+  const directRecipeSave = await directRecipeSelection(question, options.history ?? [], writeTools);
+  if (directRecipeSave) {
+    return { reply: `I found ${directRecipeSave.title}. Shall I save it to your meals?`, toolsUsed: ['searchRecipes'], proposal: { actions: [directRecipeSave.action] }, model, durationMs: Date.now() - startedAt };
+  }
+
   const directPlan = await directMealPlanProposal(question, repos, writeTools);
   if (directPlan) {
     toolsUsed.push('getMeals');
@@ -253,6 +258,25 @@ export async function askAssistant(
     })`,
     'The assistant could not finish that. Try asking it more simply.',
   );
+}
+
+async function directRecipeSelection(
+  question: string,
+  history: Array<Pick<AiMessage, 'role' | 'content'>>,
+  writeTools: Record<string, AiWriteTool>,
+): Promise<{ title: string; action: AssistantProposalAction } | undefined> {
+  const number = question.match(/\b(?:save|add|choose|use)\s+(?:recipe\s*)?(\d+)\b/i)?.[1];
+  if (!number) return undefined;
+  const previous = [...history].reverse().find((message) => message.role === 'assistant' && /\d+\.\s/.test(message.content));
+  if (!previous) return undefined;
+  const choices = [...previous.content.matchAll(/\d+\.\s*([^\d]+?)(?=\s+\d+\.\s|\s+Tell me|$)/g)];
+  const title = choices[Number(number) - 1]?.[1]?.trim();
+  if (!title) return undefined;
+  const recipe = (await getRecipeProvider().search(title))[0];
+  const tool = writeTools.addRecipeToMeals;
+  if (!recipe || !tool) return undefined;
+  const args = { recipeId: recipe.id };
+  return { title: recipe.title, action: { tool: 'addRecipeToMeals', description: await tool.describe(args), args } };
 }
 
 async function directRecipeSearch(question: string): Promise<string | undefined> {
