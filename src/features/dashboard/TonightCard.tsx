@@ -12,9 +12,9 @@ import { DashboardCard } from './DashboardCard';
 /**
  * Tonight's dinner, read from the same plan the Meals screen writes.
  *
- * Like the shopping card, this waits for the real plan. `AgrocerProvider` starts from the
- * Stage 1 demo fixtures, which include a planned dinner — so without the gate the wall
- * announces a meal nobody planned.
+ * Like the shopping card, this waits for the real plan, and reports a failed load rather than
+ * loading for ever. `AgrocerProvider` no longer starts from the demo fixtures — it used to,
+ * and the wall announced a dinner nobody had planned.
  *
  * **The missing-ingredient warning is real as of Stage 4**, built on pantry-to-recipe
  * matching. It answers the question the card is looked at for: can we actually make this
@@ -25,7 +25,7 @@ import { DashboardCard } from './DashboardCard';
  * ingredient list cannot give. A wrong number on the kitchen wall is worse than no number.
  */
 export function TonightCard() {
-  const { meals, plan, pantry, hydrated } = useAgrocer();
+  const { meals, plan, pantry, hydrated, loadFailed } = useAgrocer();
   const week = usePlannerWeek();
   const tonight = findMeal(meals, mealFor(plan, week.todayKey, 'dinner'));
   const match = tonight ? matchMealToPantry(tonight, pantry) : undefined;
@@ -42,7 +42,11 @@ export function TonightCard() {
         </Link>
       }
     >
-      {!hydrated ? (
+      {loadFailed ? (
+        <p className="py-6 text-base font-semibold text-clay-600">
+          Could not reach the household data.
+        </p>
+      ) : !hydrated ? (
         <p className="py-6 text-base text-muted">Loading…</p>
       ) : tonight ? (
         <div className="flex items-center gap-5">

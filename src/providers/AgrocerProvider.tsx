@@ -9,18 +9,14 @@ import type { Product } from '@/domain/schemas/product';
 import type { ShoppingItem, ShoppingItemDraft, ShoppingItemPatch } from '@/domain/schemas/shopping';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { repositoriesForEnvironment } from '@/data/api/repositories';
-import { householdSeed } from '@/data/seed/household';
-import { mealsSeed, planSeed } from '@/data/seed/meals';
-import { pantrySeed } from '@/data/seed/pantry';
-import { productsSeed } from '@/data/seed/products';
-import { shoppingSeed } from '@/data/seed/shopping';
+import { toIsoDate } from '@/domain/services/dates';
 
 /**
  * Application state, backed by the repository layer.
  *
- * State is seeded synchronously so the server render and the first client
- * render agree, then rehydrated from localStorage in an effect. Components
- * never touch repositories or seed data directly.
+ * Starts **empty** and is filled by `loadAll()` in an effect — see `initialState` for why it
+ * must not start with the demo fixtures. Components never touch repositories or seed data
+ * directly, and must not render household data before `hydrated`.
  */
 
 interface AgrocerState {
@@ -30,8 +26,13 @@ interface AgrocerState {
   meals: Meal[];
   products: Product[];
   household: Household;
-  /** False until localStorage has been read — used to defer persisted-only UI. */
+  /** False until the real data has arrived. Nothing may render household data before it. */
   hydrated: boolean;
+  /**
+   * The load failed and will not retry on its own. `hydrated` stays false, so a screen that
+   * gates on it shows a loading state for ever unless it also checks this.
+   */
+  loadFailed: boolean;
 }
 
 interface AgrocerActions {
@@ -76,14 +77,40 @@ type AgrocerValue = AgrocerState & AgrocerActions;
 
 const AgrocerContext = createContext<AgrocerValue | null>(null);
 
+/**
+ * What the app holds before anything has loaded: **nothing**.
+ *
+ * This used to be seeded with the Stage 1 demo fixtures, which was invisible against
+ * localStorage (the load resolved in the same tick) and actively harmful over the network.
+ * Every screen — and the wall dashboard — rendered someone else's shopping list, meals and
+ * children until the fetch came back. On 2026-08-29 that fake list was mistaken for the
+ * family's real one during development, which is the mildest possible version of the problem
+ * it causes.
+ *
+ * Empty is honest. A screen briefly showing "Nothing on the list" is a loading state; a
+ * screen showing Milk, Bread and Bananas that nobody added is a lie. The demo data still
+ * exists and still seeds localStorage for the no-database path — it just no longer pretends
+ * to be state before state exists.
+ */
 const initialState: AgrocerState = {
-  pantry: pantrySeed,
-  shopping: shoppingSeed,
-  plan: planSeed,
-  meals: mealsSeed,
-  products: productsSeed,
-  household: householdSeed,
+  pantry: [],
+  shopping: [],
+  plan: {},
+  meals: [],
+  products: [],
+  household: {
+    members: [],
+    settings: {
+      householdName: '',
+      shopLabel: '',
+      currency: 'NZD',
+      pinDemoDate: false,
+      pinnedDate: toIsoDate(new Date()),
+      showBreakfastAndLunch: false,
+    },
+  },
   hydrated: false,
+  loadFailed: false,
 };
 
 interface ProviderProps {
@@ -104,15 +131,33 @@ export function AgrocerProvider({
   const [state, setState] = useState<AgrocerState>(initialState);
 
   const loadAll = useCallback(async () => {
-    const [pantry, shopping, plan, meals, products, household] = await Promise.all([
-      repositories.pantry.list(),
-      repositories.shopping.list(),
-      repositories.meals.getPlan(),
-      repositories.meals.list(),
-      repositories.products.list(),
-      repositories.household.get(),
-    ]);
-    setState({ pantry, shopping, plan, meals, products, household, hydrated: true });
+    try {
+      const [pantry, shopping, plan, meals, products, household] = await Promise.all([
+        repositories.pantry.list(),
+        repositories.shopping.list(),
+        repositories.meals.getPlan(),
+        repositories.meals.list(),
+        repositories.products.list(),
+        repositories.household.get(),
+      ]);
+      setState({
+        pantry,
+        shopping,
+        plan,
+        meals,
+        products,
+        household,
+        hydrated: true,
+        loadFailed: false,
+      });
+    } catch (error) {
+      // Previously `void loadAll()` swallowed this entirely: a failed load left `hydrated`
+      // false for ever and said nothing, so the app sat in a loading state with no
+      // explanation. A 401 is already handled elsewhere by redirecting to sign-in; this is
+      // for the rest — the database being unreachable, or the server being down.
+      console.error('[agrocer] could not load household data', error);
+      setState((prev) => ({ ...prev, hydrated: false, loadFailed: true }));
+    }
   }, [repositories]);
 
   useEffect(() => {

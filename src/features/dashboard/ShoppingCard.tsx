@@ -12,12 +12,15 @@ import { DashboardCard } from './DashboardCard';
  * The shopping card, backed by the same repositories as the phone app — one source of truth,
  * never a tablet-specific copy of the list.
  *
- * **Nothing renders until the real list has loaded.** `AgrocerProvider` seeds its initial
- * state with the Stage 1 demo fixtures, so without this gate the kitchen wall shows a
- * convincing fake shopping list — Milk, Bread, Bananas — until the fetch resolves. That is not
- * hypothetical: it was mistaken for the family's real list during development on 2026-08-29.
- * A brief "Loading…" is a far smaller problem than a wall display confidently showing
- * groceries nobody needs.
+ * **Nothing renders until the real list has loaded**, and a failed load says so rather than
+ * showing "Loading…" for ever — on a wall tablet that reads as a slow network, and nobody
+ * investigates a slow network.
+ *
+ * `AgrocerProvider` used to seed its initial state with the Stage 1 demo fixtures, which made
+ * this gate essential: the kitchen wall showed a convincing fake list until the fetch
+ * resolved, and on 2026-08-29 it was mistaken for the family's real one. That seeding is gone
+ * now, so the gate is belt and braces — worth keeping, because the failure it prevents is a
+ * wall display confidently showing groceries nobody needs.
  *
  * Items are checkable straight from the wall, because that is the whole point of a tablet in
  * the kitchen. Adding an item opens the full list rather than putting a keyboard on the wall:
@@ -29,7 +32,7 @@ import { DashboardCard } from './DashboardCard';
 const VISIBLE = 6;
 
 export function ShoppingCard({ className }: { className?: string }) {
-  const { shopping, toggleShoppingItem, hydrated } = useAgrocer();
+  const { shopping, toggleShoppingItem, hydrated, loadFailed } = useAgrocer();
   const summary = summariseShopping(shopping);
   const visible = shopping.slice(0, VISIBLE);
   const hidden = shopping.length - visible.length;
@@ -52,7 +55,13 @@ export function ShoppingCard({ className }: { className?: string }) {
         </Link>
       }
     >
-      {!hydrated ? (
+      {loadFailed ? (
+        // Distinguished from loading on purpose: a wall tablet showing "Loading…" for ever
+        // looks like a slow network, and nobody investigates a slow network.
+        <p className="py-6 text-base font-semibold text-clay-600">
+          Could not reach the household data.
+        </p>
+      ) : !hydrated ? (
         <p className="py-6 text-base text-muted">Loading…</p>
       ) : shopping.length === 0 ? (
         <p className="py-6 text-base text-muted">Nothing on the list.</p>
