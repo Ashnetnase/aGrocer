@@ -27,7 +27,7 @@ function matchesFilter(item: PantryItem, filter: Filter): boolean {
 
 export function PantryScreen() {
   const searchParams = useSearchParams();
-  const { pantry, addPantryItem, updatePantryItem, adjustPantryQuantity, removePantryItem } = useAgrocer();
+  const { pantry, addPantryItem, updatePantryItem, adjustPantryQuantity, removePantryItem, addShoppingItem } = useAgrocer();
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>(
@@ -105,8 +105,9 @@ export function PantryScreen() {
             <h2 className="text-sm font-bold text-ink">Keep an eye on</h2>
             <ul className="mt-2 space-y-1 text-sm text-ink">
               {suggestions.slice(0, 4).map((suggestion) => (
-                <li key={suggestion.itemName}>
-                  {suggestion.itemName} — {suggestion.reason === 'recently-empty' ? 'recently ran out' : `used ${suggestion.uses} times recently`}
+                <li key={suggestion.itemName} className="flex items-center justify-between gap-2">
+                  <span>{suggestion.itemName} — {suggestion.reason === 'recently-empty' ? 'recently ran out' : `used ${suggestion.uses} times recently`}</span>
+                  <button type="button" onClick={() => void addShoppingItem({ name: suggestion.itemName, category: 'Pantry', quantity: 1, unit: 'each', price: 0, priority: false })} className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-moss-700 shadow-sm">Add</button>
                 </li>
               ))}
             </ul>
