@@ -49,11 +49,13 @@ export async function resolveShoppingItem(
   let found: RetailerProduct[] = [];
   try {
     found = await provider.search(item.name, storeId);
-  } catch {
+  } catch (error) {
     return {
       shoppingItem, requestedText: item.name, requestedQuantity: item.quantity, confidence: 0,
       source: 'unresolved', status: 'needs-review', requiresReview: true,
-      reason: 'The New World companion is offline, so this item could not be searched.',
+      reason: error instanceof Error && error.message.includes('security check')
+        ? error.message
+        : 'The New World product search could not run. Check the companion and retry.',
     };
   }
   const candidates = found

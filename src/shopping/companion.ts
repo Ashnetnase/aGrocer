@@ -22,7 +22,9 @@ export class NewWorldCompanionClient {
     const raw = await this.request('/newworld/search', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query, ...(storeId ? { storeId } : {}) }),
     });
-    return retailerProductSchema.array().parse((raw as { products?: unknown }).products);
+    const result = raw as { status?: unknown; products?: unknown; message?: unknown };
+    if (result.status === 'blocked') throw new Error(typeof result.message === 'string' ? result.message : 'New World blocked the search.');
+    return retailerProductSchema.array().parse(result.products);
   }
 
   async addBatch(items: TrolleyAddItem[]): Promise<TrolleyAddResult[]> {

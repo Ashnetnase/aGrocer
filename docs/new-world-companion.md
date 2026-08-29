@@ -44,4 +44,6 @@ and final checkout yourself on New World.
 - Live New World selectors, search results and trolley addition: **not yet validated**. Selectors are
   centralised in `companion/src/retailers/newworld/newworld.selectors.ts`; a site change should
   return `selector-failed`, not a false success.
-- CAPTCHA or retailer blocking returns `blocked`; there is no bypass or stealth behavior.
+- Live search reached New World's Cloudflare **Just a moment** security check on 2026-08-30.
+  The companion returns `blocked` immediately. Complete the check manually in the visible companion
+  Chrome profile and retry; there is no bypass or stealth behavior.

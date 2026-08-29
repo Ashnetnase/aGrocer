@@ -4,6 +4,8 @@ import { visibleNewWorldPage } from '../../browser';
 import { newWorldSelectors as selectors } from './newworld.selectors';
 import type { NewWorldBrowserOperations } from './newworld.types';
 
+export class NewWorldBlockedError extends Error {}
+
 const safeProductUrl = (value: string) => {
   const url = new URL(value);
   if (url.protocol !== 'https:' || (url.hostname !== 'newworld.co.nz' && !url.hostname.endsWith('.newworld.co.nz'))) {
@@ -22,23 +24,32 @@ export class NewWorldBrowserClient implements NewWorldBrowserOperations {
 
   async search(query: string, storeId?: string): Promise<RetailerProduct[]> {
     const page = await this.page();
-    const input = page.locator(selectors.searchInput).first();
-    if (!await input.isVisible().catch(() => false)) return [];
-    await input.fill(query);
-    await input.press('Enter');
-    await page.waitForLoadState('domcontentloaded');
-    const cards = page.locator(selectors.productCard);
-    const count = Math.min(await cards.count(), 10);
-    const products: RetailerProduct[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const card = cards.nth(index);
-      const name = (await card.locator(selectors.productName).first().textContent().catch(() => null))?.trim();
-      const href = await card.locator('a[href]').first().getAttribute('href').catch(() => null);
-      if (!name || !href) continue;
-      const productUrl = new URL(href, page.url()).toString();
-      products.push({ retailer: 'new-world', name, productUrl, availability: 'unknown', ...(storeId ? { storeId } : {}) });
+    const searchUrl = new URL('/shop/search', 'https://www.newworld.co.nz');
+    searchUrl.searchParams.set('pg', '1');
+    searchUrl.searchParams.set('q', query);
+    searchUrl.searchParams.set('sf', 'products');
+    await page.goto(searchUrl.toString(), { waitUntil: 'domcontentloaded' });
+    if ((await page.title()).toLowerCase().includes('just a moment') || await page.locator(selectors.blockedText).first().isVisible().catch(() => false)) {
+      throw new NewWorldBlockedError('New World presented a security check. Complete it in the visible browser, then retry.');
     }
-    return products;
+    const raw = await page.locator(selectors.productLink).evaluateAll((links) => links.map((link) => ({
+      href: (link as HTMLAnchorElement).href,
+      name: link.textContent?.replace(/\s+/g, ' ').trim() || (link.querySelector('img') as HTMLImageElement | null)?.alt?.trim() || '',
+    })));
+    const seen = new Set<string>();
+    return raw.flatMap(({ href, name }) => {
+      if (!href || !name || seen.has(href)) return [];
+      seen.add(href);
+      const externalProductId = new URL(href).pathname.split('/').filter(Boolean).at(-1);
+      return [{
+        retailer: 'new-world' as const,
+        name,
+        productUrl: href,
+        availability: 'unknown' as const,
+        ...(externalProductId ? { externalProductId } : {}),
+        ...(storeId ? { storeId } : {}),
+      }];
+    }).slice(0, 10);
   }
 
   async add(item: TrolleyAddItem): Promise<TrolleyAddResult> {

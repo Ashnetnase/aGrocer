@@ -10,6 +10,8 @@ export async function visibleNewWorldPage(): Promise<Page> {
       channel: process.env.NEW_WORLD_BROWSER_CHANNEL || 'chrome',
       viewport: null,
     });
+    context.setDefaultTimeout(8_000);
+    context.setDefaultNavigationTimeout(20_000);
   }
   const page = context.pages()[0] ?? await context.newPage();
   if (!page.url().startsWith('https://www.newworld.co.nz')) {

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { trolleyAddBatchSchema, trolleyAddItemSchema } from '../../src/shopping/schemas';
-import { NewWorldBrowserClient } from './retailers/newworld/newworld.client';
+import { NewWorldBlockedError, NewWorldBrowserClient } from './retailers/newworld/newworld.client';
 
 const port = Number(process.env.NEW_WORLD_COMPANION_PORT ?? 4317);
 const host = process.env.NEW_WORLD_COMPANION_HOST ?? '127.0.0.1';
@@ -32,7 +32,13 @@ createServer(async (request, response) => {
     if (request.method === 'GET' && path === '/newworld/trolley/status') return json(response, 200, await client.trolleyStatus());
     if (request.method === 'POST' && path === '/newworld/search') {
       const parsed = searchSchema.safeParse(await body(request));
-      return parsed.success ? json(response, 200, { products: await client.search(parsed.data.query, parsed.data.storeId) }) : json(response, 400, { error: 'Invalid request' });
+      if (!parsed.success) return json(response, 400, { error: 'Invalid request' });
+      try {
+        return json(response, 200, { status: 'ok', products: await client.search(parsed.data.query, parsed.data.storeId) });
+      } catch (error) {
+        if (error instanceof NewWorldBlockedError) return json(response, 200, { status: 'blocked', products: [], message: error.message });
+        throw error;
+      }
     }
     if (request.method === 'POST' && path === '/newworld/trolley/add') {
       const parsed = trolleyAddItemSchema.safeParse(await body(request));

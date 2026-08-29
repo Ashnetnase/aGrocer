@@ -20,4 +20,11 @@ describe('NewWorldCompanionClient', () => {
     ]);
     expect(results.map((result) => result.status)).toEqual(['added', 'selector-failed']);
   });
+
+  it('surfaces a retailer security check instead of returning an empty catalogue', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'blocked', products: [], message: 'New World presented a security check. Complete it in the visible browser, then retry.',
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    await expect(new NewWorldCompanionClient().search('milk')).rejects.toThrow('security check');
+  });
 });

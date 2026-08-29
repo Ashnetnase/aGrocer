@@ -689,6 +689,11 @@ the deterministic client behavior discovered by that test. Search and trolley ad
 but not claimed working against the live site. CAPTCHA/blocking must return `blocked`; checkout and
 payment remain user-only.
 
+First live attempt reached New World's Cloudflare **Just a moment** security check. Search now
+returns `blocked` promptly instead of hanging or pretending the catalogue is empty. The visible
+companion Chrome window uses `.runtime/newworld-profile`; Ash must complete that check and log in
+there once, then rerun the milk search. Do not bypass or add stealth behavior.
+
 The old AI verification instructions below are historical and retained for audit context.
 
 The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check
