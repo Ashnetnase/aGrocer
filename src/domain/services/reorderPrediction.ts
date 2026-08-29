@@ -23,7 +23,7 @@ export function predictReorders(
   windowDays = 30,
 ): ReorderSuggestion[] {
   const cutoff = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-  const recent = events.filter((event) => new Date(event.createdAt).getTime() >= cutoff);
+  const recent = events.filter((event) => Number.isFinite(new Date(event.createdAt).getTime()) && new Date(event.createdAt).getTime() >= cutoff);
   const byName = new Map<string, { uses: number; empty: boolean }>();
   for (const event of recent) {
     const name = event.itemName.trim();

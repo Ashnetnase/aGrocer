@@ -1,6 +1,7 @@
 import type { SpecialOffer } from './types';
 
 export async function searchSpecials(query: string): Promise<SpecialOffer[]> {
+  if (query.trim().length < 2) return [];
   const response = await fetch('/api/specials', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }),
   });

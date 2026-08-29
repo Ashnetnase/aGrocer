@@ -126,7 +126,7 @@ const reorderSuggestions: AiTool = {
   async execute(repos) {
     const suggestions = predictReorders(await repos.inventoryEvents.list());
     if (suggestions.length === 0) return 'There are no reorder suggestions yet.';
-    return `Keep an eye on: ${suggestions.map((item) => item.reason === 'recently-empty' ? `${item.itemName} recently ran out` : `${item.itemName} used ${item.uses} times recently`).join('; ')}.`;
+    return `Keep an eye on: ${suggestions.slice(0, 6).map((item) => item.reason === 'recently-empty' ? `${item.itemName} recently ran out` : `${item.itemName} used ${item.uses} times recently`).join('; ')}.`;
   },
 };
 

@@ -13,7 +13,7 @@ export async function GET() {
       ...predictReorders(events).map((item) => ({ kind: 'reorder', title: `${item.itemName} may need restocking`, detail: item.reason === 'recently-empty' ? 'It recently ran out.' : `Used ${item.uses} times recently.` })),
       ...pantry.filter((item) => item.state === 'soon').map((item) => ({ kind: 'use-soon', title: `Use ${item.name} soon`, detail: `${item.quantity} ${item.unit} remaining.` })),
     ];
-    return NextResponse.json({ notifications });
+    return NextResponse.json({ notifications: notifications.slice(0, 20) });
   } catch (error) {
     return failed(error);
   }

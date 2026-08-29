@@ -8,6 +8,6 @@ export class ManualSpecialsProvider implements SpecialsProvider {
   async search(query: string): Promise<SpecialOffer[]> {
     const needle = query.trim().toLowerCase();
     if (!needle) return [];
-    return this.offers.filter((offer) => offer.productName.toLowerCase().includes(needle));
+    return this.offers.filter((offer) => offer.productName.toLowerCase().includes(needle)).sort((a, b) => a.price - b.price);
   }
 }

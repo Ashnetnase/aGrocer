@@ -2,6 +2,7 @@ import type { Product } from '../schemas/product';
 
 /** Returns catalogue alternatives without contacting a supermarket or changing a list. */
 export function findProductAlternatives(product: Product, catalogue: Product[], limit = 3): Product[] {
+  if (limit <= 0) return [];
   const tokens = new Set(product.name.toLowerCase().split(/\s+/).filter((token) => token.length > 2));
   return catalogue
     .filter((candidate) => candidate.id !== product.id && candidate.category === product.category)
