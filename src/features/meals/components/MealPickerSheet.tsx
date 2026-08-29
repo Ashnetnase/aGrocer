@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ClockIcon, PencilIcon, PlusIcon, UsersIcon } from 'lucide-react';
+import { ClipboardPasteIcon, ClockIcon, PencilIcon, PlusIcon, UsersIcon } from 'lucide-react';
 import type { Meal } from '@/domain/schemas/meal';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { SearchField } from '@/components/agrocer/Field';
@@ -15,6 +15,8 @@ interface MealPickerSheetProps {
   slotLabel: string;
   onPick: (mealId: string) => void;
   onCreate: () => void;
+  /** Opens the paste-a-recipe sheet. Same moment as creating one, less typing. */
+  onImport: () => void;
   onEdit: (meal: Meal) => void;
 }
 
@@ -26,6 +28,7 @@ export function MealPickerSheet({
   slotLabel,
   onPick,
   onCreate,
+  onImport,
   onEdit,
 }: MealPickerSheetProps) {
   const [query, setQuery] = useState('');
@@ -50,6 +53,22 @@ export function MealPickerSheet({
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
         >
           <PlusIcon className="h-4 w-4" /> Create a new meal
+        </button>
+
+        {/*
+          Beside "create", because this is the same moment — you wanted a meal you do not
+          have. Pasting is usually faster than typing a recipe out, and it lands in the same
+          form for review either way.
+        */}
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onImport();
+          }}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
+        >
+          <ClipboardPasteIcon className="h-4 w-4" /> Paste a recipe
         </button>
 
         <div className="space-y-2">

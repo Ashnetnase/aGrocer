@@ -30,6 +30,13 @@ interface MealFormSheetProps {
   open: boolean;
   onClose: () => void;
   meal: Meal | null;
+  /**
+   * Pre-filled values for a meal that does not exist yet — today, a pasted recipe import.
+   * Ignored when `meal` is set, since editing an existing meal must never be overwritten by
+   * a leftover draft. The form is still fully editable: an import is a head start that the
+   * person reviews, never something saved on their behalf.
+   */
+  initialDraft?: MealDraft | null;
   products: Product[];
   onSave: (draft: MealDraft) => void;
   onDelete?: () => void;
@@ -41,6 +48,7 @@ export function MealFormSheet({
   open,
   onClose,
   meal,
+  initialDraft = null,
   products,
   onSave,
   onDelete,
@@ -53,6 +61,10 @@ export function MealFormSheet({
 
   useEffect(() => {
     if (!open) return;
+    if (!meal && initialDraft) {
+      form.reset(initialDraft);
+      return;
+    }
     form.reset(
       meal
         ? {
@@ -68,7 +80,7 @@ export function MealFormSheet({
           }
         : emptyValues,
     );
-  }, [open, meal, form]);
+  }, [open, meal, initialDraft, form]);
 
   const submit = form.handleSubmit((values) => {
     onSave({
