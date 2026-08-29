@@ -14,7 +14,8 @@ import {
  * Ollama binds to `127.0.0.1` deliberately and must stay that way — that is Ash's standing
  * instruction and the right default for a machine with no auth in front of it. So this
  * provider only works from the workstation running Ollama. Reaching it from the staging VM
- * is a separate decision later: a tunnel or an authenticated proxy, never `OLLAMA_HOST=0.0.0.0`.
+ * is settled by ADR-020: bind to the LAN with a firewall rule scoped to the one host that needs
+ * it. Ollama has no authentication of its own, so reachability is the entire control.
  *
  * Everything Ollama-shaped lives in this file. Nothing outside `src/ai/` should import it
  * directly — ask `getAiProvider()` instead.

@@ -144,9 +144,21 @@ assumed on 2026-08-29. There are two Ollama instances on this network and neithe
 So `/api/ai/ask` returns 503 `unreachable` and the card says "The assistant is offline. It runs
 on the home PC — check that is on." That is the correct failure, not a deployment fault.
 
-Making it work is a separate decision, and there are two honest options: pull `qwen3:8b` onto
-the `.14` box and point `OLLAMA_BASE_URL` at it, or reach the workstation's instance through a
-tunnel or authenticated proxy. Never `OLLAMA_HOST=0.0.0.0`.
+**Settled by ADR-020: reach the workstation.** Pulling `qwen3:8b` onto `.14` is not an option —
+`ashnetserv1` is a Proxmox box with **no GPU**, and an 8B model on CPU answers in tens of
+seconds, which is useless at a wall tablet. So:
+
+1. On the workstation, set `OLLAMA_HOST=0.0.0.0:11434` and restart Ollama.
+2. Add an inbound firewall rule on TCP 11434 **scoped to the Agrocer host's address only**.
+   Ollama has no authentication whatsoever, so who can reach the port is the entire control —
+   a bare `0.0.0.0` with no rule leaves an open GPU on the network.
+3. Reserve the workstation's address in DHCP. A moving lease breaks `OLLAMA_BASE_URL` silently,
+   and the symptom looks identical to the workstation being switched off.
+4. Set `OLLAMA_BASE_URL=http://192.168.1.222:11434` in the homelab `.env` and restart.
+
+The assistant will still be offline whenever the workstation is (ADR-007). That is inherent to
+the GPU living there, and the app degrades correctly: everything else on the wall keeps
+working, because the AI is not on the critical path for shopping, pantry or meals.
 
 ## Backups
 

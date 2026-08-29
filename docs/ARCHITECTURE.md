@@ -214,7 +214,8 @@ without learning the address.
 
 Ollama binds to localhost deliberately, so this works only on the workstation running it. From
 the staging VM the route returns 503 `unreachable` until a tunnel or authenticated proxy is
-decided — never `OLLAMA_HOST=0.0.0.0`.
+decided — see ADR-020: bind to the LAN with a firewall rule scoped to the one host that needs
+it, because the GPU is in the workstation and the always-on server has none.
 
 **The system prompt lives with the tools**, in `src/ai/assistant.ts`. It named nothing but the
 model's limits while there were no tools, and lived on the client; once it had to describe tools

@@ -2139,6 +2139,53 @@ interstitial that interferes with service-worker registration and `fetch` calls 
 Revisit only if the app is ever exposed to people outside the household.
 
 
+## ADR-020 — The AI reaches the GPU on the workstation over the LAN, firewalled
+
+**Status:** Accepted (2026-08-29)
+
+Earlier notes said "never `OLLAMA_HOST=0.0.0.0`" without qualification, and recorded the
+options as a tunnel or an authenticated proxy. That advice was written before the hardware
+was understood, and this ADR corrects it.
+
+**The topology.** Ollama runs in two places on this network and only one has a GPU:
+
+| Host | GPU | Ollama | Models |
+| ---- | --- | ------ | ------ |
+| Workstation `192.168.1.222` | **RTX 5070 12 GB** | 0.33.1, bound to `127.0.0.1` | `qwen3:8b`, `qwen3:4b` |
+| `ashnetserv1` `192.168.1.14` (Proxmox) | none | 0.7.1, on the LAN | `phi3:mini`, `llama3:8b` |
+
+So "pull `qwen3:8b` onto the always-on server" is not an option: an 8B model on CPU answers in
+tens of seconds, and the questions this serves are asked standing at a wall tablet. The GPU is
+where it is, and the assistant has to reach it there.
+
+**The decision: bind the workstation's Ollama to the LAN, and firewall it to the Agrocer host
+alone.** `OLLAMA_HOST=0.0.0.0:11434` plus an inbound rule on TCP 11434 scoped to a single
+source address.
+
+The blanket "never `0.0.0.0`" was right about the danger and wrong about the mechanism. Ollama
+has no authentication whatsoever — anyone who can reach the port can run models, read the
+model list, and pull new ones. What makes that dangerous is *unrestricted reachability*, and a
+source-scoped firewall rule addresses it directly. A tunnel or a proxy would too, with more
+moving parts and a hop through Cloudflare for traffic that never leaves the house.
+
+**The cost, accepted: the assistant is down when the workstation is off.** ADR-007 already
+says that machine is a development/GPU box, not 24/7 infrastructure. This is exactly the
+failure the assistant was built to handle — `/api/ai/ask` returns 503 `unreachable` and the
+card says "The assistant is offline. It runs on the home PC — check that is on." Everything
+else on the wall keeps working, because the AI is not on the critical path for shopping,
+pantry or meals.
+
+**Rejected: routing it through the Cloudflare Tunnel** (a hostname like
+`ollama.ashnetbase.org`). It would publish an unauthenticated GPU endpoint to the internet,
+which Access could mitigate but which solves a problem that does not exist — both machines are
+on the same LAN. `api.chat.ashnetbase.org` already does this for the CPU instance and should
+be put behind Access for the same reason.
+
+**Requires a reserved address** for the workstation in DHCP. A dynamic lease that moves breaks
+`OLLAMA_BASE_URL` silently, and the symptom — the assistant going quiet — looks like the
+workstation being off.
+
+
 ## ADR-009 — App content renders client-side behind a hydration gate
 
 **Status:** Accepted
