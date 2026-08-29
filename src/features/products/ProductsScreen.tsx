@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { CarrotIcon, CheckIcon, PackageSearchIcon, ShoppingCartIcon, StarIcon } from 'lucide-react';
 import { CATEGORIES, type Category } from '@/domain/schemas/common';
 import { isOnList } from '@/domain/services/shopping';
+import { findProductAlternatives } from '@/domain/services/productAlternatives';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { FilterChips, SearchField } from '@/components/agrocer/Field';
@@ -59,6 +60,7 @@ export function ProductsScreen() {
         ) : (
           <ul className="space-y-2.5">
             {visible.map((product) => {
+              const alternatives = findProductAlternatives(product, products);
               const onList = isOnList(shopping, product.name);
               const inPantry = pantry.some(
                 (item) => item.name.toLowerCase() === product.name.toLowerCase(),
@@ -134,6 +136,11 @@ export function ProductsScreen() {
                       {inPantry ? 'In pantry' : 'Add to pantry'}
                     </button>
                   </div>
+                  {alternatives.length > 0 ? (
+                    <p className="mt-2 text-xs text-muted">
+                      Alternatives: {alternatives.map((item) => `${item.name} (${nzd(item.price)})`).join(', ')}
+                    </p>
+                  ) : null}
                 </li>
               );
             })}
