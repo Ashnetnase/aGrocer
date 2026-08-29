@@ -2361,6 +2361,27 @@ be put behind Access for the same reason.
 `OLLAMA_BASE_URL` silently, and the symptom — the assistant going quiet — looks like the
 workstation being off.
 
+**The trap that makes the scoped rule useless, found on implementing this (2026-08-29).**
+Windows creates its own inbound rules for `ollama.exe` the first time Ollama binds to a
+network interface — the standard "allow this app through the firewall" prompt. They are
+`Allow`, `Any` protocol, `Any` port, `Any` remote address, on the Private *and* Public
+profiles. Windows permits a connection if **any** rule matches, so those two silently override
+the source-scoped rule and leave Ollama open to the whole LAN.
+
+So implementing this ADR is two steps, not one:
+
+```powershell
+New-NetFirewallRule -DisplayName "Ollama from Agrocer" -Direction Inbound -Protocol TCP -LocalPort 11434 -RemoteAddress 192.168.1.49 -Action Allow
+Get-NetFirewallRule -DisplayName "ollama.exe" | Disable-NetFirewallRule
+```
+
+**Re-check after every Ollama upgrade** — a new version re-prompts and recreates them.
+
+Verifying it also needs care: `curl` to the workstation's own LAN address *from the
+workstation* takes a loopback shortcut and skips the firewall entirely, so it proves nothing
+about the scope. The test has to run from another machine — allowed from `192.168.1.49`,
+refused from a phone on the same wifi.
+
 
 ## ADR-021 — Structured meal ingredients augment, rather than replace, recipe text
 
