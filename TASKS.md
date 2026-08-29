@@ -214,8 +214,8 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 - [x] **pantry-to-recipe matching** (`src/domain/services/recipeMatch.ts`) — started here
       because most of the rest of the stage depends on it. Surfaced as the Tonight's meal
       card's missing-ingredient warning, which had been deferred since Phase 1
-- [ ] meal cost estimation — needs structured ingredient quantities, which is the reason
-      matching checks presence only
+- [x] meal cost estimation — structured ingredient amounts augment legacy text; complete
+      catalogue-priced totals appear in meal detail and on the wall dashboard (ADR-021)
 - [ ] recipe discovery/search, recipe import
 - [ ] low-stock and staple-reorder prediction — `inventory_events` is already accumulating
       the history these need

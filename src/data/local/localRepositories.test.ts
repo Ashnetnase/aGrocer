@@ -196,10 +196,17 @@ describe('meals repository', () => {
       image: undefined,
       description: '',
       ingredients: ['Chicken breast 1kg'],
+      ingredientDetails: [
+        { name: 'Chicken breast', amount: 1, unit: 'kg', productId: 'pr6' },
+      ],
     });
 
     const meals = await localRepositories.meals.list();
-    expect(meals[0]).toMatchObject({ id: created.id, name: 'Butter Chicken' });
+    expect(meals[0]).toMatchObject({
+      id: created.id,
+      name: 'Butter Chicken',
+      ingredientDetails: [{ amount: 1, unit: 'kg', productId: 'pr6' }],
+    });
   });
 
   it('assigning and clearing a slot round-trips through storage', async () => {

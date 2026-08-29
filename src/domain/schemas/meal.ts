@@ -6,6 +6,18 @@ export type MealTag = z.infer<typeof mealTagSchema>;
 
 export const MEAL_TAGS = mealTagSchema.options;
 
+export const mealIngredientSchema = z.object({
+  name: nameSchema,
+  amount: z
+    .number({ invalid_type_error: 'Enter an amount' })
+    .positive('Must be more than zero')
+    .max(10_000, 'Too large'),
+  unit: z.string().trim().min(1, 'Required').max(24, 'Too long'),
+  /** Stable catalogue link when one is known; name matching remains the legacy fallback. */
+  productId: idSchema.optional(),
+});
+export type MealIngredient = z.infer<typeof mealIngredientSchema>;
+
 export const mealSchema = z.object({
   id: idSchema,
   name: nameSchema,
@@ -27,6 +39,11 @@ export const mealSchema = z.object({
   image: z.string().min(1).optional(),
   description: z.string().trim().max(300),
   ingredients: z.array(z.string().trim().min(1, 'Required')).max(30, 'Too many ingredients'),
+  /**
+   * Structured amounts used for cost estimation. Optional keeps Stage 1 localStorage and
+   * existing database rows readable; editing a legacy meal upgrades it without rewriting it.
+   */
+  ingredientDetails: z.array(mealIngredientSchema).max(30, 'Too many ingredients').optional(),
 });
 
 export type Meal = z.infer<typeof mealSchema>;

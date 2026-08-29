@@ -83,16 +83,21 @@ the bulk of the test suite.
 Drizzle ORM over postgres-js on Supabase managed PostgreSQL (ADR-013), project `agrocer` in
 ap-southeast-2. Nine tables in `src/db/schema.ts`: `households`, `household_members`,
 `pantry_items`, `products`, `shopping_items`, `meals`, `plan_entries`, `inventory_events`, and
-`meal_feedback`. Migrations `0000`–`0006` are applied; `0006` adds the nullable
-`households.weekly_budget_cents` target. `npm run db:seed` creates one household.
+`meal_feedback`. Migrations `0000`–`0007` are applied; `0006` adds the nullable
+`households.weekly_budget_cents` target and `0007` adds nullable JSONB structured ingredient
+details beside the legacy `meals.ingredients` text array. `npm run db:seed` creates one household.
 
 The weekly grocery budget is household settings data, not a separate ledger. Zod accepts a
 positive NZD target or no target; repositories map NZD to nullable integer cents. Shopping
-compares the current list estimate with it and reports remaining/over. Historical spend and
-meal cost estimation do not exist yet.
+compares the current list estimate with it and reports remaining/over. Historical spend does
+not exist yet.
 
-**RLS is not yet enabled** — see `TASKS.md`. It ships with authentication, because enabling it
-without policies blocks all access.
+Meal costs are pure domain estimates from structured recipe amounts and current product-catalogue
+package prices. Existing text ingredients remain readable; editing a legacy meal upgrades it by
+writing both representations. The UI only displays a total when every ingredient can be priced.
+
+**RLS is enabled on all nine tables**, with one household policy per table and no anonymous
+access. `npm run db:rls` verifies both the metadata and a publishable-key probe.
 
 `src/db/client.ts` is server-only. It throws when `DATABASE_URL` is absent, caches the client on
 `globalThis` so hot reloads do not exhaust the pool, and sets `prepare: false` because Supabase's
@@ -124,7 +129,7 @@ Signing up grants nothing: an account with no member row gets 403. Linking is
 `npm run db:claim`, a deliberate act. Auth is enforced unless `AGROCER_AUTH="off"`, which
 fails closed by design.
 
-**RLS is enabled on all seven tables**, with policies granting `authenticated` its own
+**RLS is enabled on all nine tables**, with policies granting `authenticated` its own
 household and `anon` nothing. It does not affect the application: route handlers reach Postgres
 as `postgres`, which owns the tables and has `rolbypassrls`. RLS is the wall around the
 **publishable key**, which is public by design and which Supabase otherwise exposes every table
@@ -144,8 +149,8 @@ then *tries* the publishable key against every table and fails if any read succe
 reads, so it is safe to run against production.
 
 The accepted cost: because the application bypasses RLS, a bug in household scoping is not
-caught by the database. Running application queries as the authenticated user instead is a real
-option, to weigh when authentication lands.
+caught by the database. Running application queries as the authenticated user instead remains a
+future hardening option.
 
 ## Rendering and offline
 
@@ -254,7 +259,7 @@ can reach it; `npm run ai:chat` goes through `/api/ai/chat` and proves the whole
 `npm run dev` · `build` · `start` · `lint` · `typecheck` · `test` · `check` (all three).
 Database: `db:generate` · `db:migrate` · `db:studio` · `db:seed`.
 `npm run test:db` runs the integration suite against the real database. Tests are Vitest:
-228 unit tests across 18 files, plus 10 integration tests excluded from the default run.
+234 unit tests across 18 files, plus 10 integration tests excluded from the default run.
 Docker image builds; staging runbook in `docs/staging.md`.
 
 ---

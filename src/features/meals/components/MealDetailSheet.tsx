@@ -2,6 +2,9 @@
 
 import { ClockIcon, RefreshCwIcon, ShoppingCartIcon, Trash2Icon, UsersIcon } from 'lucide-react';
 import type { Meal } from '@/domain/schemas/meal';
+import type { Product } from '@/domain/schemas/product';
+import { estimateMealCost } from '@/domain/services/meals';
+import { nzd } from '@/lib/format';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { MealImage } from '@/components/agrocer/MealImage';
 
@@ -9,6 +12,7 @@ interface MealDetailSheetProps {
   open: boolean;
   onClose: () => void;
   meal: Meal | null;
+  products: Product[];
   dayLabel: string;
   slotLabel: string;
   onChange: () => void;
@@ -21,6 +25,7 @@ export function MealDetailSheet({
   open,
   onClose,
   meal,
+  products,
   dayLabel,
   slotLabel,
   onChange,
@@ -28,6 +33,7 @@ export function MealDetailSheet({
   onAddIngredients,
   ingredientsAdded,
 }: MealDetailSheetProps) {
+  const cost = meal ? estimateMealCost(meal, products) : undefined;
   return (
     <BottomSheet
       open={open}
@@ -92,6 +98,12 @@ export function MealDetailSheet({
               </p>
               <p className="mt-0.5 text-[17px] font-extrabold text-ink">{meal.minutes} min</p>
             </div>
+            {cost?.complete ? (
+              <div className="flex-1 rounded-2xl border border-line bg-canvas px-3 py-2.5">
+                <p className="text-xs font-semibold text-muted">Est. cost</p>
+                <p className="mt-0.5 text-[17px] font-extrabold text-ink">{nzd(cost.total)}</p>
+              </div>
+            ) : null}
             <div className="flex-1 rounded-2xl border border-line bg-canvas px-3 py-2.5">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-muted">
                 <UsersIcon className="h-3.5 w-3.5" /> Serves

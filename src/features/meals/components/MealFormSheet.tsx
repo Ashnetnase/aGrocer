@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useId } from 'react';
+import { useController, useForm, type Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2Icon } from 'lucide-react';
+import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { MEAL_TAGS, mealDraftSchema, type Meal, type MealDraft } from '@/domain/schemas/meal';
+import type { Product } from '@/domain/schemas/product';
+import { formatMealIngredient, parseMealIngredient } from '@/domain/services/meals';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import {
   FormChipMultiSelect,
   FormNumberField,
-  FormStringListField,
   FormTextField,
 } from '@/components/agrocer/form/FormFields';
 
@@ -20,13 +22,15 @@ const emptyValues: MealDraft = {
   tags: [],
   image: undefined,
   description: '',
-  ingredients: [''],
+  ingredients: [],
+  ingredientDetails: [],
 };
 
 interface MealFormSheetProps {
   open: boolean;
   onClose: () => void;
   meal: Meal | null;
+  products: Product[];
   onSave: (draft: MealDraft) => void;
   onDelete?: () => void;
   /** How many planned slots use this meal, so deleting can warn honestly. */
@@ -37,6 +41,7 @@ export function MealFormSheet({
   open,
   onClose,
   meal,
+  products,
   onSave,
   onDelete,
   plannedUses = 0,
@@ -57,7 +62,9 @@ export function MealFormSheet({
             tags: meal.tags,
             image: meal.image,
             description: meal.description,
-            ingredients: meal.ingredients.length > 0 ? meal.ingredients : [''],
+            ingredients: meal.ingredients,
+            ingredientDetails:
+              meal.ingredientDetails ?? meal.ingredients.map(parseMealIngredient),
           }
         : emptyValues,
     );
@@ -66,8 +73,7 @@ export function MealFormSheet({
   const submit = form.handleSubmit((values) => {
     onSave({
       ...values,
-      // Blank rows are how an empty ingredient list looks in the UI; drop them.
-      ingredients: values.ingredients.map((item) => item.trim()).filter(Boolean),
+      ingredients: (values.ingredientDetails ?? []).map(formatMealIngredient),
     });
     onClose();
   });
@@ -128,13 +134,7 @@ export function MealFormSheet({
 
         <FormChipMultiSelect control={form.control} name="tags" label="Tags" options={MEAL_TAGS} />
 
-        <FormStringListField
-          control={form.control}
-          name="ingredients"
-          label="Ingredients"
-          placeholder="e.g. Chicken breast 1kg"
-          addLabel="Add ingredient"
-        />
+        <IngredientFields control={form.control} products={products} />
 
         {meal && plannedUses > 0 ? (
           <p className="text-xs leading-relaxed text-muted">
@@ -144,5 +144,80 @@ export function MealFormSheet({
         ) : null}
       </form>
     </BottomSheet>
+  );
+}
+
+function IngredientFields({ control, products }: { control: Control<MealDraft>; products: Product[] }) {
+  const listId = useId();
+  const { field, fieldState } = useController({ control, name: 'ingredientDetails' });
+  const values = field.value ?? [];
+  const update = (index: number, patch: Partial<(typeof values)[number]>) =>
+    field.onChange(values.map((value, position) => (position === index ? { ...value, ...patch } : value)));
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-semibold text-ink">Ingredients</span>
+      <datalist id={listId}>
+        {products.map((product) => <option key={product.id} value={product.name} />)}
+      </datalist>
+      <div className="space-y-2">
+        {values.map((ingredient, index) => (
+          <div key={index} className="rounded-2xl border border-line bg-canvas p-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                list={listId}
+                value={ingredient.name}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  const product = products.find((candidate) => candidate.name.toLowerCase() === name.trim().toLowerCase());
+                  update(index, { name, productId: product?.id });
+                }}
+                aria-label={`Ingredient ${index + 1}`}
+                placeholder="e.g. Chicken breast"
+                className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+              />
+              <button
+                type="button"
+                onClick={() => field.onChange(values.filter((_, position) => position !== index))}
+                aria-label={`Remove ingredient ${index + 1}`}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-muted hover:bg-berry-50 hover:text-berry-500"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0.01"
+                step="0.01"
+                value={ingredient.amount}
+                onChange={(event) => update(index, { amount: Number(event.target.value) })}
+                aria-label={`Ingredient ${index + 1} amount`}
+                className="h-11 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+              />
+              <input
+                type="text"
+                value={ingredient.unit}
+                onChange={(event) => update(index, { unit: event.target.value })}
+                aria-label={`Ingredient ${index + 1} unit`}
+                placeholder="g, kg, ml, pack…"
+                className="h-11 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => field.onChange([...values, { name: '', amount: 1, unit: 'item' }])}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 hover:bg-moss-50"
+      >
+        <PlusIcon className="h-4 w-4" /> Add ingredient
+      </button>
+      {fieldState.error ? <p role="alert" className="mt-1.5 text-[13px] font-medium text-berry-600">Check each ingredient has a name, amount and unit.</p> : null}
+      <p className="mt-1.5 text-xs text-muted">Choose a catalogue product by name when possible so the meal cost can be estimated.</p>
+    </div>
   );
 }

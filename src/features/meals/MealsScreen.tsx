@@ -206,6 +206,7 @@ export function MealsScreen() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         meal={editingMeal}
+        products={products}
         plannedUses={editingMeal ? countPlannedUses(plan, editingMeal.id) : 0}
         onSave={(draft) => {
           if (editingMeal) void updateMeal(editingMeal.id, draft);
@@ -218,6 +219,7 @@ export function MealsScreen() {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         meal={targetMeal ?? null}
+        products={products}
         dayLabel={targetDay?.label ?? ''}
         slotLabel={SLOT_LABELS[target.slot]}
         onChange={() => setPickerOpen(true)}

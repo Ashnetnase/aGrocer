@@ -151,7 +151,17 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
       image: undefined,
       description: 'Test meal',
       ingredients: ['sausages', 'onion'],
+      ingredientDetails: [
+        { name: 'sausages', amount: 6, unit: 'item' },
+        { name: 'onion', amount: 1, unit: 'item' },
+      ],
     });
+
+    expect((await repos.meals.list()).find((candidate) => candidate.id === meal.id)?.ingredientDetails)
+      .toEqual([
+        { name: 'sausages', amount: 6, unit: 'item' },
+        { name: 'onion', amount: 1, unit: 'item' },
+      ]);
 
     const plan = await repos.meals.assign('wed', 'dinner', meal.id);
     expect(plan.wed?.dinner).toBe(meal.id);

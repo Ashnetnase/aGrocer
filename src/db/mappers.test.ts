@@ -157,6 +157,7 @@ describe('toMeal', () => {
     image: null,
     description: 'Mild, the children eat it.',
     ingredients: ['chicken thighs', 'butter', 'tomato'],
+    ingredientDetails: null,
     createdAt: NOW,
     updatedAt: NOW,
   };

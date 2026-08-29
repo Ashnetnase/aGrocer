@@ -114,6 +114,7 @@ export function toMeal(row: MealRow): Meal {
     image: optionalText(row.image),
     description: row.description,
     ingredients: row.ingredients,
+    ingredientDetails: row.ingredientDetails ?? undefined,
   };
 }
 

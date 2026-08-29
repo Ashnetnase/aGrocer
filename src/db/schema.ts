@@ -4,6 +4,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -12,6 +13,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { MealIngredient } from '@/domain/schemas/meal';
 
 /**
  * Stage 2 database schema (ADR-013).
@@ -246,12 +248,10 @@ export const meals = pgTable(
     /** Null for meals the family adds themselves — Stage 1 has no image upload. */
     image: text('image'),
     description: text('description').notNull().default(''),
-    /**
-     * Stage 1 ingredients are free text, so an array column matches the domain exactly.
-     * A structured `meal_ingredients` table becomes worthwhile in Stage 4, when
-     * pantry-to-recipe matching needs to join on them.
-     */
+    /** Stage 1 display/compatibility text; ADR-021 explains why it remains beside JSONB. */
     ingredients: text('ingredients').array().notNull().default([]),
+    /** Structured Stage 4 amounts; legacy text stays for display and rollback compatibility. */
+    ingredientDetails: jsonb('ingredient_details').$type<MealIngredient[]>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -462,7 +462,8 @@ Make Agrocer smarter using household history and external grocery information.
 - [ ] staple reorder prediction
 - [x] weekly budget target — optional NZD household setting, compared with the current list
       estimate on shopping, shopping mode, and the wall dashboard
-- [ ] meal cost estimation
+- [x] meal cost estimation — structured ingredient amounts are stored alongside legacy recipe
+      text; complete catalogue-priced estimates appear in meal detail and on the wall dashboard
 - [ ] product alternatives
 - [ ] supermarket price/specials provider abstraction
 - [ ] waste/use-soon recommendations
@@ -632,6 +633,31 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Structured meal cost estimation (Codex)
+
+**Stage:** Stage 4 / AshHome Phase 7
+**Status:** Complete and verified.
+
+Meal editing now captures each ingredient as a name, decimal amount, and unit, with an optional
+stable product-catalogue link selected from name suggestions. Existing free-text recipes remain
+valid and are parsed into editable fields only when opened; saving writes both the readable text
+array and the structured representation. This avoids a destructive rewrite and preserves the
+Stage 1/localStorage path.
+
+`estimateMealCost` prices compatible mass, volume, count, pack, and dozen amounts proportionally
+against current household catalogue package prices. Meal detail and Tonight's meal display the
+estimate only when every ingredient is covered; partial totals remain hidden because they would
+understate the real meal cost.
+
+Migration `drizzle/0007_glorious_pete_wisdom.sql` adds one nullable JSONB column to `meals` and
+was applied to live Supabase. ADR-021 records why the legacy text column remains authoritative for
+display and rollback compatibility.
+
+**Verified:** `npm run check` (234 tests across 18 files), `npm run test:db` (10 tests, including
+structured ingredient persistence), `npm run db:rls` (all 9 tables protected; publishable key
+reads zero rows), `npm run build`, and clean no-op reruns of `db:generate` / `db:migrate`.
+Visual browser verification was unavailable because no browser connection was present.
 
 ## 2026-08-29 — Weekly grocery budget target (Codex)
 
@@ -2243,6 +2269,31 @@ be put behind Access for the same reason.
 **Requires a reserved address** for the workstation in DHCP. A dynamic lease that moves breaks
 `OLLAMA_BASE_URL` silently, and the symptom — the assistant going quiet — looks like the
 workstation being off.
+
+
+## ADR-021 — Structured meal ingredients augment, rather than replace, recipe text
+
+**Status:** Accepted (2026-08-29)
+
+Meal cost estimation needs an ingredient name, decimal amount, unit, and a stable catalogue link
+where one is known. Stage 1 stored only name-first strings such as `Beef mince 500g`; replacing
+that field in place would break existing localStorage, seed data, API consumers, recipe matching,
+and rollback to an older application build.
+
+**The decision:** keep `meals.ingredients text[]` as the readable compatibility representation and
+add nullable `ingredient_details jsonb`. The domain exposes the structured array optionally. New
+meal edits write both; old rows and localStorage values remain valid and are parsed into structured
+fields only when a person edits them. No bulk migration guesses at the family's recipes.
+
+Costs are computed, never persisted: current product-catalogue prices are applied proportionally
+when ingredient and package units are compatible. A total is shown only with complete coverage.
+Unknown products, teaspoons, or incompatible units suppress the total instead of silently becoming
+zero or a made-up fallback price.
+
+**Rejected:** a separate `meal_ingredients` table for this first slice. It gives stronger relational
+links but requires transactional child-row replacement and expands every meal read into a join.
+JSONB retains Zod validation at the API boundary and keeps the additive migration reviewable. Move
+to rows only when ingredient-level querying or foreign-key enforcement provides a demonstrated need.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

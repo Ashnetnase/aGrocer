@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { AlertTriangleIcon, ClockIcon, UsersIcon } from 'lucide-react';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { usePlannerWeek } from '@/providers/useToday';
-import { findMeal, mealFor } from '@/domain/services/meals';
+import { estimateMealCost, findMeal, mealFor } from '@/domain/services/meals';
 import { describeIngredient, matchMealToPantry } from '@/domain/services/recipeMatch';
+import { nzd } from '@/lib/format';
 import { DashboardCard } from './DashboardCard';
 
 /**
@@ -20,15 +21,15 @@ import { DashboardCard } from './DashboardCard';
  * matching. It answers the question the card is looked at for: can we actually make this
  * tonight?
  *
- * Cost is still deliberately absent. The warning needs only to know whether an ingredient is
- * *present*; a cost needs quantities and prices per ingredient, which the free-text
- * ingredient list cannot give. A wrong number on the kitchen wall is worse than no number.
+ * Cost appears only for meals whose structured ingredients all match a catalogue price. A
+ * partial total would look authoritative while quietly omitting unknown ingredients.
  */
 export function TonightCard() {
-  const { meals, plan, pantry, hydrated, loadFailed } = useAgrocer();
+  const { meals, plan, pantry, products, hydrated, loadFailed } = useAgrocer();
   const week = usePlannerWeek();
   const tonight = findMeal(meals, mealFor(plan, week.todayKey, 'dinner'));
   const match = tonight ? matchMealToPantry(tonight, pantry) : undefined;
+  const cost = tonight ? estimateMealCost(tonight, products) : undefined;
 
   return (
     <DashboardCard
@@ -70,6 +71,7 @@ export function TonightCard() {
               <span className="inline-flex items-center gap-1.5">
                 <UsersIcon className="h-5 w-5" /> Serves {tonight.serves}
               </span>
+              {cost?.complete ? <span>{nzd(cost.total)} est.</span> : null}
             </p>
 
             {/*

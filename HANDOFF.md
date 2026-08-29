@@ -13,8 +13,8 @@ Agent instructions: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex and others).
 
 **Stage 2 — Real backend and household data**: build work **complete** as of 2026-08-29.
 **Stage 3 / AshHome Phases 8–9** complete through slice 9b — all four AI slices landed
-2026-08-28/29 at Ash's request to bring the AI in "in stages". **Stage 4 has begun**, with
-pantry-to-recipe matching.
+2026-08-28/29 at Ash's request to bring the AI in "in stages". **Stage 4 is in progress**:
+pantry-to-recipe matching, the weekly budget target, and meal-cost estimation are complete.
 
 Stage 1 closed as a dev-complete milestone (ADR-012).
 
@@ -22,8 +22,7 @@ What remains splits in two, and NEXT TASK keeps them apart:
 
 - **Ash's** — the deploy itself, the Ollama firewall rule, and four other infrastructure items.
   None of them are code.
-- **The next agent's** — Stage 4, deciding the structured-ingredient UX required for meal
-  cost estimation.
+- **The next agent's** — Stage 4 meal feedback UI; prediction work should wait for real history.
 
 Stage 2 cannot be marked COMPLETE until the deploy and PWA install are done, per `CLAUDE.md`.
 
@@ -34,8 +33,10 @@ Branch: `stage-2/database-schema`. Main branch: `main`.
 What actually runs today:
 
 - **Authentication is enforced** (ADR-017). Email and password via Supabase Auth, session in
-  cookies. Every route handler refuses without one (401), and an account not linked to a
-  household member is refused too (403). `/sign-in` is the screen; sign-out is on Settings.
+  cookies. Every data-bearing route and assistant action route refuses without one (401), and
+  an account not linked to a household member is refused too (403). The raw, data-free
+  `/api/ai/chat` transport is the documented exception. `/sign-in` is the screen; sign-out is
+  on Settings.
   **Ash's account is live and signed in successfully** (2026-08-29):
   `ashley.schippersas@gmail.com` is linked to the `Ash` member of The Ashfords. The other four
   members have no login, which is correct — the children have profiles, not accounts.
@@ -73,14 +74,17 @@ What actually runs today:
 - **Weekly grocery budget target is real.** Settings accepts an optional positive NZD target;
   Shopping shows estimate/remaining/over, Shopping Mode shows estimate against target, and the
   wall Shopping card shows estimate / target. Migration `0006` is applied to Supabase.
+- **Meal cost estimation is real** (ADR-021). Meal editing captures ingredient name, decimal
+  amount, and unit while preserving legacy text. Meal detail and the wall show a catalogue-
+  priced estimate only when every ingredient is covered. Migration `0007` is applied.
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
 - A Docker image builds and has been smoke-tested; a staging runbook exists at `docs/staging.md`.
 
-What is written but **not yet running**:
+Alternative persistence path:
 
-- The localStorage implementation is intact and still runs when the flag is off. It is not
-  dead code: it is the no-database path, what the provider's tests use, and the fallback when
-  the database is unreachable in development.
+- The localStorage implementation is intact and runs when the server-data flag is off. It is
+  not dead code: it is the no-database path and what the provider's tests use. It is selected
+  at startup, not an automatic runtime fallback after a database failure.
 
 ## Dashboard, Kids and school status
 
@@ -92,7 +96,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 | Family schedule   | **Mock** — one example row. Needs Phase 12.                        |
 | Reminders         | **Mock** — one example row. Needs Phase 11.                        |
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
-| Tonight's meal    | **Real** — the plan, plus a missing-ingredient warning from the pantry. |
+| Tonight's meal    | **Real** — plan, pantry warning, and complete catalogue-priced meal cost. |
 | Chores            | **Mock** — one example row. Needs Phase 12.                        |
 | Ask AshHome       | **Real** — reads list/pantry/plan; proposes list additions, gated. |
 
@@ -110,11 +114,9 @@ example chore for a real one.
 - **Notification ingestion:** not started. No email ingestion, no `SchoolNotification` type.
 - **Calendar integration:** not started. No calendar feed, import or family calendar model.
 
-Cost note: `Tonight's meal` now shows the missing-ingredient warning (Stage 4's
-pantry-to-recipe matching). **Approximate cost is still deliberately absent** — the warning
-needs only to know whether an ingredient is present, while a cost needs quantities and prices
-per ingredient, which free-text ingredients cannot give. A wrong number on the kitchen wall is
-worse than no number.
+Cost note: `Tonight's meal` shows the missing-ingredient warning and, for recipes that have been
+saved with structured amounts, an estimated cost. A partial estimate is deliberately hidden;
+unknown products or incompatible units must not quietly understate dinner's cost.
 
 ## Completed
 
@@ -128,7 +130,8 @@ worse than no number.
   - Drizzle repository implementation behind the Stage 1 contracts.
   - Server-only Drizzle client with dev hot-reload connection caching (`src/db/client.ts`).
   - `.env.example` documenting every required variable.
-  - Supabase project provisioned and the schema applied — all 7 tables confirmed present.
+  - Supabase project provisioned and migrations `0000`–`0007` applied — all 9 tables confirmed
+    present.
   - `.env.local` written and the connection verified from this repository.
   - Drizzle's migration journal reconciled; `npm run db:migrate` is a clean no-op.
   - Integration test suite proving the repositories against real Postgres (`npm run test:db`).
@@ -140,9 +143,9 @@ worse than no number.
   - `/api/meals` (catalogue) and `/api/meals/plan/[day]/[slot]` (weekly plan), plus
     `apiMealsRepository`, verified the same way.
   - `/api/products` and `/api/household` (+ `members`), completing all five features.
-- **RLS on all 7 tables** (migration `0001_exotic_the_liberteens.sql`, ADR-016), generated
-  from `.enableRLS()` in `src/db/schema.ts`. Plus `npm run db:rls`, which verifies the state
-  *and* probes the publishable key against every table.
+- **RLS on all 9 tables** (migrations `0001_exotic_the_liberteens.sql` and `0005`, ADR-016),
+  generated from `.enableRLS()` in `src/db/schema.ts`. Plus `npm run db:rls`, which verifies
+  the state *and* probes the publishable key against every table.
 - **Supabase Auth** (ADR-017): `src/auth/` (config, server and browser clients),
   `middleware.ts`, `/sign-in`, sign-out on Settings, `household_members.user_id` (migration
   `0002`), `authenticated` RLS policies (migration `0003`), and `npm run db:claim`.
@@ -150,6 +153,8 @@ worse than no number.
   the Tonight's meal card. Presence only, not quantities.
 - **Weekly grocery budget target** (Stage 4) — optional household setting across localStorage,
   HTTP, and Drizzle; persisted as nullable integer cents and surfaced in shopping views.
+- **Meal cost estimation** (Stage 4) — additive structured ingredient JSON beside legacy text,
+  catalogue-based proportional estimates, and complete-coverage-only display (ADR-021).
 - **History tables** — `inventory_events` (written automatically by the pantry repository)
   and `meal_feedback` (append-and-read only), migrations `0004`/`0005`, plus `/api/feedback`.
 - **CI** — `.github/workflows/ci.yml`: typecheck, lint, test, build, integration tests, and an
@@ -165,7 +170,7 @@ worse than no number.
   including the offline path.
 - **AI slice 9b** — the first write tool: `src/ai/tools/write.ts` (`WRITE_TOOLS`, a sibling of
   the read record), the proposal path in `src/ai/assistant.ts`, `app/api/ai/confirm`, and the
-  Add it / Cancel gate on the card. ADR-018 records the shape.
+  Add it / Add all / Cancel gate on the card. ADR-018 records the shape.
 - **Wall dashboard cards gate on `hydrated`** — Shopping, Tonight's meal and Kids were showing
   the Stage 1 demo fixtures until their fetch resolved.
 - **AI slice 9a** — read-only tools: `src/ai/tools/registry.ts` (the allow-list boundary),
@@ -180,8 +185,9 @@ worse than no number.
 
 ## Work In Progress
 
-None of the five features. What remains in Stage 2 is authentication, RLS, deployment and CI —
-not data plumbing.
+Stage 2 code is complete; only the physical homelab deployment and phone PWA install remain.
+Stage 4 is active. The next useful code slice is meal feedback UI. Low-stock prediction remains
+deliberately deferred until `inventory_events` contains enough real history.
 
 ## Files Changed
 
@@ -197,8 +203,8 @@ Recent and important:
 - `.env.example` — Supabase variables, `AGROCER_HOUSEHOLD_ID`, the server-shopping flag.
 - `scripts/seed.ts` + `npm run db:seed` — seeds one household, its members, products, pantry
   and meals. Idempotent by household name.
-- `src/server/repositories.ts` — the single place `householdId` is resolved. When auth lands,
-  this is what changes; handlers ask for repositories, never for an id.
+- `src/server/repositories.ts` — the single place the authenticated user's `householdId` is
+  resolved; handlers ask for repositories, never for an id.
 - `src/server/http.ts` — `parseJson` (Zod-validated bodies), `notFound`, `failed`. Errors are
   logged server-side and returned generic, so no connection string reaches a browser.
 - `app/api/{shopping,pantry,meals,products,household}/**` — the route handlers. Note
@@ -244,6 +250,11 @@ Recent and important:
   `matchProduct`'s prefix test on purpose:** a pantry name matches only when a quantity or
   nothing follows it, so "Rice vinegar" does not match "Rice". A wrong price is a rounding
   error; a wrong "you have this" sends somebody to the stove without an onion.
+- `src/domain/schemas/meal.ts`, `src/domain/services/meals.ts` — optional structured ingredient
+  amounts and pure complete-coverage meal-cost estimation. Legacy strings remain supported.
+- `src/features/meals/components/{MealFormSheet,MealDetailSheet}.tsx` and
+  `src/features/dashboard/TonightCard.tsx` — structured entry, catalogue suggestions, and cost
+  display. `drizzle/0007_glorious_pete_wisdom.sql` is the additive persistence change.
 - `src/data/api/authFailure.ts` — `handleUnauthorized()`, the one place a 401 becomes a
   redirect, plus `NotInHouseholdError` for the 403 that must not redirect. `setAuthRedirect()`
   is the test seam.
@@ -308,14 +319,17 @@ Full list with rationale lives in `AGROCER_MASTER_PLAN.md` (ADR section). Must-p
 - **ADR-017** — Supabase Auth; the household comes from `household_members.user_id`; signing
   up grants nothing; auth fails closed; the middleware is a convenience and
   `currentHouseholdId()` is the boundary.
-- **ADR-019** — HTTPS via the existing Cloudflare Tunnel on `ashnetbase.org`; the container
-  binds to `127.0.0.1`, never the LAN; Cloudflare Access deliberately not in front of it.
+- **ADR-019** — HTTPS via the existing Cloudflare Tunnel on `ashnetbase.org`; because
+  `cloudflared` runs on another machine, the container publishes `3000:3000` to the LAN.
+  Cloudflare Access is deliberately not in front of the family app.
 - **ADR-018** — the AI proposes changes; a person confirms them. Write tools are never
-  executed by the assistant loop; the confirmation sentence is built server-side from
-  validated arguments; `WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`.
+  executed by the assistant loop; every confirmation sentence/action list is built server-side
+  from validated arguments; `WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`.
 - **ADR-015** — the AI reaches household data only through a fixed, read-only tool allow-list.
   Exact-name lookup, zero-argument tools, repositories from `serverRepositories()`, and read
   tools separated from write tools by construction rather than convention.
+- **ADR-021** — structured meal ingredients augment rather than replace recipe text; costs are
+  computed from current catalogue prices and shown only with complete coverage.
 - `/api/ai/chat` stays a transport with no prompt, no tools and no data. The assistant lives at
   `/api/ai/ask`, so there is exactly one path to household data with a model attached.
 
@@ -349,14 +363,15 @@ LLM, owns permanent state. AI acts only through explicitly defined tools.
 - Dev server: `npm run dev` — http://localhost:3000.
 - Database: Supabase managed PostgreSQL (ADR-013). **Provisioned 2026-08-27.**
   Project `agrocer`, ref `ojlzjjvrtnslcxqdmpay`, region `ap-southeast-2` (Sydney),
-  API URL `https://ojlzjjvrtnslcxqdmpay.supabase.co`. Schema applied, 7 tables live, 0 rows.
+  API URL `https://ojlzjjvrtnslcxqdmpay.supabase.co`. Migrations through `0007` are applied,
+  9 tables are live, and the Ashford household seed is present.
   Free tier caps one user at 2 active projects across all orgs they own, so
   `Salon Booking App UI Design` was paused (2026-08-27, user's decision) to make room.
   It is restorable from the Supabase dashboard.
-- Variables (see `.env.example`, fill into gitignored `.env.local`):
-  `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`.
-- Planned staging VM: `agrocer-stg01` (spec in master plan section 12). Not yet provisioned.
+- Variables (see `.env.example`, fill into gitignored `.env.local`): `DATABASE_URL`,
+  `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
+  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and the documented
+  Agrocer/AI flags.
 - Ollama: running natively on Windows on this workstation (RTX 5070 12 GB), listening on
   `http://127.0.0.1:11434`. Version 0.33.1. Models installed: `qwen3:8b`, `qwen3:4b`.
   Variables `AI_PROVIDER` (defaults `ollama`), `OLLAMA_BASE_URL` and `OLLAMA_MODEL` are
@@ -548,6 +563,17 @@ Added 2026-08-29 for the weekly grocery budget target:
   `npm run build` — clean.
 - Visual browser verification remained unavailable because no browser was connected.
 
+Added 2026-08-29 for meal-cost estimation:
+
+- Migration `0007_glorious_pete_wisdom` applied to live Supabase; it adds only nullable
+  `meals.ingredient_details` JSONB and leaves every legacy ingredient string intact.
+- `npm run check` — 234 tests across 18 files. New tests cover legacy parsing, proportional
+  package pricing, incomplete coverage suppression, and both persistence implementations.
+- `npm run test:db` — 10 integration tests, including structured ingredient JSON through
+  Drizzle. `npm run db:rls` — all 9 tables protected; publishable key reads zero rows.
+- `npm run build` — clean; `db:generate` and `db:migrate` reruns are clean no-ops.
+- Visual browser verification remained unavailable because no browser was connected.
+
 ## Known Problems
 
 - `products` has no repository method that creates rows — the contract exposes only `list`,
@@ -555,21 +581,14 @@ Added 2026-08-29 for the weekly grocery budget target:
   Postgres. Deliberately not papered over with a speculative POST; Stage 2 should decide.
 - `reset()` throws against the database by design. The Settings screen still offers it, so
   with the server flag on that button will surface an error rather than restoring demo data.
-- **First paint shows Stage 1 demo data.** *(Wall dashboard half fixed 2026-08-29 — Shopping,
-  Tonight's meal and Kids now gate on `hydrated`. The underlying seeding of `initialState` is
-  still there, so any new screen that forgets to gate will have the same bug.)* `AgrocerProvider` seeds `initialState` with the
-  demo fixtures, so until the load resolves every screen briefly renders someone else's
-  groceries. Screens gate on `hydrated`; the nav badge did not, and now does. The underlying
-  seeding of `initialState` is untouched and worth revisiting — it was invisible against
-  localStorage and is a visible flash over the network.
 - ~~RLS is disabled on all 7 tables.~~ **Closed 2026-08-29** (ADR-016). RLS is enabled
   everywhere, deny-all, and the publishable key now reads nothing and cannot insert. Verify
   with `npm run db:rls`. Note the old claim in this file — that RLS had to ship with auth —
   was wrong: the app connects as `postgres`, which owns the tables and bypasses RLS.
 - **Household scoping is enforced by the application, not the database.** Because the app
-  bypasses RLS, a bug in `src/server/repositories.ts` would not be caught by Postgres. Accepted
-  for now; the alternative (running queries as the authenticated user) is worth weighing when
-  auth lands.
+  connects as `postgres` and bypasses RLS, a bug in `src/server/repositories.ts` would not be
+  caught by Postgres. This is an accepted current risk; revisit if the server stops using the
+  owner connection and queries as the authenticated user instead.
 - ~~No route handler is authenticated.~~ **Closed 2026-08-29** (ADR-017). Verified: every
   route, including `/api/ai/ask`, answers 401 with no session.
 - ~~A session that expires with a screen open shows a generic failure.~~ **Closed 2026-08-29.**
@@ -581,8 +600,6 @@ Added 2026-08-29 for the weekly grocery budget target:
 - `.env.example` had been renamed rather than copied when `.env.local` was created, so it was
   briefly missing from the repository. Restored, and updated to the newer Supabase key names
   (`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`).
-- `AGROCER_MASTER_PLAN.md` cites the migration as `drizzle/0000_bouncy_shockwave.sql`; the
-  actual file is `drizzle/0000_mysterious_black_cat.sql`. The repository is correct.
 - `next lint` is deprecated (removed in Next.js 16).
 - **A dev server started immediately after `npm run build` serves a stale `.next`** and answers
   HTML 404/500 for routes that exist. Delete `.next` and restart `npm run dev`. Cost an
@@ -591,15 +608,11 @@ Added 2026-08-29 for the weekly grocery budget target:
   can appear not to have worked when it is already on disk and compiled. Unregister the service
   worker and clear the `agrocer-shell-v1` cache in DevTools. Between this and the stale `.next`,
   a dashboard edit was invisible twice over on 2026-08-28 — check both before debugging the code.
-- `/api/ai/chat` is unauthenticated, like every other route handler — the same gap Auth + RLS
-  closes. It costs GPU time rather than data, since the model has no tools, but it is one more
-  reason not to expose the app beyond the LAN before auth lands.
-- Two roadmaps currently coexist: the master plan's Stages 1–8 and the AshHome Phases 0–14 in
+- `/api/ai/chat` is intentionally still unauthenticated. It has no tools or household data, but
+  it can consume GPU time; protect or remove the raw transport before external exposure.
+- Two roadmaps currently coexist: the master plan's Stages 1–8 and the AshHome Phases 0–17 in
   `CLAUDE.md`. Not yet reconciled — see `TASKS.md`. Ask before treating either as authoritative
   where they disagree.
-- HTTPS approach for staging is undecided, which blocks PWA install on a phone
-  (a LAN address over plain HTTP is not a secure context). `docs/staging.md` compares options;
-  Tailscale is the standing recommendation.
 
 ## NEXT TASK
 
@@ -610,11 +623,13 @@ after the multi-item proposal work begun from commit `f060ee7` on
 ### State in one paragraph
 
 Stage 2's build work is complete: Postgres behind route handlers, Supabase Auth enforced on
-every route, RLS on all nine tables, history tables, CI, and a deployment runbook. The AI
+every data-bearing/action route, RLS on all nine tables, history tables, CI, and a deployment
+runbook. The raw data-free `/api/ai/chat` transport is the documented auth exception. The AI
 ladder is complete through slice 9b — the assistant reads the shopping list, pantry and meal
 plan through a read-only tool allow-list, and can *propose* one or several shopping items behind
-one list-shaped confirmation gate. Stage 4 now has pantry-to-recipe matching and the weekly
-budget target. **228 unit tests across 18 files, 10 integration tests, build clean,
+one list-shaped confirmation gate. Stage 4 now has pantry-to-recipe matching, the weekly
+budget target, and complete-coverage meal-cost estimates. **234 unit tests across 18 files,
+10 integration tests, build clean,
 `npm run db:rls` green.**
 
 ### Blocked on Ash — not code, do not attempt
@@ -647,14 +662,17 @@ provider without writing to the database.
 and in Postgres; shopping views compare the current list estimate with it. This is a target,
 not historical spend tracking.
 
-**NEXT TASK: (c) Meal cost estimation decision.** It has a prerequisite worth deciding before starting:
-it needs ingredients as structured quantities, which changes how a recipe is entered.
-`recipeMatch.ts` deliberately checks presence only for this reason. Ask Ash before committing
-to a UX change.
+**(c) Meal cost estimation — DONE 2026-08-29.** ADR-021 keeps legacy recipe text and adds
+optional structured name/amount/unit/product details. Editing upgrades old recipes; costs are
+shown only when every ingredient has a compatible catalogue price. Migration `0007` is live.
 
 **(d) Low-stock / staple-reorder prediction.** `inventory_events` has been accumulating the
 history since 2026-08-29 and nothing reads it yet. Give it a few weeks of real data first —
 predictions from three rows will be worse than none.
+
+**NEXT TASK: meal feedback UI.** `meal_feedback`, both repositories, and `/api/feedback` already
+exist and are integration-tested. Add a small rating action to meal detail and show recent
+family feedback without changing the append-only history contract.
 
 ### Smaller known gaps
 
@@ -664,8 +682,7 @@ predictions from three rows will be worse than none.
   localStorage, a round trip to Sydney now. Most visible on the pantry steppers.
 - **No automated backups.** `docs/backup.md` has verified commands; a weekly cron on the
   homelab is the obvious step once it is running. Note a full dump contains `auth.users`.
-- **`meal_feedback` has no UI.** The table, repository and `/api/feedback` exist; rating a
-  meal is Stage 4's job.
+- **`meal_feedback` has no UI.** This is now the recommended next Stage 4 code slice.
 
 ### Two traps that have each cost an hour
 
@@ -733,6 +750,6 @@ Both bit twice in one session. Check them before debugging the code.
 
 ## Last Updated
 
-2026-08-29 — multi-item AI proposals and the weekly grocery budget target completed by Codex
-on `stage-2/database-schema`. Migration `0006` is applied; this handoff records the committed
-branch checkpoint pushed to `origin/stage-2/database-schema`. Nothing was merged to `main`.
+2026-08-29 — multi-item AI proposals, weekly budget, and meal-cost estimation completed by
+Codex on `stage-2/database-schema`. Migrations through `0007` are applied; this handoff records
+the branch checkpoint pushed to `origin/stage-2/database-schema`. Nothing was merged to `main`.
