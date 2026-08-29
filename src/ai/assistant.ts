@@ -4,6 +4,7 @@ import { READ_ONLY_TOOLS } from './tools/readOnly';
 import { WRITE_TOOLS, type AiWriteTool } from './tools/write';
 import { runTool, toolSpecs, type AiTool } from './tools/registry';
 import { AiError, type AiMessage, type AiProvider } from './types';
+import { getRecipeProvider } from '@/recipes/provider';
 
 /**
  * The AshHome assistant (Phase 9, slice 9a).
@@ -155,6 +156,10 @@ export async function askAssistant(
     toolsUsed.push('getMeals');
     return { reply: `I found ${directPlan.mealName}. Shall I plan it for ${directPlan.dayLabel} ${directPlan.slot}?`, toolsUsed, proposal: { actions: [directPlan.action] }, model, durationMs: Date.now() - startedAt };
   }
+  const recipeOptions = await directRecipeSearch(question);
+  if (recipeOptions) {
+    return { reply: recipeOptions, toolsUsed: ['searchRecipes'], model, durationMs: Date.now() - startedAt };
+  }
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
     // On the final round the tools are withheld, which is what forces an answer: a model
@@ -248,6 +253,15 @@ export async function askAssistant(
     })`,
     'The assistant could not finish that. Try asking it more simply.',
   );
+}
+
+async function directRecipeSearch(question: string): Promise<string | undefined> {
+  if (!/\b(find|search|suggest|show)\b/i.test(question) || !/\brecipe(s)?\b/i.test(question)) return undefined;
+  const query = question.replace(/\b(find|search|suggest|show|a|some|new|recipe|recipes|for|me|please)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+  if (query.length < 2) return undefined;
+  const results = (await getRecipeProvider().search(query)).slice(0, 5);
+  if (results.length === 0) return `I couldn't find a recipe for ${query}.`;
+  return `I found these recipes for ${query}: ${results.map((recipe, index) => `${index + 1}. ${recipe.title}`).join(' ')} Tell me which one you'd like to save.`;
 }
 
 async function directMealPlanProposal(
