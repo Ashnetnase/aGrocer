@@ -105,6 +105,7 @@ describe('the allow-list', () => {
       'getShoppingList',
       'getPantry',
       'getMealPlan',
+      'getMeals',
       'searchRecipes',
     ]);
   });

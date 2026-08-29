@@ -41,7 +41,7 @@ describe('the write allow-list', () => {
   });
 
   it('holds exactly the writes it is meant to, and no others', () => {
-    expect(Object.keys(WRITE_TOOLS)).toEqual(['addShoppingItem', 'addRecipeToMeals']);
+    expect(Object.keys(WRITE_TOOLS)).toEqual(['addShoppingItem', 'addRecipeToMeals', 'planMeal']);
   });
 
   it('lets the model point at a recipe but never describe one', () => {

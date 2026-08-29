@@ -112,6 +112,14 @@ const mealPlan: AiTool = {
   },
 };
 
+const mealCatalogue: AiTool = {
+  spec: { name: 'getMeals', description: 'Read the household meal catalogue and ids. Use before proposing to plan one of their saved meals.', parameters: NO_ARGUMENTS },
+  async execute(repos) {
+    const meals = await repos.meals.list();
+    return meals.length === 0 ? 'The meal catalogue is empty.' : meals.map((meal) => `${meal.name} (id ${meal.id})`).join('; ');
+  },
+};
+
 function describeItem(item: { name: string; quantity: number; unit: string }): string {
   return item.quantity > 1 ? `${item.name} ×${item.quantity} ${item.unit}` : item.name;
 }
@@ -172,5 +180,6 @@ export const READ_ONLY_TOOLS: Record<string, AiTool> = {
   getShoppingList: shoppingList,
   getPantry: pantry,
   getMealPlan: mealPlan,
+  getMeals: mealCatalogue,
   searchRecipes: searchRecipes as AiTool,
 };

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { categorySchema } from '@/domain/schemas/common';
+import { categorySchema, dayKeySchema, slotSchema } from '@/domain/schemas/common';
 import { formatMealIngredient } from '@/domain/services/meals';
 import { getRecipeProvider } from '@/recipes/provider';
 import type { AgrocerRepositories } from '@/data/repositories/types';
@@ -177,6 +177,23 @@ const addRecipeToMeals: AiWriteTool<AddRecipeArgs> = {
   },
 };
 
+const planMealArgs = z.object({ mealId: z.string().uuid(), day: dayKeySchema, slot: slotSchema });
+type PlanMealArgs = z.infer<typeof planMealArgs>;
+const planMeal: AiWriteTool<PlanMealArgs> = {
+  spec: { name: 'planMeal', description: 'Propose planning an existing saved meal for a day and slot. Use only a meal id returned by getMeals. The family confirms before anything changes.', parameters: { type: 'object', properties: { mealId: { type: 'string' }, day: { type: 'string' }, slot: { type: 'string' } }, required: ['mealId', 'day', 'slot'] } },
+  schema: planMealArgs,
+  describe(args) {
+    return `Plan saved meal ${args.mealId} for ${args.day} ${args.slot}`;
+  },
+  async execute(args, repos) {
+    const meals = await repos.meals.list();
+    const meal = meals.find((item) => item.id === args.mealId);
+    if (!meal) return 'That meal could not be found, so nothing was planned.';
+    await repos.meals.assign(args.day, args.slot, args.mealId);
+    return `Planned ${meal.name} for ${args.day} ${args.slot}.`;
+  },
+};
+
 /**
  * The write allow-list. Adding a tool here lets the model *propose* that action — never
  * perform it. If a tool should ever bypass confirmation, that is a decision to record as an
@@ -185,4 +202,5 @@ const addRecipeToMeals: AiWriteTool<AddRecipeArgs> = {
 export const WRITE_TOOLS: Record<string, AiWriteTool> = {
   addShoppingItem: addShoppingItem as AiWriteTool,
   addRecipeToMeals: addRecipeToMeals as AiWriteTool,
+  planMeal: planMeal as AiWriteTool,
 };
