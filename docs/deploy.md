@@ -11,8 +11,8 @@ phone / wall tablet
 Cloudflare edge  ── TLS terminates here, real certificate
    │  (tunnel "homelab", outbound only — no port open on the router)
    ▼
-cloudflared on the homelab host
-   │  http://127.0.0.1:3000
+cloudflared          -- runs on its OWN machine, not with the app
+   │  http://<agrocer-host>:3000   <- a LAN IP, not localhost
    ▼
 agrocer container ──────────► Supabase Postgres (ap-southeast-2)
 ```
@@ -27,17 +27,26 @@ agrocer container ──────────► Supabase Postgres (ap-southe
 
 ## 1. Add the hostname to the tunnel
 
-In **Cloudflare Zero Trust → Networks → Tunnels → `homelab` → Public Hostnames → Add**:
+In **Cloudflare Zero Trust → Networks → Tunnels & Mesh → `homelab` → Published application
+routes → Add**:
 
 | Field | Value |
 | ----- | ----- |
 | Subdomain | `home` |
 | Domain | `ashnetbase.org` |
 | Service type | `HTTP` |
-| URL | `localhost:3000` |
+| URL | `<agrocer-host-ip>:3000` — e.g. `192.168.1.49:3000` |
 
-`HTTP` is correct here, not HTTPS: the hop from `cloudflared` to the container is over the
-loopback interface on the same machine. TLS is terminated at Cloudflare's edge.
+`HTTP` is correct here, not HTTPS: the hop from `cloudflared` to the container is inside the
+home network. TLS is terminated at Cloudflare's edge.
+
+**The route is a LAN IP, not `localhost`.** `cloudflared` runs on its own machine and reaches
+every service by address — `vault → 192.168.1.49:8080`, `chat → 192.168.1.37:8080`. So
+`localhost:3000` would mean localhost *inside cloudflared*, and the route would 502 forever.
+Find the address with `hostname -I` on whichever box runs the container.
+
+In the current Cloudflare UI this lives under the tunnel's **Published application routes**
+tab — not "Public Hostname", and not "Hostname routes", which is for private WARP routing.
 
 This creates the `home.ashnetbase.org` DNS record automatically, as a Tunnel record like the
 existing four.
@@ -78,12 +87,19 @@ rebuild, not a restart**. Everything secret is runtime-only and never enters an 
 ## 4. Verify
 
 ```bash
-# On the host: the container answers, and only on loopback.
+# On the host: the container answers.
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/sign-in     # 200
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/shopping # 401 — auth works
 
 docker compose ps        # health: healthy
 docker compose logs -f   # no repeated errors
+```
+
+Then from **another machine on the LAN**, because that is how `cloudflared` reaches it — this
+is the check that distinguishes "the app is running" from "the tunnel can see the app":
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://<agrocer-host-ip>:3000/sign-in   # 200
 ```
 
 Then from a phone, **off the home Wi-Fi** — mobile data proves it is the tunnel and not the
@@ -117,11 +133,20 @@ to sign-in rather than showing an error.
 would add a second sign-in on a shared kitchen tablet and its interstitial interferes with
 service-worker registration and `fetch` calls to `/api/*`. See ADR-019.
 
-**The AI assistant will not work from this container.** Ollama binds to `127.0.0.1` on the
-workstation by design, so from the homelab it is unreachable and `/api/ai/ask` returns 503
-`unreachable` — the correct failure, and the card says "The assistant is offline. It runs on
-the home PC — check that is on." Making it reachable is a separate decision: a tunnel between
-the two hosts, or an authenticated proxy. Never `OLLAMA_HOST=0.0.0.0`.
+**The AI assistant will not work from this container**, and this was checked rather than
+assumed on 2026-08-29. There are two Ollama instances on this network and neither serves:
+
+| Where | Version | Models | Why not |
+| ----- | ------- | ------ | ------- |
+| Workstation `192.168.1.222` | 0.33.1 | `qwen3:8b`, `qwen3:4b` | Bound to `127.0.0.1`; confirmed unreachable on its LAN address |
+| `192.168.1.14` (behind `api.chat`) | 0.7.1 | `phi3:mini`, `llama3:8b` | Reachable, but has neither model the assistant was built and tested against, and 0.7.1 is far older |
+
+So `/api/ai/ask` returns 503 `unreachable` and the card says "The assistant is offline. It runs
+on the home PC — check that is on." That is the correct failure, not a deployment fault.
+
+Making it work is a separate decision, and there are two honest options: pull `qwen3:8b` onto
+the `.14` box and point `OLLAMA_BASE_URL` at it, or reach the workstation's instance through a
+tunnel or authenticated proxy. Never `OLLAMA_HOST=0.0.0.0`.
 
 ## Backups
 

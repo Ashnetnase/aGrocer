@@ -3,10 +3,11 @@
 # One service. There is no Postgres here on purpose: the database is Supabase (ADR-013), so
 # this container is stateless and can be destroyed and rebuilt without losing anything.
 #
-# HTTPS comes from the existing Cloudflare Tunnel rather than from this file (ADR-019). The
-# container listens on localhost only; `cloudflared` reaches it from the same host and
-# terminates TLS at Cloudflare's edge. Nothing is published to the LAN and no port is opened
-# on the router.
+# HTTPS comes from the existing Cloudflare Tunnel rather than from this file (ADR-019).
+# `cloudflared` runs on a different machine from this container and reaches it over the LAN,
+# the same way it reaches vault, chat and status — so the port is published to the network,
+# not to loopback. TLS still terminates at Cloudflare's edge, and no port is opened on the
+# router. See ADR-019 for what that costs and why it is accepted.
 #
 # Copy `.env.example` to `.env` beside this file and fill it in. Compose reads `.env`
 # automatically; it is gitignored, like `.env.local`.
@@ -26,10 +27,15 @@ services:
     restart: unless-stopped
 
     ports:
-      # 127.0.0.1 deliberately. Only `cloudflared` on this host needs to reach it, and
-      # binding to the LAN would put an app holding family data on every device on the
-      # network — including over plain HTTP, where the session cookie travels in clear.
-      - '127.0.0.1:3000:3000'
+      # Published to the LAN because `cloudflared` lives on another machine and routes by IP
+      # (`http://<this-host>:3000`). Loopback would be safer and simply would not work here.
+      #
+      # What this costs, stated plainly: the app is reachable over plain HTTP by anything on
+      # the home network, so the session cookie travels in clear on the LAN hop between
+      # cloudflared and here. Signing in is still required — this is a transport exposure,
+      # not an access one. Co-locating the container with cloudflared and using the Docker
+      # network would remove it; see ADR-019.
+      - '3000:3000'
 
     environment:
       NODE_ENV: production

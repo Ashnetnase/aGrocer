@@ -2112,10 +2112,26 @@ and the database is already managed elsewhere (ADR-013). The existing SES setup 
 `noreply.ashnetbase.org` stays useful for outbound email in Phase 11 — that is a separate
 concern from hosting.
 
-**The container binds to `127.0.0.1:3000`, not to the LAN.** Only `cloudflared` on the same
-host needs to reach it. Publishing to the LAN as well would put an app holding family data on
-every device on the network over plain HTTP, where the session cookie travels in clear — which
-would undo much of what ADR-016 and ADR-017 just bought.
+**Amended 2026-08-29, after the first deploy attempt.** This ADR originally said the container
+would bind to `127.0.0.1:3000` because only `cloudflared` on the same host needed it. That was
+wrong about Ash's setup, and the correction is worth recording rather than quietly editing.
+
+`cloudflared` runs on a *different* machine and routes to every service by LAN IP —
+`vault → 192.168.1.49:8080`, `chat → 192.168.1.37:8080`, `status → 192.168.1.49:3001`. So
+`localhost:3000` in the tunnel config meant localhost *inside cloudflared*, and the route
+returned 502 no matter what Agrocer did. The container therefore publishes `3000:3000` to the
+LAN, and the tunnel route is `http://<agrocer-host>:3000`.
+
+**What that costs, since the original reasoning was a security argument.** The app is now
+reachable over plain HTTP by anything on the home network, so the session cookie travels in
+clear on the hop between `cloudflared` and the container. Signing in is still required, so
+this is a transport exposure rather than an access one, and it matches how vault, chat and
+status already work on this network. Accepted for now.
+
+The clean fix, if it ever matters: run the Agrocer container on the same host as
+`cloudflared`, put both on one Docker network, and route to `http://agrocer:3000` by container
+name. That removes the LAN hop entirely. Not done now because it means moving cloudflared's
+deployment around, which is more disruptive than the exposure warrants on a home network.
 
 **Cloudflare Access is deliberately NOT placed in front of it.** The application has its own
 authentication now, and Access would add a second sign-in on a kitchen wall tablet, plus an
