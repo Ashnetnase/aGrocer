@@ -28,24 +28,37 @@ services:
 
     ports:
       # Published to the LAN because `cloudflared` lives on another machine and routes by IP
-      # (`http://<this-host>:3000`). Loopback would be safer and simply would not work here.
+      # (`http://<this-host>:<port>`). Loopback would be safer and simply would not work here.
+      #
+      # The HOST port is configurable; the container port is not. `PORT=3000`, `EXPOSE 3000`
+      # and the healthcheck are all fixed at 3000 inside. On a homelab box 3000 is a popular
+      # address — Portainer holds it on `192.168.1.49` — and nothing in the app derives a URL
+      # from the port, so moving it is one line here plus one field in the tunnel route. No
+      # rebuild.
       #
       # What this costs, stated plainly: the app is reachable over plain HTTP by anything on
       # the home network, so the session cookie travels in clear on the LAN hop between
       # cloudflared and here. Signing in is still required — this is a transport exposure,
       # not an access one. Co-locating the container with cloudflared and using the Docker
       # network would remove it; see ADR-019.
-      - '3000:3000'
+      - '${AGROCER_HOST_PORT:-3000}:3000'
 
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: '1'
 
-      # Secrets, runtime-only. `:?` fails the run loudly rather than starting a container
-      # that will 500 on its first request.
+      # The only secret the running container needs. `:?` fails the run loudly rather than
+      # starting something that will 500 on its first request.
+      #
+      # If the password contains a `$`, double it in `.env` — compose interpolates `$` inside
+      # values, so `p$ss` becomes `p` + an undefined variable. The symptom is a Postgres auth
+      # failure with a password you can prove is correct.
       DATABASE_URL: ${DATABASE_URL:?set it in .env}
-      SUPABASE_URL: ${SUPABASE_URL:?set it in .env}
-      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+
+      # SUPABASE_URL and SUPABASE_SECRET_KEY are deliberately NOT here. Nothing in the running
+      # app reads them — only `scripts/claim.ts` and `scripts/rls-check.ts` do, and those run
+      # from a checkout against `.env.local`, never inside this container, which has no npm.
+      # They were required here briefly and aborted otherwise-valid deploys.
 
       # Auth is enforced unless this is exactly "off" (ADR-017). It is not set here at all,
       # so it cannot be switched off by editing a value someone skim-reads as harmless.

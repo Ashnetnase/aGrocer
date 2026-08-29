@@ -12,7 +12,7 @@ Cloudflare edge  ── TLS terminates here, real certificate
    │  (tunnel "homelab", outbound only — no port open on the router)
    ▼
 cloudflared          -- runs on its OWN machine, not with the app
-   │  http://192.168.1.49:3000     <- a LAN IP, not localhost
+   │  http://192.168.1.49:3002     <- a LAN IP, not localhost
    ▼
 agrocer container ──────────► Supabase Postgres (ap-southeast-2)
 ```
@@ -20,8 +20,17 @@ agrocer container ──────────► Supabase Postgres (ap-southe
 ## Prerequisites
 
 - Docker Engine on **`192.168.1.49`** — the host chosen on 2026-08-29. It already runs `vault`
-  (8080) and `status` (3001), so Docker is there and the machine is always on. Check port 3000
-  is free before deploying: `ss -tlnp | grep :3000` should print nothing.
+  (8080), `status` (3001) and **Portainer on 3000**, so pick a free host port:
+
+  ```bash
+  ss -tlnp | grep -E ':(3000|3002)\s'   # 3000 is Portainer; confirm your choice is free
+  ```
+
+  Set `AGROCER_HOST_PORT=3002` in `.env` (or any free port) and use the same number in the
+  tunnel route. **Move the new thing, not the running one** — Portainer is what you reach for
+  when a container misbehaves, and relocating it mid-deploy risks losing the UI exactly when
+  you need it. The container is always 3000 internally (`PORT`, `EXPOSE`, healthcheck), and
+  nothing in the app derives a URL from the port, so this needs no rebuild.
 - The `homelab` Cloudflare Tunnel already running there — it is, serving `chat`, `vault`,
   `status` and `api.chat`.
 - A Supabase project with the schema applied and at least one claimed account
@@ -37,7 +46,7 @@ routes → Add**:
 | Subdomain | `home` |
 | Domain | `ashnetbase.org` |
 | Service type | `HTTP` |
-| URL | `192.168.1.49:3000` |
+| URL | `192.168.1.49:3002` |
 
 `HTTP` is correct here, not HTTPS: the hop from `cloudflared` to the container is inside the
 home network. TLS is terminated at Cloudflare's edge.
@@ -64,11 +73,20 @@ Copy `.env.example` to `.env` next to `docker-compose.yml` on the homelab host a
 
 ```
 DATABASE_URL=                            # Supabase → Database → session pooler
-SUPABASE_URL=https://<ref>.supabase.co
-SUPABASE_SECRET_KEY=                     # only needed for npm run db:claim
 NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+AGROCER_HOST_PORT=3002                   # 3000 is Portainer on 192.168.1.49
 ```
+
+Three values, not five. `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are **not** needed here —
+nothing in the running container reads them, only `scripts/claim.ts` and `scripts/rls-check.ts`
+do, and those run from a checkout against `.env.local`. Compose briefly demanded `SUPABASE_URL`
+and aborted otherwise-valid deploys because of it.
+
+> **A `$` in the database password must be doubled.** Compose interpolates `$` inside `.env`
+> values, so `p$ss` becomes `p` followed by an undefined variable. Write `p$$ss`. The symptom
+> is a Postgres authentication failure with a password you can prove is correct — the single
+> most likely way this file goes wrong.
 
 `.env` is gitignored. `docker-compose.yml` fails the run if a required value is missing rather
 than starting a container that will 500 on its first request.
@@ -89,9 +107,9 @@ rebuild, not a restart**. Everything secret is runtime-only and never enters an 
 ## 4. Verify
 
 ```bash
-# On the host: the container answers.
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/sign-in     # 200
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/shopping # 401 — auth works
+# On the host. Use the PUBLISHED port (AGROCER_HOST_PORT), not the container's 3000.
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/sign-in      # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/api/shopping # 401 — auth works
 
 docker compose ps        # health: healthy
 docker compose logs -f   # no repeated errors
@@ -101,7 +119,7 @@ Then from **another machine on the LAN**, because that is how `cloudflared` reac
 is the check that distinguishes "the app is running" from "the tunnel can see the app":
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.49:3000/sign-in   # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.49:3002/sign-in   # 200
 ```
 
 Then from a phone, **off the home Wi-Fi** — mobile data proves it is the tunnel and not the
