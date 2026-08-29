@@ -4,9 +4,8 @@ import { idSchema } from './common';
 /**
  * What the family thought of a meal (Stage 2 data model).
  *
- * There is no screen for this yet — rating a meal is Stage 4's consumption-learning work.
- * The shape is settled now because Stage 2 is where the data model is settled, and history
- * cannot be retrofitted: you cannot record last month's dinners after the fact.
+ * Meal detail records this in Stage 4. The shape was settled in Stage 2 because history cannot
+ * be retrofitted: you cannot record last month's dinners after the fact.
  */
 
 /**

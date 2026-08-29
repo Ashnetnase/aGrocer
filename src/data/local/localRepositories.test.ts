@@ -282,6 +282,17 @@ describe('household repository', () => {
   });
 });
 
+describe('feedback repository', () => {
+  it('refuses to pretend device-local feedback is shared household history', async () => {
+    await expect(localRepositories.feedback.list('m1')).resolves.toEqual([]);
+    await expect(localRepositories.feedback.add({
+      mealId: 'm1',
+      rating: 'liked',
+      ateOn: '2026-08-29',
+    })).rejects.toThrow(/needs the database/);
+  });
+});
+
 describe('reset', () => {
   it('clears stored data so the seed comes back', async () => {
     await localRepositories.pantry.remove(pantrySeed[0]!.id);

@@ -96,6 +96,11 @@ Meal costs are pure domain estimates from structured recipe amounts and current 
 package prices. Existing text ingredients remain readable; editing a legacy meal upgrades it by
 writing both representations. The UI only displays a total when every ingredient can be priced.
 
+Meal feedback is append-and-read history, loaded on demand when meal detail opens. A rating can
+belong to the whole family or one household member and records the planned meal date. The
+localStorage implementation deliberately refuses feedback writes: history that exists on one
+device but not another is not household history.
+
 **RLS is enabled on all nine tables**, with one household policy per table and no anonymous
 access. `npm run db:rls` verifies both the metadata and a publishable-key probe.
 
@@ -140,7 +145,7 @@ So enforcement lives in two places on purpose:
 | Concern | Enforced by |
 | ------- | ----------- |
 | One family's data stays separate | The application — `src/server/repositories.ts` |
-| A request has a household at all | The application — 401/403 from every route handler |
+| A data/action request has a household | The application — 401/403 from its route handler |
 | The public key reads and writes nothing | The database — RLS, no grant to `anon` |
 | A signed-in token hitting PostgREST directly sees only its own household | The database — the `authenticated` policies |
 
@@ -259,7 +264,7 @@ can reach it; `npm run ai:chat` goes through `/api/ai/chat` and proves the whole
 `npm run dev` · `build` · `start` · `lint` · `typecheck` · `test` · `check` (all three).
 Database: `db:generate` · `db:migrate` · `db:studio` · `db:seed`.
 `npm run test:db` runs the integration suite against the real database. Tests are Vitest:
-234 unit tests across 18 files, plus 10 integration tests excluded from the default run.
+238 unit tests across 19 files, plus 10 integration tests excluded from the default run.
 Docker image builds; staging runbook in `docs/staging.md`.
 
 ---

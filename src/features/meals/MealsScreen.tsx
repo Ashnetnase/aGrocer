@@ -36,6 +36,8 @@ export function MealsScreen() {
     addMeal,
     updateMeal,
     removeMeal,
+    listMealFeedback,
+    addMealFeedback,
   } = useAgrocer();
   const week = usePlannerWeek();
 
@@ -220,12 +222,16 @@ export function MealsScreen() {
         onClose={() => setDetailOpen(false)}
         meal={targetMeal ?? null}
         products={products}
+        members={household.members}
+        ateOn={targetDay?.iso ?? week.days[0]!.iso}
         dayLabel={targetDay?.label ?? ''}
         slotLabel={SLOT_LABELS[target.slot]}
         onChange={() => setPickerOpen(true)}
         onRemove={() => void clearMeal(target.day, target.slot)}
         onAddIngredients={addIngredients}
         ingredientsAdded={Boolean(targetMeal && addedFor.includes(targetMeal.id))}
+        onLoadFeedback={listMealFeedback}
+        onAddFeedback={addMealFeedback}
       />
     </>
   );

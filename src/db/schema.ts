@@ -336,10 +336,8 @@ export const inventoryEvents = pgTable(
 /**
  * What the family thought of a meal they ate.
  *
- * Feeds Stage 3's family-feedback learning and Stage 4's consumption learning. There is no UI
- * for it yet — Stage 4 owns that — but the table and its API exist now because Stage 2 is
- * where the data model is settled, and retrofitting history is impossible: you cannot record
- * last month's dinners after the fact.
+ * Feeds Stage 3's family-feedback learning and Stage 4's consumption learning. Meal detail now
+ * records it; the table was created in Stage 2 because retrofitting history is impossible.
  *
  * `member_id` is nullable and `ON DELETE SET NULL`: "the family liked this" is a useful
  * record even when nobody says who, and it must outlive a member leaving the household.

@@ -5,9 +5,8 @@ import { request } from './client';
 /**
  * Meal feedback over HTTP.
  *
- * No screen calls this yet — rating a meal is Stage 4's work. It exists so the contract has a
- * real implementation on the path the app actually uses, rather than a gap that would be
- * discovered when the UI arrives.
+ * Meal detail calls this on demand, so feedback does not add work to the application's initial
+ * household-data load.
  */
 export const apiFeedbackRepository: FeedbackRepository = {
   async list(mealId?: string) {

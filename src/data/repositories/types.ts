@@ -56,8 +56,7 @@ export interface MealsRepository {
  * Append-and-read only: there is no update or delete, because a record of what the family
  * thought last Tuesday is history, not state. Correcting it means adding a newer rating.
  *
- * No screen uses this yet — Stage 4 owns the UI. It exists now so the history starts
- * accumulating, which is the one thing that cannot be added retrospectively.
+ * Meal detail uses this on demand; it is not part of the application's initial load.
  */
 export interface FeedbackRepository {
   /** Most recent first. `mealId` narrows it to one meal's history. */

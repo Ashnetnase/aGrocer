@@ -14,7 +14,7 @@ Agent instructions: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex and others).
 **Stage 2 — Real backend and household data**: build work **complete** as of 2026-08-29.
 **Stage 3 / AshHome Phases 8–9** complete through slice 9b — all four AI slices landed
 2026-08-28/29 at Ash's request to bring the AI in "in stages". **Stage 4 is in progress**:
-pantry-to-recipe matching, the weekly budget target, and meal-cost estimation are complete.
+pantry matching, weekly budget, meal-cost estimation, and feedback capture are complete.
 
 Stage 1 closed as a dev-complete milestone (ADR-012).
 
@@ -22,7 +22,7 @@ What remains splits in two, and NEXT TASK keeps them apart:
 
 - **Ash's** — the deploy itself, the Ollama firewall rule, and four other infrastructure items.
   None of them are code.
-- **The next agent's** — Stage 4 meal feedback UI; prediction work should wait for real history.
+- **The next agent's** — Stage 4 recipe import; prediction/learning should wait for real history.
 
 Stage 2 cannot be marked COMPLETE until the deploy and PWA install are done, per `CLAUDE.md`.
 
@@ -77,6 +77,8 @@ What actually runs today:
 - **Meal cost estimation is real** (ADR-021). Meal editing captures ingredient name, decimal
   amount, and unit while preserving legacy text. Meal detail and the wall show a catalogue-
   priced estimate only when every ingredient is covered. Migration `0007` is applied.
+- **Meal feedback capture is real.** Meal detail records a whole-family or named-member rating
+  against the planned date and shows the three newest append-only entries. It loads on demand.
 - Domain services (`src/domain/services/`) are pure and fully unit-tested.
 - A Docker image builds and has been smoke-tested; a staging runbook exists at `docs/staging.md`.
 
@@ -155,6 +157,8 @@ unknown products or incompatible units must not quietly understate dinner's cost
   HTTP, and Drizzle; persisted as nullable integer cents and surfaced in shopping views.
 - **Meal cost estimation** (Stage 4) — additive structured ingredient JSON beside legacy text,
   catalogue-based proportional estimates, and complete-coverage-only display (ADR-021).
+- **Meal feedback UI** (Stage 4) — the existing append-only API/repository is now used from
+  meal detail for whole-family or named-member ratings and recent history.
 - **History tables** — `inventory_events` (written automatically by the pantry repository)
   and `meal_feedback` (append-and-read only), migrations `0004`/`0005`, plus `/api/feedback`.
 - **CI** — `.github/workflows/ci.yml`: typecheck, lint, test, build, integration tests, and an
@@ -186,8 +190,8 @@ unknown products or incompatible units must not quietly understate dinner's cost
 ## Work In Progress
 
 Stage 2 code is complete; only the physical homelab deployment and phone PWA install remain.
-Stage 4 is active. The next useful code slice is meal feedback UI. Low-stock prediction remains
-deliberately deferred until `inventory_events` contains enough real history.
+Stage 4 is active. Recipe import is the next useful code slice. Low-stock prediction and
+feedback learning remain deliberately deferred until their history contains real signal.
 
 ## Files Changed
 
@@ -255,6 +259,9 @@ Recent and important:
 - `src/features/meals/components/{MealFormSheet,MealDetailSheet}.tsx` and
   `src/features/dashboard/TonightCard.tsx` — structured entry, catalogue suggestions, and cost
   display. `drizzle/0007_glorious_pete_wisdom.sql` is the additive persistence change.
+- `src/features/meals/components/MealDetailSheet.tsx`, `src/providers/AgrocerProvider.tsx`, and
+  `src/domain/services/feedback.ts` — on-demand append-only rating UI and family-facing labels.
+  Local feedback writes still refuse by design; shared history requires server data.
 - `src/data/api/authFailure.ts` — `handleUnauthorized()`, the one place a 401 becomes a
   redirect, plus `NotInHouseholdError` for the 403 that must not redirect. `setAuthRedirect()`
   is the test seam.
@@ -574,6 +581,15 @@ Added 2026-08-29 for meal-cost estimation:
 - `npm run build` — clean; `db:generate` and `db:migrate` reruns are clean no-ops.
 - Visual browser verification remained unavailable because no browser was connected.
 
+Added 2026-08-29 for meal feedback UI:
+
+- `npm run check` — 238 tests across 19 files. New tests cover all rating labels, feedback draft
+  boundaries, and the local repository's deliberate refusal to create device-only history.
+- `npm run test:db` — 10 integration tests, including newest-first feedback history and cascade
+  cleanup. `npm run db:rls` — all 9 tables protected; publishable key reads zero rows.
+- `npm run build` — clean. No schema change or migration was needed.
+- Visual browser verification remained unavailable because no browser was connected.
+
 ## Known Problems
 
 - `products` has no repository method that creates rows — the contract exposes only `list`,
@@ -628,7 +644,7 @@ runbook. The raw data-free `/api/ai/chat` transport is the documented auth excep
 ladder is complete through slice 9b — the assistant reads the shopping list, pantry and meal
 plan through a read-only tool allow-list, and can *propose* one or several shopping items behind
 one list-shaped confirmation gate. Stage 4 now has pantry-to-recipe matching, the weekly
-budget target, and complete-coverage meal-cost estimates. **234 unit tests across 18 files,
+budget target, complete-coverage meal costs, and append-only feedback capture. **238 unit tests across 19 files,
 10 integration tests, build clean,
 `npm run db:rls` green.**
 
@@ -670,9 +686,15 @@ shown only when every ingredient has a compatible catalogue price. Migration `00
 history since 2026-08-29 and nothing reads it yet. Give it a few weeks of real data first —
 predictions from three rows will be worse than none.
 
-**NEXT TASK: meal feedback UI.** `meal_feedback`, both repositories, and `/api/feedback` already
-exist and are integration-tested. Add a small rating action to meal detail and show recent
-family feedback without changing the append-only history contract.
+**Meal feedback UI — DONE 2026-08-29.** Meal detail records a whole-family or named-member
+rating for the planned date and shows the three newest entries. It loads through provider
+actions only when opened. Corrections append; localStorage writes still refuse rather than
+creating device-only history.
+
+**NEXT TASK: recipe import.** Keep the first slice bounded: import into the existing MealDraft /
+structured ingredient model, require a human review in `MealFormSheet`, and do not let fetched
+page content write directly. Decide pasted-text versus server-fetched URL input before choosing
+dependencies; preserve Zod as the boundary either way.
 
 ### Smaller known gaps
 
@@ -682,7 +704,6 @@ family feedback without changing the append-only history contract.
   localStorage, a round trip to Sydney now. Most visible on the pantry steppers.
 - **No automated backups.** `docs/backup.md` has verified commands; a weekly cron on the
   homelab is the obvious step once it is running. Note a full dump contains `auth.users`.
-- **`meal_feedback` has no UI.** This is now the recommended next Stage 4 code slice.
 
 ### Two traps that have each cost an hour
 
@@ -750,6 +771,7 @@ Both bit twice in one session. Check them before debugging the code.
 
 ## Last Updated
 
-2026-08-29 — multi-item AI proposals, weekly budget, and meal-cost estimation completed by
-Codex on `stage-2/database-schema`. Migrations through `0007` are applied; this handoff records
-the branch checkpoint pushed to `origin/stage-2/database-schema`. Nothing was merged to `main`.
+2026-08-29 — multi-item AI proposals, weekly budget, meal costs, and feedback capture completed
+by Codex on `stage-2/database-schema`. Migrations through `0007` are applied; this handoff
+records the branch checkpoint pushed to `origin/stage-2/database-schema`. Nothing was merged
+to `main`.

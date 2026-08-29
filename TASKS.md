@@ -25,8 +25,8 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] Phase 5 — pantry/freezer inventory
 - [~] Phase 6 — recipe providers and family recipes *(pantry-to-recipe matching done;
       discovery, import and providers not started)*
-- [~] Phase 7 — meals, meal planning and grocery budgeting *(planning and the weekly budget
-      target are done; meal cost estimation remains)*
+- [~] Phase 7 — meals, meal planning and grocery budgeting *(planning, weekly budget, meal
+      cost estimation, and feedback capture are done; feedback learning remains)*
 - [x] Phase 8 — local Ollama AI service *(slices 8a and 8b done: provider abstraction,
       `/api/ai/chat`, and the "Ask AshHome" card. Still no tools and no writes — that is Phase 9)*
 - [x] Phase 9 — controlled AI tool/action system *(9a read tools + 9b the first write tool,
@@ -127,15 +127,16 @@ reconciling: the phase list assumes work that the stage list already completed.
       frees its slot through the foreign key rather than by hand
 - [x] persistent household — settings and members, verified end to end. Initials are derived
       server-side rather than accepted from the client, so they cannot drift from the name
-- [x] **RLS enabled on all 7 tables, deny-all** (ADR-016), migration `0001`. The publishable
+- [x] **RLS enabled on all 9 tables** (ADR-016), migrations `0001`/`0005`. The publishable
       key could read the household, the children's names, the pantry, the products and the
       meals, and could insert rows; it now reads nothing and is refused on write. The app is
       unaffected because it connects as `postgres`, which owns the tables and bypasses RLS —
       so this did *not* have to ship with auth, contrary to what this file used to say.
       Verify any time with `npm run db:rls`
 - [x] **authentication (Supabase Auth, ADR-017)** — email + password, session in cookies,
-      household resolved from `household_members.user_id`. Every route handler refuses without
-      one (401), and an account with no member row is refused too (403). Auth is ON unless
+      household resolved from `household_members.user_id`. Every data-bearing/action route
+      refuses without one (401), and an account with no member row is refused too (403). The
+      raw data-free `/api/ai/chat` transport is the documented exception. Auth is ON unless
       `AGROCER_AUTH="off"`, so it fails closed
 - [x] RLS *policies* granting `authenticated` its own household
       (`drizzle/0003_household_rls_policies.sql`) — defence in depth, since the app bypasses
@@ -149,13 +150,14 @@ reconciling: the phase list assumes work that the stage list already completed.
       fetch path including the assistant; 403 deliberately does not redirect. Verified live by
       expiring the cookie on an open dashboard
 - [x] meal feedback history — `meal_feedback`, repository, `/api/feedback`. Append-and-read
-      only. No UI yet; Stage 4 owns rating a meal
+      only. Stage 4 meal detail now records and shows it
 - [x] audit-friendly inventory events — `inventory_events`, written by the pantry repository
       itself so it cannot drift. Survives deletion of the item it describes
-- [x] migrations — `0000`–`0005`, `db:migrate` and `db:generate` both clean no-ops
+- [x] migrations — `0000`–`0007`, `db:migrate` and `db:generate` both clean no-ops
 - [x] backup/restore plan — `docs/backup.md`, commands verified against the live project.
       **A full dump contains `auth.users` — password hashes. Treat it as a credential store**
-- [x] Docker Compose deployment — Stage 2 compose, Dockerfile build args, binds to loopback
+- [x] Docker Compose deployment — Stage 2 compose and Dockerfile build args; publishes
+      `3000:3000` to the LAN because `cloudflared` runs on another machine (ADR-019)
 - [x] CI checks — `.github/workflows/ci.yml`, including an RLS job that fails if the
       publishable key can read anything
 - [~] staging deployment pipeline — runbook written (`docs/deploy.md`); the deploy is Ash's
@@ -216,6 +218,8 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
       card's missing-ingredient warning, which had been deferred since Phase 1
 - [x] meal cost estimation — structured ingredient amounts augment legacy text; complete
       catalogue-priced totals appear in meal detail and on the wall dashboard (ADR-021)
+- [x] meal feedback capture — meal detail records whole-family or named-member ratings and
+      shows the three newest append-only entries
 - [ ] recipe discovery/search, recipe import
 - [ ] low-stock and staple-reorder prediction — `inventory_events` is already accumulating
       the history these need

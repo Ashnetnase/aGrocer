@@ -350,14 +350,14 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 ### Planned scope
 
 - [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
-      `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 7 tables confirmed
-- [x] Drizzle schema and migrations — 7 tables, `drizzle/0000_mysterious_black_cat.sql`,
-      plus `0001_exotic_the_liberteens.sql` (RLS)
+      `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 9 tables confirmed
+- [x] Drizzle schema and migrations — 9 tables, migrations `0000`–`0007`
 - [x] backend/API architecture — route handlers for all five features
 - [x] authentication (Supabase Auth, ADR-017) — email + password, session in cookies,
-      household from `household_members.user_id`, every route handler refuses without one
-- [x] RLS enabled on all 7 tables, deny-all (ADR-016). Closes the publishable-key exposure;
-      verified with `npm run db:rls`. Policies wait for auth, which is when they mean something
+      household from `household_members.user_id`; every data-bearing/action route refuses
+      without one (`/api/ai/chat` is the raw data-free transport exception)
+- [x] RLS enabled on all 9 tables (ADR-016). Closes the publishable-key exposure and is
+      verified with `npm run db:rls`; authenticated household policies are live
 - [x] household/user permissions — RLS policies granting `authenticated` its own household
       (`drizzle/0003_household_rls_policies.sql`). Defence in depth; the app still bypasses RLS
 - [x] persistent pantry — route handlers + HTTP repository, verified end to end
@@ -365,11 +365,11 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 - [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
 - [x] persistent meal plans — route handlers + HTTP repository, verified end to end
 - [x] meal feedback history — `meal_feedback` (migration `0004`), repository, `/api/feedback`.
-      Append-and-read only: history, not state. No UI yet; Stage 4 owns rating a meal
+      Append-and-read only: history, not state. Stage 4 meal detail now records and reads it
 - [x] audit-friendly inventory events — `inventory_events` (migration `0004`), written
       automatically by the pantry repository so the log cannot drift from what happened.
       `ON DELETE SET NULL` plus a denormalised name, so the history outlives the item
-- [x] migrations — `0000`–`0005`; `npm run db:migrate` and `npm run db:generate` are both
+- [x] migrations — `0000`–`0007`; `npm run db:migrate` and `npm run db:generate` are both
       clean no-ops against the live database
 - [x] backup/restore plan — `docs/backup.md`, with the commands actually run against the live
       project. Note a full dump contains `auth.users`, so it is a credential store
@@ -464,6 +464,8 @@ Make Agrocer smarter using household history and external grocery information.
       estimate on shopping, shopping mode, and the wall dashboard
 - [x] meal cost estimation — structured ingredient amounts are stored alongside legacy recipe
       text; complete catalogue-priced estimates appear in meal detail and on the wall dashboard
+- [x] meal feedback capture — whole-family or named-member ratings recorded from meal detail;
+      three newest entries shown, with append-only corrections
 - [ ] product alternatives
 - [ ] supermarket price/specials provider abstraction
 - [ ] waste/use-soon recommendations
@@ -633,6 +635,27 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-29 — Meal feedback capture in meal detail (Codex)
+
+**Stage:** Stage 4 / AshHome Phase 7
+**Status:** Complete and verified.
+
+The meal detail sheet now asks the existing four-step question, “Have it again?”, records a
+whole-family or named-member answer against the planned meal date, and shows the three newest
+answers. Loading happens only when the detail sheet opens, so feedback history does not expand
+the initial household-data request. Corrections append another answer; no update/delete path was
+added, preserving the history contract.
+
+The server-data path uses the existing authenticated `/api/feedback` route and Drizzle repository.
+The localStorage repository still refuses writes: a rating stored on one device and missing from
+the wall would be false household history. The sheet reports that refusal inline rather than
+appearing to save it.
+
+**Verified:** `npm run check` (238 tests across 19 files), `npm run test:db` (10 integration
+tests, including newest-first feedback and cascade cleanup), `npm run db:rls` (all 9 tables
+protected; publishable key reads zero rows), and `npm run build`. No migration was required.
+Visual browser verification was unavailable because no browser connection was present.
 
 ## 2026-08-29 — Structured meal cost estimation (Codex)
 

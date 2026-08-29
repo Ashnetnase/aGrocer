@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { DayKey, Slot } from '@/domain/schemas/common';
+import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
 import type { Household, HouseholdMemberDraft, Settings } from '@/domain/schemas/household';
 import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
@@ -53,6 +54,8 @@ interface AgrocerActions {
   addMeal: (draft: MealDraft) => Promise<void>;
   updateMeal: (id: string, draft: MealDraft) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
+  listMealFeedback: (mealId: string) => Promise<MealFeedback[]>;
+  addMealFeedback: (draft: MealFeedbackDraft) => Promise<MealFeedback>;
 
   toggleFavourite: (id: string) => Promise<void>;
 
@@ -257,6 +260,12 @@ export function AgrocerProvider({
       async removeMeal(id) {
         await repositories.meals.remove(id);
         await refreshMeals();
+      },
+      async listMealFeedback(mealId) {
+        return repositories.feedback.list(mealId);
+      },
+      async addMealFeedback(draft) {
+        return repositories.feedback.add(draft);
       },
 
       async toggleFavourite(id) {

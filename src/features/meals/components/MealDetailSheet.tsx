@@ -1,8 +1,22 @@
 'use client';
 
-import { ClockIcon, RefreshCwIcon, ShoppingCartIcon, Trash2Icon, UsersIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  ClockIcon,
+  HeartIcon,
+  MehIcon,
+  RefreshCwIcon,
+  ShoppingCartIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+  Trash2Icon,
+  UsersIcon,
+} from 'lucide-react';
+import type { MealFeedback, MealFeedbackDraft, MealRating } from '@/domain/schemas/feedback';
+import type { HouseholdMember } from '@/domain/schemas/household';
 import type { Meal } from '@/domain/schemas/meal';
 import type { Product } from '@/domain/schemas/product';
+import { MEAL_RATING_LABELS } from '@/domain/services/feedback';
 import { estimateMealCost } from '@/domain/services/meals';
 import { nzd } from '@/lib/format';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
@@ -13,12 +27,16 @@ interface MealDetailSheetProps {
   onClose: () => void;
   meal: Meal | null;
   products: Product[];
+  members: HouseholdMember[];
+  ateOn: string;
   dayLabel: string;
   slotLabel: string;
   onChange: () => void;
   onRemove: () => void;
   onAddIngredients: () => void;
   ingredientsAdded: boolean;
+  onLoadFeedback: (mealId: string) => Promise<MealFeedback[]>;
+  onAddFeedback: (draft: MealFeedbackDraft) => Promise<MealFeedback>;
 }
 
 export function MealDetailSheet({
@@ -26,14 +44,67 @@ export function MealDetailSheet({
   onClose,
   meal,
   products,
+  members,
+  ateOn,
   dayLabel,
   slotLabel,
   onChange,
   onRemove,
   onAddIngredients,
   ingredientsAdded,
+  onLoadFeedback,
+  onAddFeedback,
 }: MealDetailSheetProps) {
   const cost = meal ? estimateMealCost(meal, products) : undefined;
+  const [feedback, setFeedback] = useState<MealFeedback[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string>();
+
+  useEffect(() => {
+    if (!open || !meal) return;
+    let active = true;
+    setFeedback([]);
+    setFeedbackLoading(true);
+    setFeedbackError(undefined);
+    void onLoadFeedback(meal.id)
+      .then((history) => {
+        if (active) setFeedback(history);
+      })
+      .catch(() => {
+        if (active) setFeedbackError('Could not load feedback.');
+      })
+      .finally(() => {
+        if (active) setFeedbackLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, meal, onLoadFeedback]);
+
+  const rate = async (rating: MealRating) => {
+    if (!meal || feedbackSaving) return;
+    setFeedbackSaving(true);
+    setFeedbackError(undefined);
+    try {
+      const added = await onAddFeedback({
+        mealId: meal.id,
+        memberId: selectedMemberId || undefined,
+        rating,
+        ateOn,
+      });
+      setFeedback((current) => [added, ...current]);
+    } catch (error) {
+      setFeedbackError(
+        error instanceof Error && /needs the database/i.test(error.message)
+          ? 'Feedback is shared history and needs server data.'
+          : 'Could not save feedback. Check the connection and try again.',
+      );
+    } finally {
+      setFeedbackSaving(false);
+    }
+  };
   return (
     <BottomSheet
       open={open}
@@ -119,8 +190,66 @@ export function MealDetailSheet({
               </li>
             ))}
           </ul>
+
+          <section className="mt-5" aria-labelledby="meal-feedback-heading">
+            <h3 id="meal-feedback-heading" className="text-[11px] font-bold uppercase tracking-wider text-muted">
+              Have it again?
+            </h3>
+            {members.length > 0 ? (
+              <label className="mt-2 block text-xs font-semibold text-muted">
+                Who is rating?
+                <select
+                  value={selectedMemberId}
+                  onChange={(event) => setSelectedMemberId(event.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-line bg-canvas px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+                >
+                  <option value="">Whole family</option>
+                  {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+                </select>
+              </label>
+            ) : null}
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {RATING_OPTIONS.map(({ rating, Icon }) => (
+                <button
+                  key={rating}
+                  type="button"
+                  onClick={() => void rate(rating)}
+                  disabled={feedbackSaving}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-canvas px-2 text-sm font-semibold text-ink hover:border-moss-300 hover:bg-moss-50 disabled:opacity-50"
+                >
+                  <Icon className="h-4 w-4 text-moss-600" aria-hidden />
+                  {MEAL_RATING_LABELS[rating]}
+                </button>
+              ))}
+            </div>
+            {feedbackError ? <p role="alert" className="mt-2 text-sm font-medium text-berry-600">{feedbackError}</p> : null}
+            {feedbackLoading ? (
+              <p className="mt-3 text-sm text-muted">Loading recent feedback…</p>
+            ) : feedback.length > 0 ? (
+              <ul className="mt-3 space-y-1.5" aria-label="Recent feedback">
+                {feedback.slice(0, 3).map((entry) => {
+                  const member = members.find((candidate) => candidate.id === entry.memberId);
+                  return (
+                    <li key={entry.id} className="flex justify-between gap-3 rounded-xl bg-moss-50 px-3 py-2 text-sm">
+                      <span className="font-semibold text-ink">{member?.name ?? 'Family'}: {MEAL_RATING_LABELS[entry.rating]}</span>
+                      <time dateTime={entry.ateOn} className="shrink-0 text-xs text-muted">{entry.ateOn}</time>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : !feedbackError ? (
+              <p className="mt-3 text-sm text-muted">No feedback yet.</p>
+            ) : null}
+          </section>
         </div>
       ) : null}
     </BottomSheet>
   );
 }
+
+const RATING_OPTIONS = [
+  { rating: 'loved', Icon: HeartIcon },
+  { rating: 'liked', Icon: ThumbsUpIcon },
+  { rating: 'ok', Icon: MehIcon },
+  { rating: 'disliked', Icon: ThumbsDownIcon },
+] as const;

@@ -11,8 +11,8 @@ import { failed, parseJson } from '@/server/http';
  * There is no `PATCH` or `DELETE`: this is history, not state. A rating that turns out to be
  * wrong is corrected by adding a newer one, not by rewriting what was recorded.
  *
- * No screen calls this yet — Stage 4 owns rating a meal. It exists now because the history
- * cannot be backfilled once the dinners have been eaten.
+ * Meal detail calls this on demand. The history cannot be backfilled once dinners have been
+ * eaten, so the append path stays deliberately small.
  */
 
 export const dynamic = 'force-dynamic';
