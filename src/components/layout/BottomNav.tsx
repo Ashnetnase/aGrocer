@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CarrotIcon, CookingPotIcon, HouseIcon, ShoppingCartIcon, StarIcon } from 'lucide-react';
+import { CarrotIcon, CookingPotIcon, HouseIcon, ShoppingCartIcon, StarIcon, TagIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 
@@ -12,6 +12,7 @@ const tabs = [
   { href: '/shopping', label: 'Shopping', icon: ShoppingCartIcon, exact: false },
   { href: '/meals', label: 'Meals', icon: CookingPotIcon, exact: false },
   { href: '/products', label: 'Products', icon: StarIcon, exact: false },
+  { href: '/specials', label: 'Specials', icon: TagIcon, exact: false },
 ] as const;
 
 export function BottomNav() {

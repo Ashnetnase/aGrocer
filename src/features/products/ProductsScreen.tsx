@@ -137,9 +137,14 @@ export function ProductsScreen() {
                     </button>
                   </div>
                   {alternatives.length > 0 ? (
-                    <p className="mt-2 text-xs text-muted">
-                      Alternatives: {alternatives.map((item) => `${item.name} (${nzd(item.price)})`).join(', ')}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <span>Alternatives:</span>
+                      {alternatives.map((item) => (
+                        <button key={item.id} type="button" onClick={() => void addShoppingItem({ name: item.name, category: item.category, quantity: item.defaultQuantity, unit: item.unit, price: item.price, priority: false, note: undefined })} className="rounded-full border border-line px-2 py-1 font-semibold text-ink hover:bg-canvas">
+                          {item.name} ({nzd(item.price)})
+                        </button>
+                      ))}
+                    </div>
                   ) : null}
                 </li>
               );
