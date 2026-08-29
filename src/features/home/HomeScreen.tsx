@@ -57,7 +57,7 @@ export function HomeScreen() {
           <button
             type="button"
             aria-label="Notifications"
-            onClick={() => router.push('/pantry?filter=attention')}
+            onClick={() => router.push('/notifications')}
             className="relative flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors duration-150 ease-out hover:bg-moss-50"
           >
             <BellIcon className="h-[18px] w-[18px]" />
