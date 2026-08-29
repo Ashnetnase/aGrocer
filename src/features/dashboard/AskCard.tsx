@@ -419,6 +419,8 @@ function toggleListening(
 function proposalConfirmLabel(proposal: AskProposal): string {
   const recipeCount = proposal.actions.filter((action) => action.tool === 'addRecipeToMeals').length;
   const shoppingCount = proposal.actions.filter((action) => action.tool === 'addShoppingItem').length;
+  const planCount = proposal.actions.filter((action) => action.tool === 'planMeal').length;
+  if (planCount > 0 && recipeCount === 0 && shoppingCount === 0) return planCount === 1 ? 'Plan meal' : 'Plan meals';
   if (recipeCount > 0 && shoppingCount === 0) return recipeCount === 1 ? 'Save recipe' : 'Save recipes';
   if (shoppingCount > 0 && recipeCount === 0) return shoppingCount === 1 ? 'Add it' : 'Add all';
   return proposal.actions.length === 1 ? 'Confirm' : 'Confirm all';

@@ -212,4 +212,10 @@ describe('describeToolsUsed', () => {
   it('says nothing when the answer came from the model alone', () => {
     expect(describeToolsUsed([])).toBeUndefined();
   });
+
+  it('uses family-facing labels for meal and reorder lookups', () => {
+    expect(describeToolsUsed(['getMeals', 'getReorderSuggestions'])).toBe(
+      'Checked your meal catalogue and reorder history',
+    );
+  });
 });

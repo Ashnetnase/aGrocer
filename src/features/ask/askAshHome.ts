@@ -213,6 +213,8 @@ const TOOL_LABELS: Record<string, string> = {
   getShoppingList: 'shopping list',
   getPantry: 'pantry',
   getMealPlan: 'meal plan',
+  getMeals: 'meal catalogue',
+  getReorderSuggestions: 'reorder history',
 };
 
 export function describeToolsUsed(toolsUsed: string[]): string | undefined {
