@@ -28,6 +28,10 @@ export interface PantryRepository {
   remove(id: string): Promise<void>;
 }
 
+export interface InventoryEventRepository {
+  list(limit?: number): Promise<import('@/domain/services/reorderPrediction').InventoryUsageEvent[]>;
+}
+
 export interface ShoppingRepository {
   list(): Promise<ShoppingItem[]>;
   /** Adding a name already on the list merges quantities instead of duplicating. */
@@ -80,6 +84,7 @@ export interface HouseholdRepository {
 
 export interface AgrocerRepositories {
   pantry: PantryRepository;
+  inventoryEvents: InventoryEventRepository;
   shopping: ShoppingRepository;
   meals: MealsRepository;
   products: ProductsRepository;

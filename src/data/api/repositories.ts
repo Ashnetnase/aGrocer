@@ -18,6 +18,7 @@ import { apiFeedbackRepository } from './feedbackRepository';
  * unreachable during development.
  */
 export const apiRepositories: AgrocerRepositories = {
+  inventoryEvents: { async list() { return []; } },
   pantry: apiPantryRepository,
   shopping: apiShoppingRepository,
   meals: apiMealsRepository,

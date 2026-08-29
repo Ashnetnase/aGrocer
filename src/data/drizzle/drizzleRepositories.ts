@@ -478,6 +478,20 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
 
   return {
     pantry,
+    inventoryEvents: {
+      async list(limit = 200) {
+        const rows = await db.select().from(inventoryEvents)
+          .where(eq(inventoryEvents.householdId, householdId))
+          .orderBy(desc(inventoryEvents.createdAt)).limit(limit);
+        return rows.map((row) => ({
+          itemName: row.itemName,
+          kind: row.kind,
+          quantityDelta: row.quantityDelta,
+          quantityAfter: row.quantityAfter,
+          createdAt: row.createdAt,
+        }));
+      },
+    },
     feedback,
     shopping,
     meals: mealsRepo,

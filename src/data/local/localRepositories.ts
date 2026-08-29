@@ -308,6 +308,7 @@ const feedback: FeedbackRepository = {
 
 export const localRepositories: AgrocerRepositories = {
   pantry,
+  inventoryEvents: { async list() { return []; } },
   shopping,
   meals,
   products,
