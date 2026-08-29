@@ -215,10 +215,10 @@ unknown products or incompatible units must not quietly understate dinner's cost
 
 ## Work In Progress
 
-Stage 2 code is complete; only the physical homelab deployment and phone PWA install remain.
-Stage 4 is active. Product alternatives, specials, waste reduction and notifications remain.
-Low-stock prediction and
-feedback learning remain deliberately deferred until their history contains real signal.
+Stage 2 code is complete and deployed; the latest branch still needs a homelab Docker rebuild.
+Stage 4 code-completable features are landed: recipes, planner proposals, reorder/use-soon
+advice, product alternatives, manual specials, notifications, and voice interaction. Remaining
+work is a real retailer feed, longer-history calibration, and live deployment verification.
 
 The current Stage 4 AI slice includes `getMeals` plus gated `planMeal`; both are covered by
 unit tests. The next refinement is broader live verification after the Docker host is rebuilt.
@@ -671,6 +671,11 @@ Added 2026-08-29 for meal feedback UI:
   where they disagree.
 
 ## NEXT TASK
+
+Current state (2026-08-30): recipe/planner AI, voice input/output, reorder and use-soon advice,
+product alternatives, specials abstraction/screen, and notifications are implemented and checked.
+The old verification instructions below are historical; the remaining action is to rebuild the
+Docker host and choose/configure a real retailer feed if desired.
 
 The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check
 through the tunnel; then the next code slice is voice talk-back (`speechSynthesis`).
