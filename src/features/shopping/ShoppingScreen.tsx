@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBasketIcon } from 'lucide-react';
 import type { ShoppingItem, ShoppingItemDraft } from '@/domain/schemas/shopping';
@@ -32,6 +32,7 @@ export function ShoppingScreen() {
   const [extensionCandidates, setExtensionCandidates] = useState<Record<string, RetailerProduct[]>>({});
   const [extensionSearchMessages, setExtensionSearchMessages] = useState<Record<string, string>>({});
   const [searchingItemId, setSearchingItemId] = useState<string | null>(null);
+  const searchTimeout = useRef<number | null>(null);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>) => {
@@ -42,6 +43,7 @@ export function ShoppingScreen() {
       if (parsed.data.type === 'AGROCER_NEW_WORLD_RESULTS') { setSendResults(parsed.data.results); setSending(false); }
       if (parsed.data.type === 'AGROCER_NEW_WORLD_SEARCH_RESULTS') {
         const search = parsed.data;
+        if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
         setExtensionCandidates((current) => ({ ...current, [search.shoppingItemId]: search.products }));
         setExtensionSearchMessages((current) => ({ ...current, [search.shoppingItemId]: search.message ?? (search.products.length ? 'Choose the exact product below.' : 'No products found.') }));
         setSearchingItemId(null);
@@ -50,7 +52,10 @@ export function ShoppingScreen() {
     };
     window.addEventListener('message', receive);
     pingNewWorldExtension();
-    return () => window.removeEventListener('message', receive);
+    return () => {
+      window.removeEventListener('message', receive);
+      if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    };
   }, []);
 
   const { remaining, checked, total, progress } = useMemo(() => summariseShopping(shopping), [shopping]);
@@ -83,6 +88,11 @@ export function ShoppingScreen() {
     setSearchingItemId(line.shoppingItem.id);
     setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Searching in your New World tab…' }));
     searchWithNewWorldExtension(line.shoppingItem.id, line.requestedText);
+    if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    searchTimeout.current = window.setTimeout(() => {
+      setSearchingItemId(null);
+      setExtensionSearchMessages((messages) => ({ ...messages, [line.shoppingItem.id]: 'New World search timed out. Reload the extension and retry.' }));
+    }, 15_000);
   };
 
   const sendToNewWorld = async () => {

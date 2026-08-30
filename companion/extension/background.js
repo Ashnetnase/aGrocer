@@ -50,8 +50,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const url = `https://www.newworld.co.nz/shop/search?pg=1&q=${encodeURIComponent(query)}&sf=products`;
     chrome.tabs.query({ url: 'https://www.newworld.co.nz/*' }).then(async (tabs) => {
       const existing = tabs.find((tab) => tab.id);
-      const tab = existing ? await chrome.tabs.update(existing.id, { url, active: true }) : await chrome.tabs.create({ url, active: true });
+      const tab = existing ?? await chrome.tabs.create({ url: 'about:blank', active: true });
       await chrome.storage.session.set({ [SEARCH_KEY]: { sourceTabId: sender.tab?.id, newWorldTabId: tab.id, shoppingItemId: message.shoppingItemId, query, processing: false } });
+      await chrome.tabs.update(tab.id, { url, active: true });
       sendResponse({ accepted: true });
     }).catch((error) => sendResponse({ accepted: false, message: error.message }));
     return true;
