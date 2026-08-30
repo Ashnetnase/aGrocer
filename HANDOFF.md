@@ -674,7 +674,7 @@ Added 2026-08-29 for meal feedback UI:
 
 Current state (2026-08-30): recipe/planner AI, voice input/output, reorder and use-soon advice,
 product alternatives, specials abstraction/screen, notifications, and the Stage 5 trolley companion
-foundation are implemented and checked. Migration `0009` is applied: 12 tables have RLS and one
+foundation are implemented and checked. Migration `0010` is applied: 13 tables have RLS and one
 authenticated household policy each.
 
 The Meals planner now has a direct **Find a recipe** action in each empty slot. It opens recipe
@@ -686,6 +686,15 @@ household-operated product collector through `NEW_WORLD_CATALOGUE_URL`, validate
 products, show images/current and special prices, and save an exact product against a shopping item.
 The contract is documented in `docs/new-world-companion.md`. Until that collector is deployed, the
 section truthfully shows only previously seen cached products. No live catalogue feed is claimed.
+
+Phone/tablet replacement search no longer stops at that cache. **Search for a different product**
+shows cached choices immediately and, when no live catalogue is configured, persists a product
+search job for the household. Shopping on the desktop with extension 0.1.1 shows **Product search
+from another device**; the user presses **Process product search**, the visible New World tab is
+searched, and validated exact candidates are stored and polled back to the phone. Selecting one
+replaces the remembered preference and shows an explicit success message. This relay is automated-
+test complete but still needs its first live phone-to-desktop test. The workstation must be on for
+this fallback; a deployed homelab catalogue remains the 24/7 option.
 
 ### New World deployment options
 
@@ -718,11 +727,12 @@ preferences persist, deterministic matching runs before any future AI ranking, a
 separate explicit actions. Run the companion with `npm run companion:newworld`; configuration and
 safety details are in `docs/new-world-companion.md`.
 
-**Next Stage 5 task:** live-test the visible companion against Ash's logged-in New World session.
-Repair only the central selectors in `companion/src/retailers/newworld/newworld.selectors.ts` and
-the deterministic client behavior discovered by that test. Search and trolley addition are coded
-but not claimed working against the live site. CAPTCHA/blocking must return `blocked`; checkout and
-payment remain user-only.
+**Next Stage 5 task:** deploy this commit, reload unpacked extension 0.1.1, and live-test the new
+cross-device path: on phone choose **Search for a different product**, on desktop press **Process
+product search**, confirm exact candidates return to the phone, and select the intended product.
+Then send only one known product at quantity 1 and compare Agrocer's result with the visible New
+World trolley. Repair only central selectors/deterministic behavior exposed by that test. CAPTCHA
+or retailer blocking must stop and report `blocked`; checkout and payment remain user-only.
 
 First live attempt reached New World's Cloudflare **Just a moment** security check. Search now
 returns `blocked` promptly instead of hanging or pretending the catalogue is empty. The visible
@@ -761,6 +771,13 @@ queues ready exact products, the desktop polls for them, and the user explicitly
 queued trolley. Results are persisted and polled back to mobile. Product preferences now have an
 `enabled` switch and the UI can pause/re-enable or replace a remembered item for specials. The live
 database has 12 RLS-protected tables; `npm run test:db` passes 12 tests.
+
+Migration `0010` is also applied. `retailer_product_search_jobs` relays live replacement searches
+from phone/tablet to the normal desktop Chrome extension and returns candidates to the originating
+PWA. Shopping now reports queued, processing, completed, and attention states visibly. A remembered
+product with a conflicting form, including the observed tasty-cheese corn-chip preference, is no
+longer marked ready automatically. The live database has 13 RLS-protected tables;
+`npm run test:db` passes 13 tests. Live phone-to-desktop relay verification remains manual.
 
 The old AI verification instructions below are historical and retained for audit context.
 
@@ -918,11 +935,12 @@ Both bit again this session. Check them before debugging code.
 
 ## Last Updated
 
-2026-08-30, on `stage-2/database-schema`. Migrations through `0009` are applied. Nothing has
+2026-08-30, on `stage-2/database-schema`. Migrations through `0010` are applied. Nothing has
 been merged to `main`, which is ~30 commits behind.
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
-upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley jobs, and a separate
+upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley and product-search
+jobs, and a separate
 visible Playwright fallback. It also has the Agrocer side of an authenticated homelab catalogue feed
 and a mobile product browser; the collector itself is still to be deployed. Recipe search from an
 empty planner slot now saves and assigns the new meal in one reviewed flow. Live New World

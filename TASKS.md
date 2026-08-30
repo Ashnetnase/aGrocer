@@ -237,6 +237,7 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 - [x] mobile New World catalogue UI and authenticated homelab feed contract
 - [x] encountered-product cache with truthful offline fallback
 - [x] visible Chrome extension and cross-device trolley jobs
+- [x] cross-device live product-search jobs with persisted results and mobile feedback
 - [ ] deploy/connect the homelab catalogue collector for live store products and prices
 - [ ] live-verify New World Add and quantity selectors
 

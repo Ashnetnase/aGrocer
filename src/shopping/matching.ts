@@ -11,6 +11,10 @@ function tokens(value: string): Set<string> {
   return new Set(normaliseRetailerText(value).split(' ').filter(Boolean));
 }
 
+const PRODUCT_FORM_TOKENS = new Set([
+  'bites', 'chips', 'crackers', 'dip', 'flavour', 'flavoured', 'powder', 'sauce', 'snack', 'snacks',
+]);
+
 /** Reject category/search links that a retailer page presents beside real product cards. */
 export function isSpecificNewWorldProduct(product: RetailerProduct): boolean {
   if (/^(view|see|shop) all\b/i.test(product.name.trim())) return false;
@@ -22,6 +26,14 @@ export function isSpecificNewWorldProduct(product: RetailerProduct): boolean {
   } catch {
     return false;
   }
+}
+
+/** Prevent a remembered ingredient from silently resolving to a snack or condiment with that flavour. */
+export function isPlausibleProductForItem(itemName: string, product: RetailerProduct): boolean {
+  const requested = tokens(itemName);
+  const candidate = tokens([product.brand, product.name, product.size].filter(Boolean).join(' '));
+  const conflictingForm = [...PRODUCT_FORM_TOKENS].some((token) => candidate.has(token) && !requested.has(token));
+  return !conflictingForm && rankProduct(itemName, product) >= 0.55;
 }
 
 export function rankProduct(query: string, product: RetailerProduct): number {
@@ -46,6 +58,7 @@ export async function resolveShoppingItem(
   if (preference) {
     const unavailable = preference.product.availability === 'unavailable';
     const executable = isSpecificNewWorldProduct(preference.product);
+    const plausible = isPlausibleProductForItem(item.name, preference.product);
     const paused = !preference.enabled;
     return {
       shoppingItem,
@@ -54,10 +67,14 @@ export async function resolveShoppingItem(
       product: preference.product,
       confidence: unavailable ? 0 : preference.confidence,
       source: 'household-preference',
-      status: unavailable ? 'unavailable' : executable && !paused ? 'ready' : 'needs-review',
-      requiresReview: unavailable || !executable || paused,
+      status: unavailable ? 'unavailable' : executable && plausible && !paused ? 'ready' : 'needs-review',
+      requiresReview: unavailable || !executable || !plausible || paused,
       preferenceEnabled: preference.enabled,
-      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.' : paused ? 'Automatic use of this saved product is paused.' : executable ? undefined : 'The saved choice is not a specific New World product. Choose a replacement.',
+      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.'
+        : paused ? 'Automatic use of this saved product is paused.'
+          : !executable ? 'The saved choice is not a specific New World product. Choose a replacement.'
+            : !plausible ? 'The saved product no longer looks like the requested item. Choose a replacement.'
+              : undefined,
     };
   }
 

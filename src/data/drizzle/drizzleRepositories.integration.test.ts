@@ -10,6 +10,7 @@ import type { AgrocerRepositories } from '@/data/repositories/types';
 import { createDrizzleRepositories } from './drizzleRepositories';
 import { createShoppingProductRepository, type ShoppingProductRepository } from '@/shopping/repository';
 import { createTrolleyJobRepository } from '@/shopping/jobs';
+import { createRetailerProductSearchJobRepository } from '@/shopping/searchJobs';
 
 /**
  * Integration tests against a real Postgres database (ADR-013).
@@ -39,6 +40,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
   let householdId: string;
   let shoppingProducts: ShoppingProductRepository;
   let trolleyJobRepository: ReturnType<typeof createTrolleyJobRepository>;
+  let searchJobRepository: ReturnType<typeof createRetailerProductSearchJobRepository>;
 
   beforeAll(async () => {
     sql = postgres(url as string, { max: 1, prepare: false });
@@ -53,6 +55,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     repos = createDrizzleRepositories(db, householdId);
     shoppingProducts = createShoppingProductRepository(db, householdId);
     trolleyJobRepository = createTrolleyJobRepository(db, householdId);
+    searchJobRepository = createRetailerProductSearchJobRepository(db, householdId);
   });
 
   afterAll(async () => {
@@ -169,6 +172,20 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     }]);
     expect(completed?.status).toBe('attention');
     expect(completed?.results?.[0]?.status).toBe('quantity-mismatch');
+  });
+
+  it('returns a desktop product search to the originating device', async () => {
+    const job = await searchJobRepository.create({
+      shoppingItemId: 'integration-milk-search', shoppingItemKey: 'Milk', query: 'blue milk',
+    });
+    expect(job.status).toBe('pending');
+    expect((await searchJobRepository.listPending()).some((candidate) => candidate.id === job.id)).toBe(true);
+    expect((await searchJobRepository.markProcessing(job.id))?.status).toBe('processing');
+    const completed = await searchJobRepository.complete(job.id, [{
+      retailer: 'new-world', externalProductId: 'integration-search-milk', name: 'Integration Blue Milk 2L',
+      productUrl: 'https://www.newworld.co.nz/shop/product/integration-search-milk', availability: 'available',
+    }]);
+    expect(completed).toMatchObject({ status: 'completed', products: [{ name: 'Integration Blue Milk 2L' }] });
   });
 
   it('creates and adjusts a pantry item', async () => {

@@ -15,7 +15,7 @@ import { NewWorldCatalogue } from './components/NewWorldCatalogue';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PreparedTrolley, TrolleyLine } from '@/shopping/types';
-import type { RetailerProduct, TrolleyAddResult, TrolleyJob } from '@/shopping/schemas';
+import type { RetailerProduct, RetailerProductSearchJob, TrolleyAddResult, TrolleyJob } from '@/shopping/schemas';
 import { extensionEventSchema, pingNewWorldExtension, searchWithNewWorldExtension, sendBatchToNewWorldExtension } from '@/shopping/extensionBridge';
 
 export function ShoppingScreen() {
@@ -29,15 +29,19 @@ export function ShoppingScreen() {
   const [sending, setSending] = useState(false);
   const [sendResults, setSendResults] = useState<TrolleyAddResult[] | null>(null);
   const [trolleyError, setTrolleyError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [extensionOnline, setExtensionOnline] = useState(false);
   const [extensionCandidates, setExtensionCandidates] = useState<Record<string, RetailerProduct[]>>({});
   const [extensionSearchMessages, setExtensionSearchMessages] = useState<Record<string, string>>({});
   const [searchingItemId, setSearchingItemId] = useState<string | null>(null);
   const searchTimeout = useRef<number | null>(null);
   const activeJobId = useRef<string | null>(null);
+  const activeSearchJobId = useRef<string | null>(null);
   const activeJobItems = useRef<TrolleyJob['items']>([]);
   const [pendingJob, setPendingJob] = useState<TrolleyJob | null>(null);
   const [queuedJob, setQueuedJob] = useState<TrolleyJob | null>(null);
+  const [pendingSearchJob, setPendingSearchJob] = useState<RetailerProductSearchJob | null>(null);
+  const [queuedSearchJob, setQueuedSearchJob] = useState<RetailerProductSearchJob | null>(null);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>) => {
@@ -48,6 +52,7 @@ export function ShoppingScreen() {
       if (parsed.data.type === 'AGROCER_NEW_WORLD_RESULTS') {
         setSendResults(parsed.data.results);
         setSending(false);
+        setActionMessage(parsed.data.results.every((result) => result.status === 'added') ? 'New World trolley update completed.' : 'Trolley processing finished with items that need attention.');
         if (activeJobId.current) {
           const jobId = activeJobId.current;
           activeJobId.current = null;
@@ -64,6 +69,17 @@ export function ShoppingScreen() {
         setExtensionCandidates((current) => ({ ...current, [search.shoppingItemId]: search.products }));
         setExtensionSearchMessages((current) => ({ ...current, [search.shoppingItemId]: search.message ?? (search.products.length ? 'Choose the exact product below.' : 'No products found.') }));
         setSearchingItemId(null);
+        if (activeSearchJobId.current) {
+          const jobId = activeSearchJobId.current;
+          activeSearchJobId.current = null;
+          void fetch(`/api/trolley/search-jobs/${jobId}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ products: search.products, ...(search.message ? { message: search.message } : {}) }),
+          }).then(async (response) => {
+            if (response.ok) setQueuedSearchJob((await response.json()) as RetailerProductSearchJob);
+          });
+        }
       }
       if (parsed.data.type === 'AGROCER_NEW_WORLD_ERROR') {
         const errorMessage = parsed.data.message;
@@ -71,6 +87,16 @@ export function ShoppingScreen() {
         setTrolleyError(parsed.data.message);
         setSearchingItemId(null);
         setSending(false);
+        if (activeSearchJobId.current) {
+          const jobId = activeSearchJobId.current;
+          activeSearchJobId.current = null;
+          void fetch(`/api/trolley/search-jobs/${jobId}`, {
+            method: 'PATCH', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ products: [], message: errorMessage }),
+          }).then(async (response) => {
+            if (response.ok) setQueuedSearchJob((await response.json()) as RetailerProductSearchJob);
+          });
+        }
         if (activeJobId.current) {
           const jobId = activeJobId.current;
           const results: TrolleyAddResult[] = activeJobItems.current.map((item) => ({
@@ -102,8 +128,16 @@ export function ShoppingScreen() {
       const data = (await response.json()) as { jobs: TrolleyJob[] };
       setPendingJob(data.jobs[0] ?? null);
     });
-    refresh();
-    const timer = window.setInterval(refresh, 5_000);
+    const refreshAll = () => {
+      refresh();
+      void fetch('/api/trolley/search-jobs').then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as { jobs: RetailerProductSearchJob[] };
+        setPendingSearchJob(data.jobs[0] ?? null);
+      });
+    };
+    refreshAll();
+    const timer = window.setInterval(refreshAll, 5_000);
     return () => window.clearInterval(timer);
   }, [extensionOnline]);
 
@@ -119,6 +153,22 @@ export function ShoppingScreen() {
     }, 5_000);
     return () => window.clearInterval(timer);
   }, [queuedJob]);
+
+  useEffect(() => {
+    if (!queuedSearchJob || queuedSearchJob.status === 'completed' || queuedSearchJob.status === 'attention') return;
+    const timer = window.setInterval(() => {
+      void fetch(`/api/trolley/search-jobs/${queuedSearchJob.id}`).then(async (response) => {
+        if (!response.ok) return;
+        const job = (await response.json()) as RetailerProductSearchJob;
+        setQueuedSearchJob(job);
+        if (job.products) {
+          setExtensionCandidates((current) => ({ ...current, [job.shoppingItemId]: job.products ?? [] }));
+          setExtensionSearchMessages((current) => ({ ...current, [job.shoppingItemId]: job.message ?? (job.products?.length ? 'Choose the exact product below.' : 'No products found.') }));
+        }
+      });
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [queuedSearchJob]);
 
   const { remaining, checked, total, progress } = useMemo(() => summariseShopping(shopping), [shopping]);
   const budget = summariseShoppingBudget(total, household.settings.weeklyBudget);
@@ -138,11 +188,13 @@ export function ShoppingScreen() {
   };
 
   const chooseProduct = async (line: TrolleyLine, product: RetailerProduct) => {
+    setTrolleyError(null);
     const response = await fetch('/api/trolley/preferences', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ shoppingItemKey: line.requestedText, product, defaultQuantity: line.requestedQuantity }),
     });
     if (!response.ok) { setTrolleyError('Could not remember that product.'); return; }
+    setActionMessage(`${product.name} is now the saved New World product for ${line.requestedText}.`);
     await prepareNewWorld();
   };
 
@@ -155,6 +207,30 @@ export function ShoppingScreen() {
     await prepareNewWorld();
   };
 
+  const queueDesktopProductSearch = async (line: TrolleyLine) => {
+    if (queuedSearchJob && ['pending', 'processing'].includes(queuedSearchJob.status)) {
+      setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'A live product search is already waiting for the desktop.' }));
+      return;
+    }
+    const response = await fetch('/api/trolley/search-jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        shoppingItemId: line.shoppingItem.id,
+        shoppingItemKey: line.requestedText,
+        query: line.requestedText,
+      }),
+    });
+    if (!response.ok) throw new Error('queue failed');
+    const job = (await response.json()) as RetailerProductSearchJob;
+    setQueuedSearchJob(job);
+    setExtensionSearchMessages((current) => ({
+      ...current,
+      [line.shoppingItem.id]: 'Live search queued. Open Agrocer Shopping on the desktop and process the product search.',
+    }));
+    setActionMessage(`Live New World search for ${line.requestedText} was sent to the desktop.`);
+  };
+
   const searchNewWorld = async (line: TrolleyLine) => {
     setSearchingItemId(line.shoppingItem.id);
     if (!extensionOnline) {
@@ -162,7 +238,7 @@ export function ShoppingScreen() {
       try {
         const parameters = new URLSearchParams({ q: line.requestedText, limit: '20' });
         const response = await fetch(`/api/retailer/new-world/products?${parameters}`);
-        const body = (await response.json().catch(() => null)) as { products?: RetailerProduct[]; message?: string } | null;
+        const body = (await response.json().catch(() => null)) as { products?: RetailerProduct[]; message?: string; source?: 'live' | 'cache' } | null;
         if (!response.ok || !body?.products) throw new Error('search failed');
         const products = body.products;
         setExtensionCandidates((current) => ({ ...current, [line.shoppingItem.id]: products }));
@@ -170,8 +246,10 @@ export function ShoppingScreen() {
           ...current,
           [line.shoppingItem.id]: body.message ?? (products.length ? 'Choose the exact product below.' : 'No products found.'),
         }));
+        if (body.source !== 'live') await queueDesktopProductSearch(line);
       } catch {
-        setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Could not load New World products.' }));
+        try { await queueDesktopProductSearch(line); }
+        catch { setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Could not load cached products or queue a desktop search.' })); }
       } finally {
         setSearchingItemId(null);
       }
@@ -195,9 +273,9 @@ export function ShoppingScreen() {
       expectedName: line.product?.name ?? line.requestedText,
       quantity: line.requestedQuantity,
     }));
-    setSending(true); setTrolleyError(null);
+    setSending(true); setTrolleyError(null); setActionMessage(null);
     if (extensionOnline) {
-      try { sendBatchToNewWorldExtension(items); }
+      try { sendBatchToNewWorldExtension(items); setActionMessage('Chrome is processing the trolley. Keep the New World tab open.'); }
       catch { setTrolleyError('The prepared products were not valid for the browser extension.'); setSending(false); }
       return;
     }
@@ -206,6 +284,7 @@ export function ShoppingScreen() {
         const response = await fetch('/api/trolley/jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items }) });
         if (!response.ok) throw new Error('queue failed');
         setQueuedJob((await response.json()) as TrolleyJob);
+        setActionMessage('Trolley queued. Open Agrocer Shopping on the desktop and process the queued trolley.');
         setSending(false);
       } catch { setTrolleyError('Could not queue this trolley for the desktop.'); setSending(false); }
       return;
@@ -232,6 +311,22 @@ export function ShoppingScreen() {
     catch { setTrolleyError('The queued products were not valid for the extension.'); setSending(false); }
   };
 
+  const processPendingSearchJob = async () => {
+    if (!pendingSearchJob) return;
+    setTrolleyError(null);
+    setActionMessage(`Searching New World for ${pendingSearchJob.query}…`);
+    const response = await fetch(`/api/trolley/search-jobs/${pendingSearchJob.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'start' }),
+    });
+    if (!response.ok) { setTrolleyError('That product search is no longer pending.'); return; }
+    const started = (await response.json()) as RetailerProductSearchJob;
+    activeSearchJobId.current = started.id;
+    setQueuedSearchJob(started);
+    setPendingSearchJob(null);
+    setSearchingItemId(started.shoppingItemId);
+    searchWithNewWorldExtension(started.shoppingItemId, started.query);
+  };
+
   return <>
     <ScreenHeader title="Shopping" subtitle={`${remaining.length} to buy · ${household.settings.shopLabel}`} />
 
@@ -244,18 +339,21 @@ export function ShoppingScreen() {
         <button type="button" onClick={() => void prepareNewWorld()} disabled={!shopping.length || preparing} className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl border border-moss-200 bg-white text-sm font-bold text-moss-700 disabled:opacity-50">{preparing ? 'Preparing…' : 'Prepare New World trolley'}</button>
       </div>
       {trolleyError ? <p className="mb-3 rounded-2xl bg-berry-50 px-4 py-3 text-sm font-semibold text-berry-700">{trolleyError}</p> : null}
+      {actionMessage ? <p role="status" className="mb-3 rounded-2xl bg-moss-50 px-4 py-3 text-sm font-semibold text-moss-800">{actionMessage}</p> : null}
+      {pendingSearchJob && extensionOnline ? <section className="mb-3 rounded-2xl border border-honey-200 bg-honey-50 px-4 py-3 text-sm"><strong>Product search from another device</strong><p className="mt-0.5 text-xs text-muted">Search New World for “{pendingSearchJob.query}” and return the choices.</p><button type="button" onClick={() => void processPendingSearchJob()} className="mt-2 rounded-xl bg-moss-600 px-3 py-2 text-xs font-bold text-white">Process product search</button></section> : null}
+      {queuedSearchJob ? <section className="mb-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"><strong>Live product search: {queuedSearchJob.status}</strong><p className="mt-0.5 text-xs text-muted">{queuedSearchJob.status === 'pending' ? 'Open Agrocer Shopping on the desktop with extension 0.1.1.' : queuedSearchJob.status === 'processing' ? 'Desktop Chrome is searching New World.' : queuedSearchJob.products?.length ? `${queuedSearchJob.products.length} choices returned. Select one under the shopping item.` : queuedSearchJob.message ?? 'No live products were returned.'}</p></section> : null}
       {shopping.length ? <NewWorldCatalogue items={shopping} onPreferenceSaved={() => trolley ? prepareNewWorld() : undefined} /> : null}
       {trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
         <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold text-ink">New World trolley</h2><p className="text-xs text-muted">{trolley.summary.total} items · {trolley.summary.ready} ready · {trolley.summary.needsReview} need review · {trolley.summary.unavailable} unavailable</p></div><button type="button" className="text-xs font-bold text-muted" onClick={() => setTrolley(null)}>Close</button></div>
         <div className="mt-3 space-y-2">
-          {extensionOnline ? <div className="rounded-xl bg-moss-100 px-3 py-2 text-sm text-moss-800"><strong>Chrome trolley extension ready</strong><p className="text-xs">Products will be added in your normal visible New World tab.</p></div> : !trolley.companion.online ? <div className="rounded-xl bg-honey-50 px-3 py-2 text-sm text-ink"><strong>Trolley companion offline</strong><p className="text-xs text-muted">Install the Chrome extension or start the local companion to add products.</p></div> : null}
+          {extensionOnline ? <div className="rounded-xl bg-moss-100 px-3 py-2 text-sm text-moss-800"><strong>Chrome trolley extension ready</strong><p className="text-xs">Products will be added in your normal visible New World tab.</p></div> : !trolley.companion.online ? <div className="rounded-xl bg-honey-50 px-3 py-2 text-sm text-ink"><strong>Desktop connection not active on this device</strong><p className="text-xs text-muted">On a phone, send ready items to the desktop. Open Agrocer there with the Chrome extension to process them.</p></div> : null}
           {pendingJob && extensionOnline ? <div className="rounded-xl bg-honey-50 px-3 py-2 text-sm"><strong>Queued trolley from another device</strong><p className="text-xs text-muted">{pendingJob.items.length} ready products are waiting.</p><button type="button" onClick={() => void processPendingJob()} className="mt-2 rounded-lg bg-moss-600 px-3 py-2 text-xs font-bold text-white">Process queued trolley</button></div> : null}
           {queuedJob ? <div className="rounded-xl bg-white px-3 py-2 text-sm"><strong>Desktop trolley job: {queuedJob.status}</strong><p className="text-xs text-muted">{queuedJob.status === 'pending' ? 'Open Agrocer on the desktop with the extension installed.' : queuedJob.status === 'processing' ? 'The desktop extension is processing this trolley.' : 'Results are available below.'}</p></div> : null}
           {trolley.lines.map((line) => <div key={line.shoppingItem.id} className="rounded-xl bg-white px-3 py-2 text-sm">
             <div className="flex justify-between gap-3"><span>{line.requestedQuantity} {line.shoppingItem.unit} {line.requestedText}</span><span className={line.status === 'ready' ? 'text-moss-700' : 'text-berry-600'}>{line.status === 'ready' ? 'Ready' : line.status === 'unavailable' ? 'Unavailable' : 'Needs review'}</span></div>
             {line.product ? <p className="mt-1 text-xs text-muted">{line.product.name}{line.product.size ? ` · ${line.product.size}` : ''}{line.product.price !== undefined ? ` · ${nzd(line.product.price)}` : ''}<br />{line.source === 'household-preference' ? 'Matched from household preference' : `Match confidence ${Math.round(line.confidence * 100)}%`}</p> : <p className="mt-1 text-xs text-muted">{line.reason}</p>}
-            {line.source === 'household-preference' ? <button type="button" onClick={() => void togglePreference(line)} className="mr-2 mt-2 rounded-lg border border-line px-2 py-1.5 text-xs font-bold text-muted">{line.preferenceEnabled === false ? 'Use saved product automatically' : 'Pause saved product'}</button> : null}
-            {line.requiresReview || line.source === 'household-preference' ? <button type="button" disabled={searchingItemId === line.shoppingItem.id} onClick={() => void searchNewWorld(line)} className="mt-2 rounded-lg border border-moss-200 px-2 py-1.5 text-xs font-bold text-moss-700 disabled:opacity-50">{searchingItemId === line.shoppingItem.id ? 'Searching…' : line.source === 'household-preference' ? 'Search for a different product' : 'Choose New World product'}</button> : null}
+            <div className="mt-2 flex flex-wrap gap-2">{line.source === 'household-preference' ? <button type="button" onClick={() => void togglePreference(line)} className="rounded-lg border border-line px-2 py-1.5 text-xs font-bold text-muted">{line.preferenceEnabled === false ? 'Use saved product automatically' : 'Pause saved product'}</button> : null}
+            {line.requiresReview || line.source === 'household-preference' ? <button type="button" disabled={searchingItemId === line.shoppingItem.id} onClick={() => void searchNewWorld(line)} className="rounded-lg border border-moss-200 px-2 py-1.5 text-xs font-bold text-moss-700 disabled:opacity-50">{searchingItemId === line.shoppingItem.id ? 'Searching…' : line.source === 'household-preference' ? 'Search for a different product' : 'Choose New World product'}</button> : null}</div>
             {extensionSearchMessages[line.shoppingItem.id] ? <p className="mt-1 text-xs text-muted">{extensionSearchMessages[line.shoppingItem.id]}</p> : null}
             {(extensionCandidates[line.shoppingItem.id] ?? line.candidates)?.length ? <div className="mt-2 space-y-1">{(extensionCandidates[line.shoppingItem.id] ?? line.candidates ?? []).map((candidate) => <button key={candidate.externalProductId ?? candidate.productUrl ?? candidate.name} type="button" onClick={() => void chooseProduct(line, candidate)} className="flex w-full items-center gap-2 rounded-lg border border-line px-2 py-2 text-left text-xs font-semibold text-ink">{candidate.imageUrl ? <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-lg bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${JSON.stringify(candidate.imageUrl)})` }} /> : null}<span>Choose {candidate.name}{candidate.size ? ` · ${candidate.size}` : ''}{candidate.price !== undefined ? ` · ${nzd(candidate.price)}` : ''}</span></button>)}</div> : null}
           </div>)}

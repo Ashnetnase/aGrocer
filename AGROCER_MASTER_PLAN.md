@@ -501,6 +501,7 @@ Prepare a supermarket trolley for human review without autonomous payment.
 - [~] browser cart preparation — normal-Chrome extension fallback implemented after Cloudflare
       rejected Playwright; extension selectors are protocol-tested but not live-site validated
 - [x] persisted cross-device trolley jobs with explicit desktop processing
+- [x] persisted cross-device product-search jobs returning live extension candidates to phone/tablet
 - [x] explicit partial-failure/error states; background retries remain future work
 - [x] cart review UI with ready/review/unavailable summaries
 - [x] separate explicit user action before sending ready products to the companion
@@ -645,6 +646,18 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-30 - Cross-device New World product search and mobile feedback (Codex)
+
+Migration `0010` adds household-scoped retailer product-search jobs. When the optional live
+catalogue is absent, a phone/tablet can now queue a replacement search for the normal desktop
+Chrome extension; the desktop explicitly processes it and validated exact candidates are stored,
+cached, and polled back to the originating PWA. Shopping now gives visible feedback for product
+selection, queued search, queued trolley, processing, and partial failure instead of leaving button
+presses apparently unanswered. Remembered products with a conflicting form (such as corn chips for
+cheese) are forced back to review. Verified with 312 unit tests, 13 real-database integration tests,
+RLS on all 13 tables, schema no-op generation, typecheck, lint, and production build. The relay still
+requires a live user test with desktop extension 0.1.1; a 24/7 catalogue remains optional.
 
 ## 2026-08-30 - Live trolley product identity and mobile navigation repair (Codex)
 

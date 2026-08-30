@@ -31,6 +31,13 @@ On a phone/tablet without the extension, the send button creates a household tro
 Shopping page on the desktop with the extension enabled, prepare the view, and press **Process
 queued trolley**. Results are stored so the originating PWA can show completed/attention status.
 
+Product replacement uses the same cross-device boundary. On a phone, **Search for a different
+product** shows any cached choices immediately and queues a live search when the catalogue service
+is not configured. Open Shopping on the desktop, press **Process product search**, and keep the
+visible New World tab open. The exact product candidates are validated, stored, and returned to the
+phone automatically; choosing one replaces the household preference. A clearly incompatible old
+preference (for example cheese-flavoured corn chips saved for cheese) is forced back to review.
+
 ## Optional homelab product catalogue
 
 The Shopping screen has a **New World products** section that works on phones, tablets and desktop.

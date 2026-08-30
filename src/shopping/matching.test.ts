@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import { ManualShoppingProvider } from './manual';
-import { isSpecificNewWorldProduct, rankProduct, resolveShoppingItem } from './matching';
+import { isPlausibleProductForItem, isSpecificNewWorldProduct, rankProduct, resolveShoppingItem } from './matching';
 
 const milk: ShoppingItem = { id: 'item-1', name: 'Milk', category: 'Dairy', quantity: 2, unit: 'bottles', price: 0, priority: false, note: '', checked: false };
 const anchor = { retailer: 'new-world' as const, externalProductId: 'anchor-2l', name: 'Anchor Blue Milk 2L', brand: 'Anchor', size: '2L', availability: 'available' as const };
@@ -54,6 +54,23 @@ describe('retailer matching', () => {
     });
     expect(result.status).toBe('needs-review');
     expect(result.reason).toContain('not a specific New World product');
+  });
+
+  it('does not silently reuse a snack product for an ingredient with the same flavour', async () => {
+    const cornChips = {
+      retailer: 'new-world' as const,
+      name: 'Mexicano Tasty Cheese Corn Chips',
+      size: '170g',
+      productUrl: 'https://www.newworld.co.nz/shop/product/5000000',
+      availability: 'available' as const,
+    };
+    expect(isPlausibleProductForItem('tastey cheese', cornChips)).toBe(false);
+    const item = { ...milk, name: 'tastey cheese' };
+    const result = await resolveShoppingItem(item, new ManualShoppingProvider(), {
+      getPreferredProduct: async () => ({ shoppingItemKey: 'tastey cheese', retailer: 'new-world', product: cornChips, defaultQuantity: 2, confidence: 1, enabled: true, lastConfirmedAt: new Date().toISOString() }),
+    });
+    expect(result.status).toBe('needs-review');
+    expect(result.reason).toContain('no longer looks like');
   });
 
   it('does not fabricate a match when no candidates exist', async () => {

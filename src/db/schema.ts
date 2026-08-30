@@ -315,6 +315,26 @@ export const trolleyJobs = pgTable(
   (table) => ({ householdIdx: index('trolley_jobs_household_idx').on(table.householdId, table.status, table.createdAt) }),
 ).enableRLS();
 
+export const retailerProductSearchJobs = pgTable(
+  'retailer_product_search_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+    retailer: text('retailer').notNull().default('new-world'),
+    shoppingItemId: text('shopping_item_id').notNull(),
+    shoppingItemKey: text('shopping_item_key').notNull(),
+    query: text('query').notNull(),
+    storeId: text('store_id'),
+    status: text('status').notNull().default('pending'),
+    products: jsonb('products').$type<import('@/shopping/schemas').RetailerProduct[]>(),
+    message: text('message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({ householdIdx: index('retailer_product_search_jobs_household_idx').on(table.householdId, table.status, table.createdAt) }),
+).enableRLS();
+
 /* -------------------------------------------------------------------------- */
 /* Meals and the weekly plan                                                   */
 /* -------------------------------------------------------------------------- */

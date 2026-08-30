@@ -70,3 +70,20 @@ export const trolleyJobSchema = z.object({
   createdAt: z.string().datetime(), updatedAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
 });
 export type TrolleyJob = z.infer<typeof trolleyJobSchema>;
+
+export const retailerSearchJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'attention']);
+export const retailerProductSearchJobSchema = z.object({
+  id: z.string().uuid(),
+  retailer: retailerSchema,
+  shoppingItemId: z.string().min(1).max(200),
+  shoppingItemKey: z.string().min(1).max(200),
+  query: z.string().min(1).max(120),
+  storeId: z.string().max(100).optional(),
+  status: retailerSearchJobStatusSchema,
+  products: z.array(retailerProductSchema).optional(),
+  message: z.string().max(500).optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional(),
+});
+export type RetailerProductSearchJob = z.infer<typeof retailerProductSearchJobSchema>;

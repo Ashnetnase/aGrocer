@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { failed } from '@/server/http';
 import { serverShoppingProductRepository } from '@/server/repositories';
 import { NewWorldCatalogueClient } from '@/shopping/catalogue';
+import { isSpecificNewWorldProduct } from '@/shopping/matching';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,8 @@ export async function GET(request: Request) {
     const catalogue = new NewWorldCatalogueClient();
     if (catalogue.configured) {
       try {
-        const products = await catalogue.search(parsed.data.q, parsed.data.storeId, parsed.data.limit);
+        const products = (await catalogue.search(parsed.data.q, parsed.data.storeId, parsed.data.limit))
+          .filter(isSpecificNewWorldProduct);
         const saved = await Promise.all(products.map((product) => repository.saveProduct(product)));
         return NextResponse.json({ products: saved, source: 'live', storeId: parsed.data.storeId });
       } catch (error) {
@@ -34,12 +36,12 @@ export async function GET(request: Request) {
       }
     }
 
-    const products = await repository.searchProducts(
+    const products = (await repository.searchProducts(
       parsed.data.q,
       'new-world',
       parsed.data.storeId,
       parsed.data.limit,
-    );
+    )).filter(isSpecificNewWorldProduct);
     return NextResponse.json({
       products,
       source: 'cache',
@@ -52,4 +54,3 @@ export async function GET(request: Request) {
     return failed(error);
   }
 }
-

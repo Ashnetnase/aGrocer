@@ -7,6 +7,7 @@ import { authEnabled } from '@/auth/config';
 import { currentUser } from '@/auth/server';
 import { createShoppingProductRepository } from '@/shopping/repository';
 import { createTrolleyJobRepository } from '@/shopping/jobs';
+import { createRetailerProductSearchJobRepository } from '@/shopping/searchJobs';
 
 /**
  * Server-side repository access for route handlers.
@@ -92,4 +93,8 @@ export async function serverShoppingProductRepository() {
 
 export async function serverTrolleyJobRepository() {
   return createTrolleyJobRepository(getDb(), await currentHouseholdId());
+}
+
+export async function serverRetailerProductSearchJobRepository() {
+  return createRetailerProductSearchJobRepository(getDb(), await currentHouseholdId());
 }

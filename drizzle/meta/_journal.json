@@ -71,6 +71,13 @@
       "when": 1788052898250,
       "tag": "0009_redundant_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788070920940,
+      "tag": "0010_busy_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }
