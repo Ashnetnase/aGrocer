@@ -649,6 +649,17 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-30 - Live New World nested-card extraction repair (Codex)
+
+The first post-deployment search reached New World but returned no candidates because extension
+0.1.2 assumed product links lived in one of three card wrappers and required the `www` hostname.
+Extension 0.1.3 keeps the strict `/shop/product/` boundary but supports both retailer hostnames,
+walks generic nested `div` cards, pairs sibling image/name links by product path, and waits up to 30
+seconds for client rendering. Failure messages now report how many genuine product links were seen,
+so a future markup change is diagnosable. The app timeout was extended to 60 seconds. Verified with
+the new installed-Chrome extraction smoke check, extension syntax checks, typecheck, lint, and all
+313 unit tests. Live signed-in New World confirmation still requires reloading extension 0.1.3.
+
 ## 2026-08-30 - Always-on household New World catalogue (Codex)
 
 The deployed Agrocer container plus Supabase are now explicitly the 24/7 household catalogue; a

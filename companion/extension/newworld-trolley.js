@@ -10,6 +10,42 @@ const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mil
 const firstVisible = (selectors) => selectors.map((selector) => document.querySelector(selector)).find((element) => element && element.getClientRects().length);
 const normalise = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const genericProductName = (value) => /^(view|see|shop) all\b/i.test(value.trim());
+const isNewWorldHost = (hostname) => hostname === 'newworld.co.nz' || hostname.endsWith('.newworld.co.nz');
+
+function productContainer(anchor, queryTokens) {
+  const explicit = anchor.closest('[data-testid*="product" i], [data-test*="product" i], [class*="product-card" i], [class*="product-tile" i], article, li');
+  if (explicit && explicit.querySelectorAll('a[href*="/shop/product/"]').length <= 3) return explicit;
+  let element = anchor.parentElement;
+  let fallback = element || anchor;
+  for (let depth = 0; element && depth < 8; depth += 1, element = element.parentElement) {
+    const text = normalise(element.textContent || '');
+    const containsQuery = !queryTokens.length || queryTokens.some((token) => text.includes(token));
+    const hasProductControl = Boolean(element.querySelector('button, input[type="number"], [data-testid*="price" i], [class*="price" i]'));
+    const productLinkCount = element.querySelectorAll('a[href*="/shop/product/"]').length;
+    if (containsQuery && hasProductControl && productLinkCount <= 3) return element;
+    if (containsQuery && productLinkCount <= 2 && text.length >= 4 && text.length <= 500) fallback = element;
+  }
+  return fallback;
+}
+
+function cleanProductName(value) {
+  return value.replace(/^image:\s*/i, '').replace(/\s+image(?:\s+\d+)?$/i, '').replace(/\s+/g, ' ').trim();
+}
+
+function productName(anchor, container, image, url) {
+  const sameProductLinks = [...container.querySelectorAll('a[href]')].filter((candidate) => {
+    try { return new URL(candidate.href, document.baseURI).pathname === url.pathname; } catch { return false; }
+  });
+  const values = [
+    ...sameProductLinks.map((candidate) => candidate.textContent || ''),
+    anchor.getAttribute('aria-label') || '',
+    anchor.getAttribute('title') || '',
+    image?.alt || '',
+    container.querySelector('[data-testid*="product-name" i], [data-test*="product-name" i], [class*="product-name" i], h2, h3, h4')?.textContent || '',
+    url.searchParams.get('name')?.replace(/[-_]+/g, ' ') || '',
+  ].map(cleanProductName);
+  return values.find((value) => value && !genericProductName(value)) || '';
+}
 
 function imageUrl(image, container) {
   const source = image?.currentSrc || image?.getAttribute?.('src') || image?.getAttribute?.('data-src') ||
@@ -73,16 +109,17 @@ function extractProducts(query) {
   const products = [];
   for (const anchor of document.querySelectorAll('a[href]')) {
     let url;
-    try { url = new URL(anchor.href); } catch { continue; }
-    if (url.hostname !== 'www.newworld.co.nz' || !/\/shop\/product\//i.test(url.pathname)) continue;
-    const container = anchor.closest('[data-testid*="product-card"], article, li') || anchor.parentElement || anchor;
+    try { url = new URL(anchor.href, document.baseURI); } catch { continue; }
+    if (!isNewWorldHost(url.hostname) || !/\/shop\/product\//i.test(url.pathname)) continue;
+    url.hash = '';
+    const container = productContainer(anchor, queryTokens);
     const containerText = container.textContent?.replace(/\s+/g, ' ').trim() || '';
-    const textMatches = queryTokens.some((token) => normalise(containerText).includes(token));
-    if (!textMatches || seen.has(url.href)) continue;
+    if (seen.has(url.href)) continue;
     const image = anchor.querySelector('img') || container.querySelector('img');
-    const heading = anchor.querySelector('h1, h2, h3, h4, [data-testid*="name"]') || container.querySelector('h1, h2, h3, h4, [data-testid*="name"]');
-    const name = (heading?.textContent || anchor.getAttribute('aria-label') || anchor.getAttribute('title') || image?.alt || '').replace(/\s+/g, ' ').trim();
-    if (!name || genericProductName(name) || !queryTokens.some((token) => normalise(`${name} ${containerText}`).includes(token))) continue;
+    const name = productName(anchor, container, image, url);
+    if (!name || genericProductName(name)) continue;
+    const textMatches = !queryTokens.length || queryTokens.some((token) => normalise(`${name} ${containerText}`).includes(token));
+    if (!textMatches) continue;
     const priceText = containerText.match(/\$\s*(\d+(?:\.\d{1,2})?)/)?.[1];
     seen.add(url.href);
     products.push({
@@ -96,7 +133,17 @@ function extractProducts(query) {
     });
     if (products.length >= 12) break;
   }
-  return { status: products.length ? 'ok' : 'selector-failed', products, ...(products.length ? {} : { message: 'No product cards could be read from the New World search page.' }) };
+  const productLinkCount = [...document.querySelectorAll('a[href]')].filter((anchor) => {
+    try {
+      const url = new URL(anchor.href, document.baseURI);
+      return isNewWorldHost(url.hostname) && /\/shop\/product\//i.test(url.pathname);
+    } catch { return false; }
+  }).length;
+  return {
+    status: products.length ? 'ok' : 'selector-failed',
+    products,
+    ...(products.length ? {} : { message: `New World loaded, but Agrocer could not read a valid product card (${productLinkCount} product links detected).` }),
+  };
 }
 
 async function addCurrent(item) {

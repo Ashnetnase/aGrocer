@@ -678,7 +678,7 @@ foundation are implemented and checked. Migration `0010` is applied: 13 tables h
 authenticated household policy each.
 
 The 24/7 New World household catalogue now uses the deployed Agrocer container and Supabase rather
-than a redundant second service (ADR-022). Every valid candidate returned by extension 0.1.2 is
+than a redundant second service (ADR-022). Every valid candidate returned by extension 0.1.3 is
 cached automatically, and phones can browse those products while the workstation is off. The
 timestamp is freshness information, not a live-price promise. Commit `2078ba1` was deployed to
 `192.168.1.49` on 2026-08-30 after its ED25519 host fingerprint was verified. The container was
@@ -697,7 +697,7 @@ section truthfully shows only previously seen cached products. No live catalogue
 
 Phone/tablet replacement search no longer stops at that cache. **Search for a different product**
 shows cached choices immediately and, when no live catalogue is configured, persists a product
-search job for the household. Shopping on the desktop with extension 0.1.2 shows **Product search
+search job for the household. Shopping on the desktop with extension 0.1.3 shows **Product search
 from another device**; the user presses **Process product search**, the visible New World tab is
 searched, and validated exact candidates are stored and polled back to the phone. Selecting one
 replaces the remembered preference and shows an explicit success message. This relay is automated-
@@ -735,7 +735,7 @@ preferences persist, deterministic matching runs before any future AI ranking, a
 separate explicit actions. Run the companion with `npm run companion:newworld`; configuration and
 safety details are in `docs/new-world-companion.md`.
 
-**Next Stage 5 task:** deploy this commit, reload unpacked extension 0.1.2, and live-test the repaired
+**Next Stage 5 task:** deploy this commit, reload unpacked extension 0.1.3, and live-test the repaired
 cross-device path: on phone choose **Search for a different product**, on desktop press **Process
 product search**, confirm exact candidates return to the phone, and select the intended product.
 Then send only one known product at quantity 1 and compare Agrocer's result with the visible New
@@ -787,12 +787,16 @@ product with a conflicting form, including the observed tasty-cheese corn-chip p
 longer marked ready automatically. The live database has 13 RLS-protected tables;
 `npm run test:db` passes 13 tests. Live phone-to-desktop relay verification remains manual.
 
-Extension 0.1.2 repairs the failed product-search flow observed after 0.1.1: it retries while New
+Extension 0.1.2 repaired the first failed product-search flow observed after 0.1.1: it retries while New
 World's client-rendered cards appear, extracts real lazy-loaded HTTP images, and returns the choices
 to both the general catalogue panel and **Search for a different product**. Empty/failed searches now
 end with a useful status rather than remaining in processing. Completed or stale search/trolley
 activity has a Clear/Dismiss action; the database record is marked `dismissed`, not deleted, so the
 history remains audit-friendly. Reload the unpacked extension before live testing these changes.
+
+Extension 0.1.3 then repairs the live nested-card failure: it accepts either New World hostname,
+finds product identity across sibling image/name links in generic `div` cards, waits up to 30
+seconds, and reports the number of genuine product links detected when extraction still fails.
 
 The old AI verification instructions below are historical and retained for audit context.
 
@@ -958,6 +962,6 @@ upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley and
 jobs, and a separate visible Playwright fallback. The built-in 24/7 household catalogue is deployed
 on the homelab and backed by Supabase; visible extension searches populate it without an unattended
 retailer crawler. Recipe search from an empty planner slot now saves and assigns the new meal in one
-reviewed flow. The extension 0.1.2 candidate/image flow and live New World trolley-add selectors
+reviewed flow. The extension 0.1.3 candidate/image flow and live New World trolley-add selectors
 still need final browser validation. No New World credentials are stored and payment/final checkout
 are not implemented.

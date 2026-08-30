@@ -20,6 +20,7 @@
     "ai:chat": "tsx scripts/ai-chat.ts",
     "db:rls": "tsx scripts/rls-check.ts",
     "db:claim": "tsx scripts/claim.ts",
+    "extension:check": "node scripts/extension-smoke.mjs",
     "companion:newworld": "tsx --env-file=.env.local companion/src/server.ts"
   },
   "dependencies": {

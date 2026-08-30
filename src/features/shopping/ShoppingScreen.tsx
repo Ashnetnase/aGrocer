@@ -269,8 +269,8 @@ export function ShoppingScreen() {
     if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
     searchTimeout.current = window.setTimeout(() => {
       setSearchingItemId(null);
-      setExtensionSearchMessages((messages) => ({ ...messages, [item.id]: 'New World search timed out. Reload extension 0.1.2 and retry.' }));
-    }, 35_000);
+      setExtensionSearchMessages((messages) => ({ ...messages, [item.id]: 'New World search timed out. Reload extension 0.1.3 and retry.' }));
+    }, 60_000);
   };
 
   const searchNewWorld = (line: TrolleyLine) => searchNewWorldItem(line.shoppingItem, line.requestedText);
@@ -341,12 +341,12 @@ export function ShoppingScreen() {
       const jobId = activeSearchJobId.current;
       activeSearchJobId.current = null;
       setSearchingItemId(null);
-      setExtensionSearchMessages((messages) => ({ ...messages, [started.shoppingItemId]: 'New World search timed out. Reload extension 0.1.2 and retry.' }));
+      setExtensionSearchMessages((messages) => ({ ...messages, [started.shoppingItemId]: 'New World search timed out. Reload extension 0.1.3 and retry.' }));
       if (jobId) void fetch(`/api/trolley/search-jobs/${jobId}`, {
         method: 'PATCH', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ products: [], message: 'Desktop New World search timed out.' }),
       }).then(async (result) => { if (result.ok) setQueuedSearchJob((await result.json()) as RetailerProductSearchJob); });
-    }, 35_000);
+    }, 60_000);
   };
 
   const dismissSearchActivity = async () => {
@@ -387,7 +387,7 @@ export function ShoppingScreen() {
       {trolleyError ? <p className="mb-3 rounded-2xl bg-berry-50 px-4 py-3 text-sm font-semibold text-berry-700">{trolleyError}</p> : null}
       {actionMessage ? <p role="status" className="mb-3 rounded-2xl bg-moss-50 px-4 py-3 text-sm font-semibold text-moss-800">{actionMessage}</p> : null}
       {pendingSearchJob && extensionOnline ? <section className="mb-3 rounded-2xl border border-honey-200 bg-honey-50 px-4 py-3 text-sm"><strong>Product search from another device</strong><p className="mt-0.5 text-xs text-muted">Search New World for “{pendingSearchJob.query}” and return the choices.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => void processPendingSearchJob()} className="rounded-xl bg-moss-600 px-3 py-2 text-xs font-bold text-white">Process product search</button><button type="button" onClick={() => void dismissSearchActivity()} className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-bold text-muted">Dismiss</button></div></section> : null}
-      {queuedSearchJob ? <section className="mb-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"><div className="flex items-start justify-between gap-3"><div><strong>Live product search: {queuedSearchJob.status}</strong><p className="mt-0.5 text-xs text-muted">{queuedSearchJob.status === 'pending' ? 'Open Agrocer Shopping on the desktop with extension 0.1.2.' : queuedSearchJob.status === 'processing' ? 'Desktop Chrome is searching New World.' : queuedSearchJob.products?.length ? `${queuedSearchJob.products.length} choices returned. Select one below.` : queuedSearchJob.message ?? 'No live products were returned.'}</p></div><button type="button" onClick={() => void dismissSearchActivity()} className="shrink-0 text-xs font-bold text-muted">Clear</button></div></section> : null}
+      {queuedSearchJob ? <section className="mb-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"><div className="flex items-start justify-between gap-3"><div><strong>Live product search: {queuedSearchJob.status}</strong><p className="mt-0.5 text-xs text-muted">{queuedSearchJob.status === 'pending' ? 'Open Agrocer Shopping on the desktop with extension 0.1.3.' : queuedSearchJob.status === 'processing' ? 'Desktop Chrome is searching New World. This can take up to a minute.' : queuedSearchJob.products?.length ? `${queuedSearchJob.products.length} choices returned. Select one below.` : queuedSearchJob.message ?? 'No live products were returned.'}</p></div><button type="button" onClick={() => void dismissSearchActivity()} className="shrink-0 text-xs font-bold text-muted">Clear</button></div></section> : null}
       {remaining.length ? <NewWorldCatalogue items={remaining} extensionOnline={extensionOnline} liveProducts={extensionCandidates} liveMessages={extensionSearchMessages} searchingItemId={searchingItemId} onLiveSearch={searchNewWorldItem} onPreferenceSaved={() => trolley ? prepareNewWorld() : undefined} /> : null}
       {trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
         <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold text-ink">New World trolley</h2><p className="text-xs text-muted">{trolley.summary.total} items · {trolley.summary.ready} ready · {trolley.summary.needsReview} need review · {trolley.summary.unavailable} unavailable</p></div><button type="button" className="text-xs font-bold text-muted" onClick={() => setTrolley(null)}>Close</button></div>

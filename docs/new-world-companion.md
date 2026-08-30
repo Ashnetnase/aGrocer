@@ -41,7 +41,7 @@ preference (for example cheese-flavoured corn chips saved for cheese) is forced 
 ## Built-in 24/7 household catalogue
 
 Agrocer's always-on container and Supabase database already provide the homelab catalogue. Every
-specific product returned by extension 0.1.2 is validated and cached automatically, not only the
+specific product returned by extension 0.1.3 is validated and cached automatically, not only the
 product eventually selected. Phones and tablets can browse those saved products when the desktop is
 off. See [`homelab-catalogue.md`](./homelab-catalogue.md) for the teaching-style deployment and
 verification guide.
@@ -103,8 +103,9 @@ every request, bypass CAPTCHA/security checks, or place collector credentials in
 If the service is offline, Agrocer labels and displays previously seen cached products instead.
 
 The first live batch added two products but exposed incorrect search-card name/link associations and
-quantity-verification false negatives. Extension 0.1.2 waits for client-rendered search cards, reads
-lazy-loaded image URLs, accepts only real `/shop/product/` URLs,
+quantity-verification false negatives. Extension 0.1.3 waits up to 30 seconds for client-rendered
+search cards, supports New World's nested card layouts and both retailer hostnames, reads lazy-loaded
+image URLs, accepts only real `/shop/product/` URLs,
 verifies the opened product heading before clicking, and reads the visible existing quantity before
 incrementing. Reload the unpacked extension and replace preferences saved by older versions. Exact
 live quantity verification still needs a controlled one-product retest.

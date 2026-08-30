@@ -39,14 +39,14 @@ const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mill
 
 async function extractProductsWhenReady(tabId, query) {
   let lastResult;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       lastResult = await chrome.tabs.sendMessage(tabId, { type: 'extract-products', query });
       if (lastResult?.status === 'ok' || lastResult?.status === 'blocked') return lastResult;
     } catch {
       lastResult = { status: 'selector-failed', products: [], message: 'New World search page bridge was unavailable.' };
     }
-    await wait(500);
+    await wait(1_000);
   }
   return lastResult ?? { status: 'selector-failed', products: [], message: 'No New World products appeared after the page loaded.' };
 }
