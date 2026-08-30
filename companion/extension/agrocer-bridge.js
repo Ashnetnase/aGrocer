@@ -18,6 +18,7 @@ window.addEventListener('message', (event) => {
       query: event.data.query,
     }, (response) => {
       if (chrome.runtime.lastError || !response?.accepted) reply('AGROCER_NEW_WORLD_ERROR', { message: chrome.runtime.lastError?.message || response?.message || 'Search was rejected.' });
+      else reply('AGROCER_NEW_WORLD_SEARCH_RESULTS', { shoppingItemId: event.data.shoppingItemId, ...response.result });
     });
     return;
   }
@@ -33,7 +34,6 @@ window.addEventListener('message', (event) => {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === 'job-results') reply('AGROCER_NEW_WORLD_RESULTS', { results: message.results });
-  if (message?.type === 'search-results') reply('AGROCER_NEW_WORLD_SEARCH_RESULTS', message);
 });
 
 reply('AGROCER_NEW_WORLD_READY');

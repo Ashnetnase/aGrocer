@@ -1,5 +1,4 @@
 const JOB_KEY = 'agrocerActiveTrolleyJob';
-const SEARCH_KEY = 'agrocerProductSearch';
 
 function isNewWorldUrl(value) {
   try {
@@ -16,6 +15,25 @@ function validItem(item) {
 async function loadJob() { return (await chrome.storage.session.get(JOB_KEY))[JOB_KEY]; }
 async function saveJob(job) { await chrome.storage.session.set({ [JOB_KEY]: job }); }
 async function clearJob() { await chrome.storage.session.remove(JOB_KEY); }
+
+function navigateAndWait(tabId, url, reload) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve(false); }, 20_000);
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve(true);
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    const navigation = reload ? chrome.tabs.reload(tabId) : chrome.tabs.update(tabId, { url, active: true });
+    navigation.catch(() => {
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve(false);
+    });
+  });
+}
 
 async function finish(job) {
   await clearJob();
@@ -51,9 +69,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.tabs.query({ url: 'https://www.newworld.co.nz/*' }).then(async (tabs) => {
       const existing = tabs.find((tab) => tab.id);
       const tab = existing ?? await chrome.tabs.create({ url: 'about:blank', active: true });
-      await chrome.storage.session.set({ [SEARCH_KEY]: { sourceTabId: sender.tab?.id, newWorldTabId: tab.id, shoppingItemId: message.shoppingItemId, query, processing: false } });
-      await chrome.tabs.update(tab.id, { url, active: true });
-      sendResponse({ accepted: true });
+      const loaded = await navigateAndWait(tab.id, url, tab.url === url);
+      if (!loaded) { sendResponse({ accepted: false, message: 'New World search did not finish loading.' }); return; }
+      let result;
+      try { result = await chrome.tabs.sendMessage(tab.id, { type: 'extract-products', query }); }
+      catch { result = { status: 'selector-failed', products: [], message: 'New World search page bridge was unavailable.' }; }
+      sendResponse({ accepted: true, result });
     }).catch((error) => sendResponse({ accepted: false, message: error.message }));
     return true;
   }
@@ -74,19 +95,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status !== 'complete') return;
-  chrome.storage.session.get(SEARCH_KEY).then(async (stored) => {
-    const search = stored[SEARCH_KEY];
-    if (!search || search.newWorldTabId !== tabId || search.processing) return;
-    search.processing = true;
-    await chrome.storage.session.set({ [SEARCH_KEY]: search });
-    let response;
-    try { response = await chrome.tabs.sendMessage(tabId, { type: 'extract-products', query: search.query }); }
-    catch { response = { status: 'selector-failed', products: [], message: 'New World search page bridge was unavailable.' }; }
-    await chrome.storage.session.remove(SEARCH_KEY);
-    if (search.sourceTabId) chrome.tabs.sendMessage(search.sourceTabId, {
-      type: 'search-results', shoppingItemId: search.shoppingItemId, ...response,
-    }).catch(() => undefined);
-  });
   loadJob().then(async (job) => {
     if (!job || job.newWorldTabId !== tabId || job.processingIndex === job.index) return;
     const item = job.items[job.index];

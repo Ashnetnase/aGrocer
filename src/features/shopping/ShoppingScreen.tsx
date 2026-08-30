@@ -48,7 +48,12 @@ export function ShoppingScreen() {
         setExtensionSearchMessages((current) => ({ ...current, [search.shoppingItemId]: search.message ?? (search.products.length ? 'Choose the exact product below.' : 'No products found.') }));
         setSearchingItemId(null);
       }
-      if (parsed.data.type === 'AGROCER_NEW_WORLD_ERROR') { setTrolleyError(parsed.data.message); setSending(false); }
+      if (parsed.data.type === 'AGROCER_NEW_WORLD_ERROR') {
+        if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+        setTrolleyError(parsed.data.message);
+        setSearchingItemId(null);
+        setSending(false);
+      }
     };
     window.addEventListener('message', receive);
     pingNewWorldExtension();
