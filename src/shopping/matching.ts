@@ -8,7 +8,9 @@ export interface ProductPreferenceReader {
 }
 
 function tokens(value: string): Set<string> {
-  return new Set(normaliseRetailerText(value).split(' ').filter(Boolean));
+  return new Set(normaliseRetailerText(value)
+    .replace(/([a-z])(\d)/g, '$1 $2').replace(/(\d)([a-z])/g, '$1 $2')
+    .split(' ').filter(Boolean));
 }
 
 const PRODUCT_FORM_TOKENS = new Set([

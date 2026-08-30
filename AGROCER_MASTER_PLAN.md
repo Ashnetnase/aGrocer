@@ -658,9 +658,11 @@ headings by meaningful product-token overlap, normalises letter/number boundarie
 tokens only for identity comparison. It still rejects a different product before clicking Add; the
 browser smoke check covers both outcomes. The review UI now has **Remove from this trolley** on each
 line and **Clear trolley** for the whole prepared batch. These actions intentionally leave the
-underlying family shopping list unchanged. Typecheck, lint, all 313 unit tests, the browser smoke
-check, and production build pass. Commit `1cf07b7` is deployed and healthy on the homelab. Live
-signed-in confirmation remains.
+underlying family shopping list unchanged. Server-side product-form matching uses the same joined
+letter/number normalisation, so the observed `Tasty Cheese Corn Chips170g` preference is forced back
+to review for a `tastey cheese` list item. Typecheck, lint, all 313 unit tests, the browser smoke
+check, and production build pass. Commit `1cf07b7` deployed the first slice; the matching follow-up
+is recorded separately. Live signed-in confirmation remains.
 
 ## 2026-08-30 - Live New World plain Add control repair (Codex)
 

@@ -59,8 +59,7 @@ describe('retailer matching', () => {
   it('does not silently reuse a snack product for an ingredient with the same flavour', async () => {
     const cornChips = {
       retailer: 'new-world' as const,
-      name: 'Mexicano Tasty Cheese Corn Chips',
-      size: '170g',
+      name: 'Mexicano Tasty Cheese Corn Chips170g',
       productUrl: 'https://www.newworld.co.nz/shop/product/5000000',
       availability: 'available' as const,
     };
