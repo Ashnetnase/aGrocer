@@ -25,3 +25,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return job ? NextResponse.json(job) : notFound('Pending trolley job');
   } catch (error) { return failed(error); }
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const job = await (await serverTrolleyJobRepository()).dismiss(id);
+    return job ? NextResponse.json(job) : notFound('Trolley job');
+  } catch (error) { return failed(error); }
+}

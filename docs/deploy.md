@@ -108,6 +108,11 @@ editing a value that looks harmless.
 docker compose up -d --build
 ```
 
+The 24/7 household product catalogue needs no additional container or environment value: it uses
+this Agrocer container plus Supabase. Leave `NEW_WORLD_CATALOGUE_URL` empty unless an authorised
+external feed exists. Deployment and refresh verification are explained step by step in
+[`homelab-catalogue.md`](./homelab-catalogue.md).
+
 The `NEXT_PUBLIC_*` values are compiled into the client bundle, so **changing them requires a
 rebuild, not a restart**. Everything secret is runtime-only and never enters an image layer.
 

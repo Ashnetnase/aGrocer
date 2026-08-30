@@ -39,3 +39,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return failed(error);
   }
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const job = await (await serverRetailerProductSearchJobRepository()).dismiss(id);
+    return job ? NextResponse.json(job) : notFound('Product search job');
+  } catch (error) {
+    return failed(error);
+  }
+}

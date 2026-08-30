@@ -104,10 +104,12 @@ device but not another is not household history.
 
 ## Retailer catalogue and trolley boundary
 
-The mobile PWA never scrapes or controls New World. An optional household-operated catalogue
-service exposes validated New World product records to Agrocer's server. The server caches only
-products encountered through browse/search and stores explicit household item preferences. A live
-feed failure falls back to labelled cached results. The catalogue token is server-only.
+The mobile PWA never scrapes or controls New World. The always-on Agrocer container and
+household-scoped `retailer_products` rows in Supabase are the built-in 24/7 catalogue (ADR-022).
+Every valid product candidate returned by visible Chrome search is cached, and explicit household
+item preferences point at those products. Phones can browse the cache while Chrome is offline;
+`lastSeenAt` communicates freshness rather than pretending cached prices are live. An optional
+authorised external feed may augment it through `NEW_WORLD_CATALOGUE_URL`; its token is server-only.
 
 Trolley execution is separate: a visible normal-Chrome extension or Playwright fallback receives
 only exact confirmed products after an explicit user action. Household-scoped cross-device jobs

@@ -11,6 +11,17 @@ const firstVisible = (selectors) => selectors.map((selector) => document.querySe
 const normalise = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const genericProductName = (value) => /^(view|see|shop) all\b/i.test(value.trim());
 
+function imageUrl(image, container) {
+  const source = image?.currentSrc || image?.getAttribute?.('src') || image?.getAttribute?.('data-src') ||
+    image?.getAttribute?.('data-lazy-src') || container.querySelector('source[srcset]')?.getAttribute('srcset')?.split(',')[0]?.trim().split(/\s+/)[0] ||
+    image?.getAttribute?.('srcset')?.split(',')[0]?.trim().split(/\s+/)[0];
+  if (!source) return undefined;
+  try {
+    const url = new URL(source, document.baseURI);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : undefined;
+  } catch { return undefined; }
+}
+
 function numberFrom(element) {
   if (!element) return undefined;
   const values = [element.value, element.getAttribute?.('aria-valuenow'), element.getAttribute?.('data-quantity')];
@@ -68,9 +79,9 @@ function extractProducts(query) {
     const containerText = container.textContent?.replace(/\s+/g, ' ').trim() || '';
     const textMatches = queryTokens.some((token) => normalise(containerText).includes(token));
     if (!textMatches || seen.has(url.href)) continue;
-    const image = anchor.querySelector('img[alt]') || container.querySelector('img[alt]');
+    const image = anchor.querySelector('img') || container.querySelector('img');
     const heading = anchor.querySelector('h1, h2, h3, h4, [data-testid*="name"]') || container.querySelector('h1, h2, h3, h4, [data-testid*="name"]');
-    const name = (image?.alt || anchor.getAttribute('aria-label') || anchor.getAttribute('title') || heading?.textContent || '').replace(/\s+/g, ' ').trim();
+    const name = (heading?.textContent || anchor.getAttribute('aria-label') || anchor.getAttribute('title') || image?.alt || '').replace(/\s+/g, ' ').trim();
     if (!name || genericProductName(name) || !queryTokens.some((token) => normalise(`${name} ${containerText}`).includes(token))) continue;
     const priceText = containerText.match(/\$\s*(\d+(?:\.\d{1,2})?)/)?.[1];
     seen.add(url.href);
@@ -80,7 +91,7 @@ function extractProducts(query) {
       productUrl: url.href,
       externalProductId: url.pathname.split('/').filter(Boolean).at(-1),
       availability: /unavailable|out of stock/i.test(containerText) ? 'unavailable' : 'unknown',
-      ...((image?.currentSrc || image?.src) ? { imageUrl: image.currentSrc || image.src } : {}),
+      ...(imageUrl(image, container) ? { imageUrl: imageUrl(image, container) } : {}),
       ...(priceText ? { price: Number(priceText) } : {}),
     });
     if (products.length >= 12) break;

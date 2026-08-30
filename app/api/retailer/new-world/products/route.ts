@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { failed } from '@/server/http';
+import { failed, parseJson } from '@/server/http';
 import { serverShoppingProductRepository } from '@/server/repositories';
 import { NewWorldCatalogueClient } from '@/shopping/catalogue';
 import { isSpecificNewWorldProduct } from '@/shopping/matching';
+import { retailerProductBatchSchema } from '@/shopping/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
         const products = (await catalogue.search(parsed.data.q, parsed.data.storeId, parsed.data.limit))
           .filter(isSpecificNewWorldProduct);
         const saved = await Promise.all(products.map((product) => repository.saveProduct(product)));
-        return NextResponse.json({ products: saved, source: 'live', storeId: parsed.data.storeId });
+        return NextResponse.json({ products: saved, source: 'live', storeId: parsed.data.storeId, updatedAt: new Date().toISOString() });
       } catch (error) {
         console.error('[new-world-catalogue] live search failed; using cache', error);
       }
@@ -46,10 +47,27 @@ export async function GET(request: Request) {
       products,
       source: 'cache',
       storeId: parsed.data.storeId,
+      updatedAt: products[0]?.lastSeenAt,
       message: catalogue.configured
-        ? 'The live New World catalogue is offline. Showing previously seen products.'
-        : 'Live New World catalogue is not configured. Showing previously seen products.',
+        ? 'The external New World feed is offline. The 24/7 household catalogue is still available.'
+        : products.length
+          ? 'The 24/7 household catalogue is available. Desktop searches refresh it with current products.'
+          : 'No saved products match yet. Use desktop Chrome to add them to the household catalogue.',
     });
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await parseJson(request, retailerProductBatchSchema);
+    if (!body.ok) return body.response;
+    const products = body.data.products.filter(isSpecificNewWorldProduct);
+    if (!products.length) return NextResponse.json({ error: 'No specific New World products were supplied.' }, { status: 400 });
+    const repository = await serverShoppingProductRepository();
+    const saved = await Promise.all(products.map((product) => repository.saveProduct(product)));
+    return NextResponse.json({ products: saved, updatedAt: new Date().toISOString() });
   } catch (error) {
     return failed(error);
   }

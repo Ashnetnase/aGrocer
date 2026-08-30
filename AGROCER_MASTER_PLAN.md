@@ -494,6 +494,8 @@ Prepare a supermarket trolley for human review without autonomous payment.
 - [x] New World browser provider communicating with a separate local companion
 - [x] deterministic product matching with confidence, preferences and unresolved-item review
 - [x] authenticated homelab catalogue API seam with Zod validation and encountered-product cache
+- [x] 24/7 household catalogue — the deployed app and Supabase serve cached products continuously;
+      every validated visible-Chrome search result refreshes it (ADR-022)
 - [~] live catalogue acquisition — Shopping browse/search UI is implemented; the collector/feed
       still needs to be deployed and connected before it can show a store-wide live catalogue
 - [~] substitutions — candidate selection and unavailable replacement state exist
@@ -646,6 +648,33 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-30 - Always-on household New World catalogue (Codex)
+
+The deployed Agrocer container plus Supabase are now explicitly the 24/7 household catalogue; a
+redundant second database/container was rejected. Every specific product candidate returned by the
+visible Chrome extension is persisted automatically, rather than only the final selected product,
+so phone/tablet browsing remains useful while the workstation is off. Shopping labels cached data
+as the 24/7 household catalogue and shows its newest update timestamp. An optional authorised feed
+still fits the existing `NEW_WORLD_CATALOGUE_URL` seam, but unattended New World search crawling is
+not implemented: the public search path is disallowed by `robots.txt`, direct product requests hit
+Cloudflare, and the website terms reserve product data/images. Added a teaching-style homelab guide
+at `docs/homelab-catalogue.md`. Verified with 313 unit tests, 13 real-database integration tests,
+typecheck, lint, production build, schema no-op generation, extension syntax checks, and RLS on all
+13 tables. Deployment awaits manual confirmation of the homelab SSH host fingerprint.
+
+## 2026-08-30 - New World search-flow and activity UX repair (Codex)
+
+Audited the complete catalogue, replacement-search, cross-device relay and trolley-result flow after
+live use exposed searches with no choices or images and activity that could not be cleared. Extension
+0.1.2 now waits for New World's client-rendered product cards and reads real lazy-loaded HTTP image
+URLs instead of accepting placeholders. The general product search and per-line replacement action
+now share the live Chrome/cross-device fallback, so returned candidates appear in both entry points.
+Searches time out truthfully instead of leaving processing jobs stuck. Search and trolley activity can
+be dismissed without deleting its persisted audit history, and remote image failures show a consistent
+placeholder. Verified with 312 unit tests, 13 real-database integration tests, typecheck, lint,
+production build, extension syntax checks, schema no-op generation and RLS on all 13 tables. A live
+test still requires reloading unpacked extension 0.1.2 in the user's signed-in Chrome profile.
 
 ## 2026-08-30 - Cross-device New World product search and mobile feedback (Codex)
 
@@ -2508,6 +2537,27 @@ zero or a made-up fallback price.
 links but requires transactional child-row replacement and expands every meal read into a join.
 JSONB retains Zod validation at the API boundary and keeps the additive migration reviewable. Move
 to rows only when ingredient-level querying or foreign-key enforcement provides a demonstrated need.
+
+
+## ADR-022 — The 24/7 catalogue is the existing Agrocer database, fed by visible searches
+
+**Status:** Accepted (2026-08-30)
+
+Agrocer already has an always-on application container and household-scoped `retailer_products` in
+managed PostgreSQL. Adding a second catalogue container and database would duplicate persistence,
+backups, authentication and health monitoring without creating a data source. The built-in API and
+Supabase rows are therefore the household catalogue.
+
+Every validated specific product candidate returned by the normal-Chrome extension is persisted,
+not only the product the person selects. This gradually builds the useful household subset and makes
+it available to every device while the workstation is off. `lastSeenAt` is shown as freshness; cache
+availability must never be described as a live price guarantee.
+
+Unattended store-wide New World acquisition is rejected. New World's `robots.txt` disallows its
+shop search path, its terms reserve product data and images, direct server product requests receive
+a Cloudflare challenge, and earlier Playwright attempts were repeatedly blocked. Agrocer will not
+bypass those controls. The existing authenticated `NEW_WORLD_CATALOGUE_URL` seam remains for a
+future authorised retailer feed or licensed provider.
 
 
 ## ADR-009 — App content renders client-side behind a hydration gate

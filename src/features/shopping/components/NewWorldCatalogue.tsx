@@ -5,30 +5,42 @@ import { SearchIcon, StoreIcon, XIcon } from 'lucide-react';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import type { RetailerProduct } from '@/shopping/schemas';
 import { nzd } from '@/lib/format';
+import { ProductThumbnail } from './ProductThumbnail';
 
 interface CatalogueResponse {
   products: RetailerProduct[];
   source: 'live' | 'cache';
   storeId?: string;
   message?: string;
+  updatedAt?: string;
 }
 
 interface NewWorldCatalogueProps {
   items: ShoppingItem[];
+  extensionOnline: boolean;
+  liveProducts: Record<string, RetailerProduct[]>;
+  liveMessages: Record<string, string>;
+  searchingItemId: string | null;
+  onLiveSearch: (item: ShoppingItem, query: string) => Promise<void>;
   onPreferenceSaved: () => void | Promise<void>;
 }
 
-export function NewWorldCatalogue({ items, onPreferenceSaved }: NewWorldCatalogueProps) {
+export function NewWorldCatalogue({ items, extensionOnline, liveProducts, liveMessages, searchingItemId, onLiveSearch, onPreferenceSaved }: NewWorldCatalogueProps) {
   const availableItems = useMemo(() => items.filter((item) => !item.checked), [items]);
   const [open, setOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState('');
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<RetailerProduct[]>([]);
   const [source, setSource] = useState<'live' | 'cache'>('cache');
+  const [updatedAt, setUpdatedAt] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [savingId, setSavingId] = useState<string>();
   const selectedItem = availableItems.find((item) => item.id === selectedItemId);
+  const returnedProducts = selectedItem ? liveProducts[selectedItem.id] : undefined;
+  const displayedProducts = returnedProducts?.length ? returnedProducts : products;
+  const liveMessage = selectedItem ? liveMessages[selectedItem.id] : undefined;
+  const searchBusy = busy || searchingItemId === selectedItemId;
 
   useEffect(() => {
     if (!availableItems.length) {
@@ -42,9 +54,18 @@ export function NewWorldCatalogue({ items, onPreferenceSaved }: NewWorldCatalogu
   }, [availableItems, selectedItemId]);
 
   async function loadProducts(search = query) {
-    if (busy) return;
+    if (busy || !selectedItem) return;
     setBusy(true);
     setMessage(undefined);
+    if (extensionOnline) {
+      setProducts([]);
+      try {
+        await onLiveSearch(selectedItem, search.trim() || selectedItem.name);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const parameters = new URLSearchParams({ limit: '40' });
       if (search.trim()) parameters.set('q', search.trim());
@@ -57,7 +78,9 @@ export function NewWorldCatalogue({ items, onPreferenceSaved }: NewWorldCatalogu
       }
       setProducts(body.products);
       setSource(body.source);
+      setUpdatedAt(body.updatedAt);
       setMessage(body.message ?? (body.products.length ? undefined : 'No matching products were found.'));
+      if (body.source !== 'live') await onLiveSearch(selectedItem, search.trim() || selectedItem.name);
     } catch {
       setProducts([]);
       setMessage('Could not reach the New World catalogue.');
@@ -131,6 +154,7 @@ export function NewWorldCatalogue({ items, onPreferenceSaved }: NewWorldCatalogu
           setSelectedItemId(id);
           const item = availableItems.find((candidate) => candidate.id === id);
           if (item) setQuery(item.name);
+          setProducts([]);
         }}
         className="mt-1 h-11 w-full rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink"
       >
@@ -145,24 +169,25 @@ export function NewWorldCatalogue({ items, onPreferenceSaved }: NewWorldCatalogu
           aria-label="Search New World products"
           className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-sm text-ink"
         />
-        <button type="submit" disabled={busy} className="flex h-11 items-center gap-1.5 rounded-xl bg-moss-600 px-3 text-sm font-bold text-white disabled:bg-line">
-          <SearchIcon className="h-4 w-4" /> {busy ? 'Loading…' : 'Search'}
+        <button type="submit" disabled={searchBusy} className="flex h-11 items-center gap-1.5 rounded-xl bg-moss-600 px-3 text-sm font-bold text-white disabled:bg-line">
+          <SearchIcon className="h-4 w-4" /> {searchBusy ? 'Searching…' : 'Search'}
         </button>
       </form>
 
-      <p className="mt-2 text-xs text-muted">
-        {source === 'live' ? 'Live catalogue prices' : 'Previously seen products'}
-        {message ? ` · ${message}` : ''}
+      <p className="mt-2 text-xs text-muted" role="status">
+        {extensionOnline ? 'Searching with desktop Chrome' : source === 'live' ? 'Live catalogue prices' : '24/7 household catalogue'}
+        {liveMessage || message ? ` · ${liveMessage ?? message}` : ''}
+        {!liveMessage && updatedAt ? ` · Updated ${new Date(updatedAt).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}
       </p>
 
-      {products.length ? (
+      {displayedProducts.length ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          {products.map((product) => {
+          {displayedProducts.map((product) => {
             const identity = product.externalProductId ?? product.productUrl ?? product.name;
             const currentPrice = product.specialPrice ?? product.price;
             return (
               <article key={identity} className="flex min-w-0 flex-col rounded-xl border border-line bg-white p-2.5">
-                {product.imageUrl ? <span aria-hidden className="mb-2 h-24 rounded-lg bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${JSON.stringify(product.imageUrl)})` }} /> : <span className="mb-2 flex h-24 items-center justify-center rounded-lg bg-canvas"><StoreIcon className="h-6 w-6 text-muted" /></span>}
+                <ProductThumbnail src={product.imageUrl} alt={product.name} className="mb-2 h-24 w-full" />
                 <h3 className="text-xs font-bold leading-snug text-ink">{product.name}</h3>
                 <p className="mt-0.5 text-[11px] text-muted">{[product.brand, product.size].filter(Boolean).join(' · ') || 'Size not listed'}</p>
                 <div className="mt-auto pt-2">
@@ -187,4 +212,3 @@ export function NewWorldCatalogue({ items, onPreferenceSaved }: NewWorldCatalogu
     </section>
   );
 }
-

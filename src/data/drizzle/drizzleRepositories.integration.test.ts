@@ -172,6 +172,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     }]);
     expect(completed?.status).toBe('attention');
     expect(completed?.results?.[0]?.status).toBe('quantity-mismatch');
+    expect((await trolleyJobRepository.dismiss(job.id))?.status).toBe('dismissed');
   });
 
   it('returns a desktop product search to the originating device', async () => {
@@ -186,6 +187,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
       productUrl: 'https://www.newworld.co.nz/shop/product/integration-search-milk', availability: 'available',
     }]);
     expect(completed).toMatchObject({ status: 'completed', products: [{ name: 'Integration Blue Milk 2L' }] });
+    expect((await searchJobRepository.dismiss(job.id))?.status).toBe('dismissed');
   });
 
   it('creates and adjusts a pantry item', async () => {

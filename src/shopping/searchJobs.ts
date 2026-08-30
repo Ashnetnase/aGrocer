@@ -75,5 +75,14 @@ export function createRetailerProductSearchJobRepository(db: Database, household
       )).returning();
       return row ? toJob(row) : undefined;
     },
+    async dismiss(id: string): Promise<RetailerProductSearchJob | undefined> {
+      const [row] = await db.update(retailerProductSearchJobs).set({
+        status: 'dismissed', updatedAt: new Date(), completedAt: new Date(),
+      }).where(and(
+        eq(retailerProductSearchJobs.id, id),
+        eq(retailerProductSearchJobs.householdId, householdId),
+      )).returning();
+      return row ? toJob(row) : undefined;
+    },
   };
 }

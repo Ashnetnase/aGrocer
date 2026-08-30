@@ -84,6 +84,8 @@ services:
       NEW_WORLD_COMPANION_URL: ${NEW_WORLD_COMPANION_URL:-http://127.0.0.1:4317}
       NEW_WORLD_STORE_ID: ${NEW_WORLD_STORE_ID:-}
       NEW_WORLD_COMPANION_TOKEN: ${NEW_WORLD_COMPANION_TOKEN:-}
+      # Optional authorised external feed. The built-in 24/7 household catalogue lives in
+      # Supabase and needs no extra container or URL; visible extension searches refresh it.
       NEW_WORLD_CATALOGUE_URL: ${NEW_WORLD_CATALOGUE_URL:-}
       NEW_WORLD_CATALOGUE_TOKEN: ${NEW_WORLD_CATALOGUE_TOKEN:-}
 

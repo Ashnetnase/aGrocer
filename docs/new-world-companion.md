@@ -38,7 +38,19 @@ visible New World tab open. The exact product candidates are validated, stored, 
 phone automatically; choosing one replaces the household preference. A clearly incompatible old
 preference (for example cheese-flavoured corn chips saved for cheese) is forced back to review.
 
-## Optional homelab product catalogue
+## Built-in 24/7 household catalogue
+
+Agrocer's always-on container and Supabase database already provide the homelab catalogue. Every
+specific product returned by extension 0.1.2 is validated and cached automatically, not only the
+product eventually selected. Phones and tablets can browse those saved products when the desktop is
+off. See [`homelab-catalogue.md`](./homelab-catalogue.md) for the teaching-style deployment and
+verification guide.
+
+This makes saved data continuously available; it does not make prices continuously live. New World
+blocks unattended server requests, and its store-wide search path must not be crawled. Visible
+Chrome searches refresh the cache. An authorised external feed remains an optional upgrade.
+
+## Optional authorised external feed
 
 The Shopping screen has a **New World products** section that works on phones, tablets and desktop.
 It does not scrape from the PWA. Agrocer calls a server-side catalogue service, validates the
@@ -91,7 +103,8 @@ every request, bypass CAPTCHA/security checks, or place collector credentials in
 If the service is offline, Agrocer labels and displays previously seen cached products instead.
 
 The first live batch added two products but exposed incorrect search-card name/link associations and
-quantity-verification false negatives. Extension 0.1.1 accepts only real `/shop/product/` URLs,
+quantity-verification false negatives. Extension 0.1.2 waits for client-rendered search cards, reads
+lazy-loaded image URLs, accepts only real `/shop/product/` URLs,
 verifies the opened product heading before clicking, and reads the visible existing quantity before
 incrementing. Reload the unpacked extension and replace preferences saved by older versions. Exact
 live quantity verification still needs a controlled one-product retest.

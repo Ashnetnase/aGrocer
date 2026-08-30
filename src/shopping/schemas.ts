@@ -20,6 +20,9 @@ export const retailerProductSchema = z.object({
   lastSeenAt: z.string().datetime().optional(),
 });
 export type RetailerProduct = z.infer<typeof retailerProductSchema>;
+export const retailerProductBatchSchema = z.object({
+  products: z.array(retailerProductSchema).min(1).max(40),
+});
 
 export const productPreferenceSchema = z.object({
   id: z.string().uuid().optional(),
@@ -63,7 +66,7 @@ export const trolleyAddResultSchema = z.object({
 });
 export type TrolleyAddResult = z.infer<typeof trolleyAddResultSchema>;
 
-export const trolleyJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'attention']);
+export const trolleyJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'attention', 'dismissed']);
 export const trolleyJobSchema = z.object({
   id: z.string().uuid(), retailer: retailerSchema, status: trolleyJobStatusSchema,
   items: z.array(trolleyAddItemSchema), results: z.array(trolleyAddResultSchema).optional(),
@@ -71,7 +74,7 @@ export const trolleyJobSchema = z.object({
 });
 export type TrolleyJob = z.infer<typeof trolleyJobSchema>;
 
-export const retailerSearchJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'attention']);
+export const retailerSearchJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'attention', 'dismissed']);
 export const retailerProductSearchJobSchema = z.object({
   id: z.string().uuid(),
   retailer: retailerSchema,

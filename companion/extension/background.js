@@ -35,6 +35,22 @@ function navigateAndWait(tabId, url, reload) {
   });
 }
 
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function extractProductsWhenReady(tabId, query) {
+  let lastResult;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      lastResult = await chrome.tabs.sendMessage(tabId, { type: 'extract-products', query });
+      if (lastResult?.status === 'ok' || lastResult?.status === 'blocked') return lastResult;
+    } catch {
+      lastResult = { status: 'selector-failed', products: [], message: 'New World search page bridge was unavailable.' };
+    }
+    await wait(500);
+  }
+  return lastResult ?? { status: 'selector-failed', products: [], message: 'No New World products appeared after the page loaded.' };
+}
+
 async function finish(job) {
   await clearJob();
   if (job.sourceTabId) chrome.tabs.sendMessage(job.sourceTabId, { type: 'job-results', results: job.results }).catch(() => undefined);
@@ -71,9 +87,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const tab = existing ?? await chrome.tabs.create({ url: 'about:blank', active: true });
       const loaded = await navigateAndWait(tab.id, url, tab.url === url);
       if (!loaded) { sendResponse({ accepted: false, message: 'New World search did not finish loading.' }); return; }
-      let result;
-      try { result = await chrome.tabs.sendMessage(tab.id, { type: 'extract-products', query }); }
-      catch { result = { status: 'selector-failed', products: [], message: 'New World search page bridge was unavailable.' }; }
+      const result = await extractProductsWhenReady(tab.id, query);
       sendResponse({ accepted: true, result });
     }).catch((error) => sendResponse({ accepted: false, message: error.message }));
     return true;

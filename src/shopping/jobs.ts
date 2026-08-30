@@ -48,5 +48,11 @@ export function createTrolleyJobRepository(db: Database, householdId: string) {
       )).returning();
       return row ? toJob(row) : undefined;
     },
+    async dismiss(id: string): Promise<TrolleyJob | undefined> {
+      const [row] = await db.update(trolleyJobs).set({ status: 'dismissed', updatedAt: new Date(), completedAt: new Date() }).where(and(
+        eq(trolleyJobs.id, id), eq(trolleyJobs.householdId, householdId),
+      )).returning();
+      return row ? toJob(row) : undefined;
+    },
   };
 }
