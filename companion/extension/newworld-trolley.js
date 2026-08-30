@@ -40,6 +40,7 @@ function extractProducts(query) {
       productUrl: url.href,
       externalProductId: url.pathname.split('/').filter(Boolean).at(-1),
       availability: /unavailable|out of stock/i.test(containerText) ? 'unavailable' : 'unknown',
+      ...((image?.currentSrc || image?.src) ? { imageUrl: image.currentSrc || image.src } : {}),
       ...(priceText ? { price: Number(priceText) } : {}),
     });
     if (products.length >= 12) break;
