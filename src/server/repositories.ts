@@ -6,6 +6,7 @@ import { householdMembers } from '@/db/schema';
 import { authEnabled } from '@/auth/config';
 import { currentUser } from '@/auth/server';
 import { createShoppingProductRepository } from '@/shopping/repository';
+import { createTrolleyJobRepository } from '@/shopping/jobs';
 
 /**
  * Server-side repository access for route handlers.
@@ -87,4 +88,8 @@ export async function serverRepositories(): Promise<AgrocerRepositories> {
 
 export async function serverShoppingProductRepository() {
   return createShoppingProductRepository(getDb(), await currentHouseholdId());
+}
+
+export async function serverTrolleyJobRepository() {
+  return createTrolleyJobRepository(getDb(), await currentHouseholdId());
 }

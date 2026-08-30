@@ -36,3 +36,19 @@ export async function DELETE(request: Request) {
     return failed(error);
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await parseJson(request, z.object({
+      shoppingItemKey: z.string().trim().min(1).max(200),
+      enabled: z.boolean(),
+      storeId: z.string().max(100).optional(),
+    }));
+    if (!body.ok) return body.response;
+    const repository = await serverShoppingProductRepository();
+    const preference = await repository.setPreferenceEnabled(body.data.shoppingItemKey, 'new-world', body.data.enabled, body.data.storeId);
+    return preference ? NextResponse.json(preference) : NextResponse.json({ error: 'Preference not found' }, { status: 404 });
+  } catch (error) {
+    return failed(error);
+  }
+}

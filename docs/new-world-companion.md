@@ -23,6 +23,14 @@ For an unmatched line, press **Search New World**. The extension opens the real 
 inside the normal Chrome profile, reads only the visible product cards, and returns candidates to
 Agrocer. Choosing one persists it as the household preference for later shopping lists.
 
+Remembered products are not permanent lock-ins. Each preferred line offers **Pause saved product**
+and **Search for a different product**; a paused choice remains stored and can be re-enabled later.
+This is useful when another brand is on special without losing the family's normal choice.
+
+On a phone/tablet without the extension, the send button creates a household trolley job. Open the
+Shopping page on the desktop with the extension enabled, prepare the view, and press **Process
+queued trolley**. Results are stored so the originating PWA can show completed/attention status.
+
 The extension is currently implemented and protocol-tested but its live search/Add/quantity
 selectors still need one controlled product test against the normal logged-in Chrome session.
 

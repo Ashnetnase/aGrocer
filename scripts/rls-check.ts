@@ -31,6 +31,7 @@ const TABLES = [
   'meal_feedback',
   'retailer_products',
   'shopping_product_preferences',
+  'trolley_jobs',
 ] as const;
 
 /** Same approach as `drizzle.config.ts`: read `.env.local` rather than add a dotenv dependency. */

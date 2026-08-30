@@ -497,7 +497,7 @@ Prepare a supermarket trolley for human review without autonomous payment.
 - [x] quantity reconciliation in the companion request/verified result contract
 - [~] browser cart preparation — normal-Chrome extension fallback implemented after Cloudflare
       rejected Playwright; extension selectors are protocol-tested but not live-site validated
-- [ ] background job handling
+- [x] persisted cross-device trolley jobs with explicit desktop processing
 - [x] explicit partial-failure/error states; background retries remain future work
 - [x] cart review UI with ready/review/unavailable summaries
 - [x] separate explicit user action before sending ready products to the companion
@@ -642,6 +642,15 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-30 - Cross-device trolley jobs and controllable preferences (Codex)
+
+Migration `0009` adds household-scoped trolley jobs and an enabled flag for remembered retailer
+choices. Phone/tablet PWAs can queue ready products; a desktop Shopping page with the extension
+polls for pending jobs and requires an explicit Process action. Results persist for the originating
+device. Saved choices can be paused, re-enabled, or replaced through a fresh New World search when
+specials or preferences change. Verified with 308 unit tests, 12 real-database integration tests,
+RLS on all 12 tables, typecheck and lint.
 
 ## 2026-08-30 - Normal Chrome trolley extension fallback (Codex)
 

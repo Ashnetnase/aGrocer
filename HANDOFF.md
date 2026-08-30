@@ -707,6 +707,12 @@ which navigates the normal New World tab, extracts visible product cards, and re
 Agrocer. Choosing one uses the existing persisted preference endpoint. This is protocol-tested but
 awaits the first live selector result; reload the unpacked extension after pulling this commit.
 
+Migration `0009` is applied. `trolley_jobs` makes the extension workflow cross-device: a mobile PWA
+queues ready exact products, the desktop polls for them, and the user explicitly presses Process
+queued trolley. Results are persisted and polled back to mobile. Product preferences now have an
+`enabled` switch and the UI can pause/re-enable or replace a remembered item for specials. The live
+database has 12 RLS-protected tables; `npm run test:db` passes 12 tests.
+
 The old AI verification instructions below are historical and retained for audit context.
 
 The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check
@@ -863,7 +869,7 @@ Both bit again this session. Check them before debugging code.
 
 ## Last Updated
 
-2026-08-30, on `stage-2/database-schema`. Migrations through `0008` are applied. Nothing has
+2026-08-30, on `stage-2/database-schema`. Migrations through `0009` are applied. Nothing has
 been merged to `main`, which is ~30 commits behind.
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an

@@ -64,6 +64,13 @@
       "when": 1788038399245,
       "tag": "0008_demonic_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788052898250,
+      "tag": "0009_redundant_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

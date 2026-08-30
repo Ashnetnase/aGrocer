@@ -29,6 +29,7 @@ export const productPreferenceSchema = z.object({
   product: retailerProductSchema,
   defaultQuantity: z.number().int().min(1).max(99).default(1),
   confidence: z.number().min(0).max(1).default(1),
+  enabled: z.boolean().default(true),
   lastConfirmedAt: z.string().datetime(),
 });
 export type ProductPreference = z.infer<typeof productPreferenceSchema>;
@@ -61,3 +62,11 @@ export const trolleyAddResultSchema = z.object({
   message: z.string().optional(),
 });
 export type TrolleyAddResult = z.infer<typeof trolleyAddResultSchema>;
+
+export const trolleyJobStatusSchema = z.enum(['pending', 'processing', 'completed', 'attention']);
+export const trolleyJobSchema = z.object({
+  id: z.string().uuid(), retailer: retailerSchema, status: trolleyJobStatusSchema,
+  items: z.array(trolleyAddItemSchema), results: z.array(trolleyAddResultSchema).optional(),
+  createdAt: z.string().datetime(), updatedAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
+});
+export type TrolleyJob = z.infer<typeof trolleyJobSchema>;

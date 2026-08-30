@@ -33,6 +33,7 @@ export async function resolveShoppingItem(
   if (preference) {
     const unavailable = preference.product.availability === 'unavailable';
     const executable = Boolean(preference.product.productUrl || preference.product.externalProductId);
+    const paused = !preference.enabled;
     return {
       shoppingItem,
       requestedText: item.name,
@@ -40,9 +41,10 @@ export async function resolveShoppingItem(
       product: preference.product,
       confidence: unavailable ? 0 : preference.confidence,
       source: 'household-preference',
-      status: unavailable ? 'unavailable' : executable ? 'ready' : 'needs-review',
-      requiresReview: unavailable || !executable,
-      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.' : executable ? undefined : 'Saved product needs a New World product URL or id.',
+      status: unavailable ? 'unavailable' : executable && !paused ? 'ready' : 'needs-review',
+      requiresReview: unavailable || !executable || paused,
+      preferenceEnabled: preference.enabled,
+      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.' : paused ? 'Automatic use of this saved product is paused.' : executable ? undefined : 'Saved product needs a New World product URL or id.',
     };
   }
 

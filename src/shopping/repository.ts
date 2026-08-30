@@ -8,6 +8,7 @@ export interface ShoppingProductRepository {
   getPreferredProduct(itemKey: string, retailer: 'new-world', storeId?: string): Promise<ProductPreference | undefined>;
   savePreferredProduct(itemKey: string, product: RetailerProduct, defaultQuantity: number, confidence?: number): Promise<ProductPreference>;
   removePreferredProduct(itemKey: string, retailer: 'new-world', storeId?: string): Promise<void>;
+  setPreferenceEnabled(itemKey: string, retailer: 'new-world', enabled: boolean, storeId?: string): Promise<ProductPreference | undefined>;
   saveProduct(product: RetailerProduct): Promise<RetailerProduct>;
 }
 
@@ -71,6 +72,7 @@ export function createShoppingProductRepository(db: Database, householdId: strin
         product,
         defaultQuantity: row.defaultQuantity,
         confidence: row.confidenceBasisPoints / 10_000,
+        enabled: row.enabled,
         lastConfirmedAt: row.lastConfirmedAt.toISOString(),
         ...(row.storeId ? { storeId: row.storeId } : {}),
       };
@@ -105,6 +107,7 @@ export function createShoppingProductRepository(db: Database, householdId: strin
         productName: product.name, brand: product.brand ?? null, size: product.size ?? null,
         productUrl: product.productUrl ?? null, defaultQuantity,
         confidenceBasisPoints: Math.round(Math.max(0, Math.min(1, confidence)) * 10_000),
+        enabled: true,
         lastConfirmedAt: new Date(), updatedAt: new Date(),
       };
       const [row] = existing?.id
@@ -123,6 +126,16 @@ export function createShoppingProductRepository(db: Database, householdId: strin
         eq(shoppingProductPreferences.id, existing.id),
         eq(shoppingProductPreferences.householdId, householdId),
       ));
+    },
+
+    async setPreferenceEnabled(itemKey, retailer, enabled, storeId) {
+      const existing = await repository.getPreferredProduct(itemKey, retailer, storeId);
+      if (!existing?.id) return undefined;
+      await db.update(shoppingProductPreferences).set({ enabled, updatedAt: new Date() }).where(and(
+        eq(shoppingProductPreferences.id, existing.id),
+        eq(shoppingProductPreferences.householdId, householdId),
+      ));
+      return repository.getPreferredProduct(itemKey, retailer, storeId);
     },
   };
   return repository;

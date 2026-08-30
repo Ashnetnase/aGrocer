@@ -17,7 +17,7 @@ describe('retailer matching', () => {
     const provider = new ManualShoppingProvider([]);
     provider.search = async () => { searched = true; return []; };
     const result = await resolveShoppingItem(milk, provider, {
-      getPreferredProduct: async () => ({ shoppingItemKey: 'milk', retailer: 'new-world', product: anchor, defaultQuantity: 2, confidence: 1, lastConfirmedAt: new Date().toISOString() }),
+      getPreferredProduct: async () => ({ shoppingItemKey: 'milk', retailer: 'new-world', product: anchor, defaultQuantity: 2, confidence: 1, enabled: true, lastConfirmedAt: new Date().toISOString() }),
     });
     expect(result.source).toBe('household-preference');
     expect(result.status).toBe('ready');
@@ -26,10 +26,18 @@ describe('retailer matching', () => {
 
   it('requires review when a saved product is unavailable', async () => {
     const result = await resolveShoppingItem(milk, new ManualShoppingProvider(), {
-      getPreferredProduct: async () => ({ shoppingItemKey: 'milk', retailer: 'new-world', product: { ...anchor, availability: 'unavailable' }, defaultQuantity: 2, confidence: 1, lastConfirmedAt: new Date().toISOString() }),
+      getPreferredProduct: async () => ({ shoppingItemKey: 'milk', retailer: 'new-world', product: { ...anchor, availability: 'unavailable' }, defaultQuantity: 2, confidence: 1, enabled: true, lastConfirmedAt: new Date().toISOString() }),
     });
     expect(result.status).toBe('unavailable');
     expect(result.requiresReview).toBe(true);
+  });
+
+  it('keeps a paused preference visible but requires review', async () => {
+    const result = await resolveShoppingItem(milk, new ManualShoppingProvider(), {
+      getPreferredProduct: async () => ({ shoppingItemKey: 'milk', retailer: 'new-world', product: anchor, defaultQuantity: 2, confidence: 1, enabled: false, lastConfirmedAt: new Date().toISOString() }),
+    });
+    expect(result.preferenceEnabled).toBe(false);
+    expect(result.status).toBe('needs-review');
   });
 
   it('does not fabricate a match when no candidates exist', async () => {

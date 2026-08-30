@@ -19,6 +19,7 @@ export interface TrolleyLine {
   candidates?: ShoppingProduct[];
   status: 'ready' | 'needs-review' | 'unavailable';
   requiresReview: boolean;
+  preferenceEnabled?: boolean;
   reason?: string;
 }
 

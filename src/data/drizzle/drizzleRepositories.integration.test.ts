@@ -9,6 +9,7 @@ import type { Database } from '@/db/client';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import { createDrizzleRepositories } from './drizzleRepositories';
 import { createShoppingProductRepository, type ShoppingProductRepository } from '@/shopping/repository';
+import { createTrolleyJobRepository } from '@/shopping/jobs';
 
 /**
  * Integration tests against a real Postgres database (ADR-013).
@@ -37,6 +38,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
   let repos: AgrocerRepositories;
   let householdId: string;
   let shoppingProducts: ShoppingProductRepository;
+  let trolleyJobRepository: ReturnType<typeof createTrolleyJobRepository>;
 
   beforeAll(async () => {
     sql = postgres(url as string, { max: 1, prepare: false });
@@ -50,6 +52,7 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     householdId = row.id;
     repos = createDrizzleRepositories(db, householdId);
     shoppingProducts = createShoppingProductRepository(db, householdId);
+    trolleyJobRepository = createTrolleyJobRepository(db, householdId);
   });
 
   afterAll(async () => {
@@ -138,9 +141,31 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     const remembered = await shoppingProducts.getPreferredProduct('milk', 'new-world');
     expect(remembered?.product.name).toBe('Anchor Blue Milk 2L');
     expect(remembered?.defaultQuantity).toBe(2);
+    expect(remembered?.enabled).toBe(true);
+
+    await shoppingProducts.setPreferenceEnabled('milk', 'new-world', false);
+    expect((await shoppingProducts.getPreferredProduct('milk', 'new-world'))?.enabled).toBe(false);
 
     await shoppingProducts.removePreferredProduct('MILK', 'new-world');
     expect(await shoppingProducts.getPreferredProduct('milk', 'new-world')).toBeUndefined();
+  });
+
+  it('persists a cross-device trolley job and its partial results', async () => {
+    const job = await trolleyJobRepository.create([{
+      shoppingItemId: 'integration-milk',
+      productUrl: 'https://www.newworld.co.nz/shop/product/integration-milk',
+      expectedName: 'Integration Milk 2L',
+      quantity: 2,
+    }]);
+    expect(job.status).toBe('pending');
+    expect((await trolleyJobRepository.listPending()).some((candidate) => candidate.id === job.id)).toBe(true);
+    expect((await trolleyJobRepository.markProcessing(job.id))?.status).toBe('processing');
+    const completed = await trolleyJobRepository.complete(job.id, [{
+      shoppingItemId: 'integration-milk', status: 'quantity-mismatch', requestedQuantity: 2,
+      confirmedQuantity: 1,
+    }]);
+    expect(completed?.status).toBe('attention');
+    expect(completed?.results?.[0]?.status).toBe('quantity-mismatch');
   });
 
   it('creates and adjusts a pantry item', async () => {

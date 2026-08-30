@@ -283,6 +283,7 @@ export const shoppingProductPreferences = pgTable(
     productUrl: text('product_url'),
     defaultQuantity: smallint('default_quantity').notNull().default(1),
     confidenceBasisPoints: smallint('confidence_basis_points').notNull().default(10000),
+    enabled: boolean('enabled').notNull().default(true),
     lastConfirmedAt: timestamp('last_confirmed_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -296,6 +297,22 @@ export const shoppingProductPreferences = pgTable(
       table.storeId,
     ),
   }),
+).enableRLS();
+
+export const trolleyJobs = pgTable(
+  'trolley_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+    retailer: text('retailer').notNull().default('new-world'),
+    status: text('status').notNull().default('pending'),
+    items: jsonb('items').$type<import('@/shopping/schemas').TrolleyAddItem[]>().notNull(),
+    results: jsonb('results').$type<import('@/shopping/schemas').TrolleyAddResult[]>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => ({ householdIdx: index('trolley_jobs_household_idx').on(table.householdId, table.status, table.createdAt) }),
 ).enableRLS();
 
 /* -------------------------------------------------------------------------- */
