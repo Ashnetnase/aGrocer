@@ -687,6 +687,31 @@ products, show images/current and special prices, and save an exact product agai
 The contract is documented in `docs/new-world-companion.md`. Until that collector is deployed, the
 section truthfully shows only previously seen cached products. No live catalogue feed is claimed.
 
+### New World deployment options
+
+**Option A — recommended hybrid:** run the catalogue/search/cache service as a separate 24/7
+homelab container. Phone and tablet use Agrocer and catalogue data without the workstation. Turn on
+the workstation only for the short trolley-add step, because the Manifest V3 extension uses Ash's
+normal visible, logged-in Chrome session. Review and payment can then happen on the phone or New
+World website. Estimated setup from the current seam: 2–4 hours for the container/API/cache and
+deployment, plus 4–8 hours to implement and validate retailer acquisition if New World's public
+site permits it. Allow roughly one working day for a useful first version; reliable live acquisition
+may take 1–3 days or remain constrained by Cloudflare/site changes. Never bypass a challenge.
+
+**Option B — fully homelab visible browser:** run the catalogue service and a persistent visible
+Chrome session on the homelab, exposed to Ash through a user-operated remote desktop such as noVNC.
+Ash logs into New World there manually. This can remove the workstation dependency for trolley
+addition, but costs roughly another 4–8 hours to package and secure, keeps a retailer session on the
+homelab, is less convenient on a phone, and may still receive the same Cloudflare challenges.
+Because the already-tested Playwright profile was repeatedly challenged, this is supported as an
+experimental alternative, not the default recommendation. No headless/stealth/CAPTCHA bypass.
+
+The token is household-generated, not supplied by New World. Store the same long random value as
+`NEW_WORLD_CATALOGUE_TOKEN` in the private `.env` files for Agrocer and the catalogue container;
+never commit it. When both containers share a Docker network, use an internal URL such as
+`NEW_WORLD_CATALOGUE_URL=http://new-world-catalogue:4320`. `NEW_WORLD_STORE_ID` will be captured
+from the selected store during collector validation.
+
 Stage 5 now supports both preferred integration paths: a future official retailer API and a local,
 visible New World browser companion. It no longer treats an official API as a prerequisite. Product
 preferences persist, deterministic matching runs before any future AI ranking, and prepare/send are
