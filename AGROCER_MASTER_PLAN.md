@@ -657,8 +657,10 @@ Extension 0.1.3 keeps the strict `/shop/product/` boundary but supports both ret
 walks generic nested `div` cards, pairs sibling image/name links by product path, and waits up to 30
 seconds for client rendering. Failure messages now report how many genuine product links were seen,
 so a future markup change is diagnosable. The app timeout was extended to 60 seconds. Verified with
-the new installed-Chrome extraction smoke check, extension syntax checks, typecheck, lint, and all
-313 unit tests. Live signed-in New World confirmation still requires reloading extension 0.1.3.
+the new installed-Chrome extraction smoke check, extension syntax checks, typecheck, lint, all 313
+unit tests, and a production build. Commit `a60a885` was deployed to the homelab; the container is
+healthy and local/public authentication-boundary checks pass. Live signed-in New World confirmation
+still requires reloading extension 0.1.3.
 
 ## 2026-08-30 - Always-on household New World catalogue (Codex)
 
