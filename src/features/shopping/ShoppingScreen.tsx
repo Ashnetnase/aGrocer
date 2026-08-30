@@ -233,17 +233,16 @@ export function ShoppingScreen() {
   };
 
   return <>
-    <ScreenHeader title="Shopping" subtitle={`${remaining.length} to buy · ${household.settings.shopLabel}`}>
-      <div className="rounded-3xl border border-line bg-surface p-4 shadow-card">
+    <ScreenHeader title="Shopping" subtitle={`${remaining.length} to buy · ${household.settings.shopLabel}`} />
+
+    <main className="no-scrollbar relative flex-1 overflow-y-auto px-5 pb-24 pt-4">
+      <div className="mb-4 rounded-3xl border border-line bg-surface p-4 shadow-card">
         <div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-muted">In the trolley</p><p className="mt-0.5 text-[22px] font-extrabold text-ink">{checked.length} of {shopping.length}</p></div><div className="text-right"><p className="text-sm font-semibold text-muted">Estimated total</p><p className="mt-0.5 text-[22px] font-extrabold text-moss-700">{nzd(total)}</p></div></div>
         <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas"><div className="h-full rounded-full bg-moss-500" style={{ width: `${progress}%` }} /></div>
         {budget ? <div className="mt-3 rounded-2xl bg-canvas px-3 py-2.5"><div className="flex justify-between gap-3 text-sm font-semibold"><span className="text-muted">Weekly budget {nzd(budget.target)}</span><span className={budget.over ? 'text-berry-600' : 'text-moss-700'}>{budget.over ? `${nzd(Math.abs(budget.remaining))} over` : `${nzd(budget.remaining)} left`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line"><div className={cn('h-full rounded-full', budget.over ? 'bg-berry-500' : 'bg-moss-500')} style={{ width: `${budget.progress}%` }} /></div></div> : null}
         <button type="button" onClick={() => router.push('/shopping/mode')} disabled={!shopping.length} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-moss-600 text-[15px] font-bold text-white disabled:bg-line disabled:text-muted"><ShoppingBasketIcon className="h-[18px] w-[18px]" /> Start shopping mode</button>
         <button type="button" onClick={() => void prepareNewWorld()} disabled={!shopping.length || preparing} className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl border border-moss-200 bg-white text-sm font-bold text-moss-700 disabled:opacity-50">{preparing ? 'Preparing…' : 'Prepare New World trolley'}</button>
       </div>
-    </ScreenHeader>
-
-    <main className="no-scrollbar relative flex-1 overflow-y-auto px-5 pb-24 pt-4">
       {trolleyError ? <p className="mb-3 rounded-2xl bg-berry-50 px-4 py-3 text-sm font-semibold text-berry-700">{trolleyError}</p> : null}
       {shopping.length ? <NewWorldCatalogue items={shopping} onPreferenceSaved={() => trolley ? prepareNewWorld() : undefined} /> : null}
       {trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
@@ -261,7 +260,7 @@ export function ShoppingScreen() {
             {(extensionCandidates[line.shoppingItem.id] ?? line.candidates)?.length ? <div className="mt-2 space-y-1">{(extensionCandidates[line.shoppingItem.id] ?? line.candidates ?? []).map((candidate) => <button key={candidate.externalProductId ?? candidate.productUrl ?? candidate.name} type="button" onClick={() => void chooseProduct(line, candidate)} className="flex w-full items-center gap-2 rounded-lg border border-line px-2 py-2 text-left text-xs font-semibold text-ink">{candidate.imageUrl ? <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-lg bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${JSON.stringify(candidate.imageUrl)})` }} /> : null}<span>Choose {candidate.name}{candidate.size ? ` · ${candidate.size}` : ''}{candidate.price !== undefined ? ` · ${nzd(candidate.price)}` : ''}</span></button>)}</div> : null}
           </div>)}
         </div>
-        {sendResults ? <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm"><strong>{sendResults.filter((result) => result.status === 'added').length} / {sendResults.length} added</strong><p className="text-xs text-muted">{sendResults.some((result) => result.status !== 'added') ? 'Some products require your attention.' : 'Your trolley is ready for review.'}</p></div> : null}
+        {sendResults ? <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm"><strong>{sendResults.filter((result) => result.status === 'added').length} / {sendResults.length} added</strong><p className="text-xs text-muted">{sendResults.some((result) => result.status !== 'added') ? 'Some products require your attention.' : 'Your trolley is ready for review.'}</p><ul className="mt-2 space-y-1.5">{sendResults.map((result) => { const line = trolley.lines.find((candidate) => candidate.shoppingItem.id === result.shoppingItemId); return <li key={result.shoppingItemId} className="rounded-lg bg-canvas px-2 py-1.5 text-xs"><span className={result.status === 'added' ? 'font-bold text-moss-700' : 'font-bold text-berry-600'}>{result.status === 'added' ? 'Added' : result.status.replaceAll('-', ' ')}</span>{` · ${line?.requestedText ?? result.confirmedProductName ?? 'Product'}`}{result.confirmedQuantity !== undefined ? ` · quantity ${result.confirmedQuantity}` : ''}{result.message ? <span className="mt-0.5 block text-muted">{result.message}</span> : null}</li>; })}</ul></div> : null}
         <button type="button" disabled={!trolley.summary.ready || sending} onClick={() => void sendToNewWorld()} className="mt-3 h-11 w-full rounded-2xl bg-moss-600 text-sm font-bold text-white disabled:bg-line disabled:text-muted">{sending ? 'Working…' : extensionOnline || trolley.companion.online ? `Add ${trolley.summary.ready} ready items to New World` : `Send ${trolley.summary.ready} ready items to desktop`}</button>
         <p className="mt-2 text-center text-xs text-muted">Agrocer prepares the trolley. You complete checkout and payment in New World.</p>
       </section> : null}

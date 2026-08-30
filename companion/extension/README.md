@@ -10,3 +10,7 @@ only after the user presses the Agrocer send button. It never enters checkout or
 
 The live New World Add/quantity selectors still require validation. Any unverified operation
 returns an error instead of claiming that an item was added.
+
+Version 0.1.1 accepts only `/shop/product/…` search results, verifies the opened page's product
+heading before clicking anything, and reads the visible quantity stepper. Search/category links
+such as “View all Milk” are deliberately rejected. Reload the unpacked extension after updating.

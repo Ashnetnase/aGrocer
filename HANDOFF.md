@@ -742,6 +742,20 @@ which navigates the normal New World tab, extracts visible product cards, and re
 Agrocer. Choosing one uses the existing persisted preference endpoint. This is protocol-tested but
 awaits the first live selector result; reload the unpacked extension after pulling this commit.
 
+The first live trolley test added two products but returned `0 / 3`, and revealed that search-card
+containers had paired misleading names/links: saved examples included `View all 'Milk'`, `White
+Bread`, and a corn-chip result for tasty cheese. Extension 0.1.1 tightens acquisition to real
+`/shop/product/` URLs, takes the product name from the product image/link rather than a surrounding
+group heading, verifies the opened page's product heading before clicking, and reads the existing
+visible quantity before incrementing. Generic preferences now require replacement and cannot be
+saved again. The UI reports each item status/message. **Next manual step:** pull/deploy, reload the
+unpacked extension, replace all three bad preferences via **Search for a different product**, then
+test one product at quantity 1. Do not resend the old three-item batch because two products are
+already in the New World trolley.
+
+The Shopping summary card was also moved into the scrollable content. On mobile only the compact
+title remains above the scroll area, so list items and bottom navigation are reachable.
+
 Migration `0009` is applied. `trolley_jobs` makes the extension workflow cross-device: a mobile PWA
 queues ready exact products, the desktop polls for them, and the user explicitly presses Process
 queued trolley. Results are persisted and polled back to mobile. Product preferences now have an

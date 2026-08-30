@@ -11,6 +11,19 @@ function tokens(value: string): Set<string> {
   return new Set(normaliseRetailerText(value).split(' ').filter(Boolean));
 }
 
+/** Reject category/search links that a retailer page presents beside real product cards. */
+export function isSpecificNewWorldProduct(product: RetailerProduct): boolean {
+  if (/^(view|see|shop) all\b/i.test(product.name.trim())) return false;
+  if (!product.productUrl) return Boolean(product.externalProductId);
+  try {
+    const url = new URL(product.productUrl);
+    return (url.hostname === 'newworld.co.nz' || url.hostname.endsWith('.newworld.co.nz')) &&
+      /\/shop\/product\//i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function rankProduct(query: string, product: RetailerProduct): number {
   const queryNormal = normaliseRetailerText(query);
   const productNormal = normaliseRetailerText([product.brand, product.name, product.size].filter(Boolean).join(' '));
@@ -32,7 +45,7 @@ export async function resolveShoppingItem(
   const preference = await preferences?.getPreferredProduct(normaliseRetailerText(item.name), 'new-world', storeId);
   if (preference) {
     const unavailable = preference.product.availability === 'unavailable';
-    const executable = Boolean(preference.product.productUrl || preference.product.externalProductId);
+    const executable = isSpecificNewWorldProduct(preference.product);
     const paused = !preference.enabled;
     return {
       shoppingItem,
@@ -44,7 +57,7 @@ export async function resolveShoppingItem(
       status: unavailable ? 'unavailable' : executable && !paused ? 'ready' : 'needs-review',
       requiresReview: unavailable || !executable || paused,
       preferenceEnabled: preference.enabled,
-      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.' : paused ? 'Automatic use of this saved product is paused.' : executable ? undefined : 'Saved product needs a New World product URL or id.',
+      reason: unavailable ? 'Your saved product is unavailable; choose a replacement.' : paused ? 'Automatic use of this saved product is paused.' : executable ? undefined : 'The saved choice is not a specific New World product. Choose a replacement.',
     };
   }
 

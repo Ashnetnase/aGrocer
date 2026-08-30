@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import { ManualShoppingProvider } from './manual';
-import { rankProduct, resolveShoppingItem } from './matching';
+import { isSpecificNewWorldProduct, rankProduct, resolveShoppingItem } from './matching';
 
 const milk: ShoppingItem = { id: 'item-1', name: 'Milk', category: 'Dairy', quantity: 2, unit: 'bottles', price: 0, priority: false, note: '', checked: false };
 const anchor = { retailer: 'new-world' as const, externalProductId: 'anchor-2l', name: 'Anchor Blue Milk 2L', brand: 'Anchor', size: '2L', availability: 'available' as const };
@@ -38,6 +38,22 @@ describe('retailer matching', () => {
     });
     expect(result.preferenceEnabled).toBe(false);
     expect(result.status).toBe('needs-review');
+  });
+
+  it('rejects retailer search/category links as remembered products', async () => {
+    const generic = {
+      retailer: 'new-world' as const,
+      name: "View all 'Milk'",
+      productUrl: 'https://www.newworld.co.nz/shop/category/fresh-foods/milk',
+      externalProductId: 'milk',
+      availability: 'unknown' as const,
+    };
+    expect(isSpecificNewWorldProduct(generic)).toBe(false);
+    const result = await resolveShoppingItem(milk, new ManualShoppingProvider(), {
+      getPreferredProduct: async () => ({ shoppingItemKey: 'milk', retailer: 'new-world', product: generic, defaultQuantity: 4, confidence: 1, enabled: true, lastConfirmedAt: new Date().toISOString() }),
+    });
+    expect(result.status).toBe('needs-review');
+    expect(result.reason).toContain('not a specific New World product');
   });
 
   it('does not fabricate a match when no candidates exist', async () => {

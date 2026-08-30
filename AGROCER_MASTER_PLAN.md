@@ -646,6 +646,17 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-30 - Live trolley product identity and mobile navigation repair (Codex)
+
+The first live batch exposed false product associations (`View all Milk` saved as a product and
+names paired with different product URLs) plus false-negative quantity verification. Extension
+0.1.1 now accepts only New World `/shop/product/` results, verifies the opened product heading
+before any click, reads an existing visible quantity before changing it, and never reduces an
+over-quantity trolley. Generic saved links are forced back to review. Per-item execution failures
+are visible in Agrocer, and the large Shopping summary now scrolls instead of trapping mobile
+navigation. The exact live quantity selector still needs retesting after reloading the extension.
+Verified with extension syntax checks, typecheck, lint, production build and 311 unit tests.
+
 ## 2026-08-30 - Mobile New World catalogue and homelab feed seam (Codex)
 
 Shopping now includes a New World product section for phone, tablet and desktop. It browses/searches

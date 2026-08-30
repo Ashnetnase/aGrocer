@@ -83,8 +83,11 @@ future official API can replace it without changing Agrocer. Do not crawl the en
 every request, bypass CAPTCHA/security checks, or place collector credentials in the Agrocer PWA.
 If the service is offline, Agrocer labels and displays previously seen cached products instead.
 
-The extension is currently implemented and protocol-tested but its live search/Add/quantity
-selectors still need one controlled product test against the normal logged-in Chrome session.
+The first live batch added two products but exposed incorrect search-card name/link associations and
+quantity-verification false negatives. Extension 0.1.1 accepts only real `/shop/product/` URLs,
+verifies the opened product heading before clicking, and reads the visible existing quantity before
+incrementing. Reload the unpacked extension and replace preferences saved by older versions. Exact
+live quantity verification still needs a controlled one-product retest.
 
 ## Optional: Playwright companion
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { failed, parseJson } from '@/server/http';
 import { serverShoppingProductRepository } from '@/server/repositories';
 import { retailerProductSchema } from '@/shopping/schemas';
+import { isSpecificNewWorldProduct } from '@/shopping/matching';
 
 const saveSchema = z.object({
   shoppingItemKey: z.string().trim().min(1).max(200),
@@ -14,6 +15,9 @@ export async function POST(request: Request) {
   try {
     const body = await parseJson(request, saveSchema);
     if (!body.ok) return body.response;
+    if (!isSpecificNewWorldProduct(body.data.product)) {
+      return NextResponse.json({ error: 'Choose a specific New World product, not a search or category link.' }, { status: 400 });
+    }
     const repository = await serverShoppingProductRepository();
     return NextResponse.json(await repository.savePreferredProduct(
       body.data.shoppingItemKey,
