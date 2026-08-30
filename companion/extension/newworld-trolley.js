@@ -1,7 +1,7 @@
 const SELECTORS = {
   addButton: ['button[data-testid*="add"]', 'button[aria-label*="add to trolley" i]', 'button[aria-label*="add to cart" i]'],
   increaseButton: ['button[aria-label*="increase" i]', 'button[aria-label*="add one" i]', 'button[data-testid*="increment"]'],
-  quantityValue: ['input[data-testid*="quantity"]', 'input[aria-label*="quantity" i]', 'input[type="number"]', '[aria-valuenow]', '[data-testid*="quantity"]', '[class*="quantity"]'],
+  quantityValue: ['input[data-testid*="quantity"]', 'input[aria-label*="quantity" i]', 'input[name*="quantity" i]', 'input[type="number"]', '[aria-valuenow]', '[data-testid*="quantity"]', '[class*="quantity"]'],
   productHeading: ['main h1', '[data-testid*="product-name"]', '[class*="product-name"] h1'],
   login: ['a[href*="login"]', 'a[href*="sign-in"]'],
 };
@@ -11,6 +11,18 @@ const firstVisible = (selectors) => selectors.map((selector) => document.querySe
 const normalise = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const genericProductName = (value) => /^(view|see|shop) all\b/i.test(value.trim());
 const isNewWorldHost = (hostname) => hostname === 'newworld.co.nz' || hostname.endsWith('.newworld.co.nz');
+
+function accessibleText(element) {
+  return (element.getAttribute?.('aria-label') || element.getAttribute?.('title') || element.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function addButton() {
+  const selected = firstVisible(SELECTORS.addButton);
+  if (selected) return selected;
+  return [...document.querySelectorAll('button, [role="button"]')].find((element) =>
+    element.getClientRects().length && /^(add|add to (?:my )?(?:trolley|cart))(?:\s+item)?$/i.test(accessibleText(element))
+  );
+}
 
 function productContainer(anchor, queryTokens) {
   const explicit = anchor.closest('[data-testid*="product" i], [data-test*="product" i], [class*="product-card" i], [class*="product-tile" i], article, li');
@@ -160,8 +172,15 @@ async function addCurrent(item) {
 
   let count = readVisibleQuantity();
   if (count === undefined) {
-    const add = firstVisible(SELECTORS.addButton);
-    if (!add) return result(item, 'selector-failed', { message: 'Could not find the Add to trolley control or a visible existing quantity.' });
+    const add = addButton();
+    if (!add) {
+      const visibleLabels = [...document.querySelectorAll('button, [role="button"]')]
+        .filter((element) => element.getClientRects().length)
+        .map(accessibleText).filter(Boolean).slice(0, 8);
+      return result(item, 'selector-failed', {
+        message: `Could not find the Add to trolley control or a visible existing quantity${visibleLabels.length ? `; visible controls: ${visibleLabels.join(', ')}` : ''}.`,
+      });
+    }
     add.click();
     count = await waitForQuantity();
     if (count === undefined) return result(item, 'selector-failed', { confirmedProductName: confirmedName, message: 'New World reacted to Add, but the product quantity could not be visibly verified.' });

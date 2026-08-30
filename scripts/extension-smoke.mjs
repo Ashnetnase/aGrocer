@@ -33,7 +33,25 @@ try {
     imageUrl: 'https://images.example/anchor.jpg',
     price: 3.73,
   });
-  console.log('Extension product-card extraction smoke check passed.');
+  await page.setContent(`
+    <main>
+      <h1>Anchor Trim Milk 1l</h1>
+      <div id="purchase"><button>Add</button></div>
+    </main>
+  `);
+  await page.evaluate(() => {
+    document.querySelector('button').addEventListener('click', () => {
+      document.querySelector('#purchase').innerHTML = '<label>Quantity <input aria-label="Quantity" value="1"></label>';
+    });
+  });
+  const addResult = await page.evaluate(() => addCurrent({
+    shoppingItemId: 'milk-item', expectedName: 'Anchor Trim Milk 1l', quantity: 1,
+  }));
+  assert.deepEqual(addResult, {
+    shoppingItemId: 'milk-item', status: 'added', requestedQuantity: 1,
+    confirmedQuantity: 1, confirmedProductName: 'Anchor Trim Milk 1l',
+  });
+  console.log('Extension product extraction and verified Add smoke checks passed.');
 } finally {
   await browser.close();
 }

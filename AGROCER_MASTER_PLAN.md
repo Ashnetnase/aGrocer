@@ -649,6 +649,16 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-30 - Live New World plain Add control repair (Codex)
+
+The first successful 0.1.3 catalogue search exposed the next live boundary: New World's current
+product page presents a visible button labelled simply `Add`, without the trolley/cart attributes
+the extension required. Extension 0.1.4 adds a narrowly matched visible-text fallback for `Add`,
+`Add to trolley`, or `Add to cart`, then still requires a visible resulting quantity before it can
+report success. Quantity inputs named for quantity are also recognised, and selector failures now
+list a bounded set of visible control labels for diagnosis. The installed-Chrome smoke check now
+exercises both product extraction and verified Add behavior. Live signed-in confirmation remains.
+
 ## 2026-08-30 - Live New World nested-card extraction repair (Codex)
 
 The first post-deployment search reached New World but returned no candidates because extension
