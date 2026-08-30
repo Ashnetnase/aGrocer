@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Agrocer New World Trolley",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Adds user-approved Agrocer products to a visible New World trolley. Never checks out or pays.",
   "permissions": ["storage", "tabs"],
   "host_permissions": ["https://www.newworld.co.nz/*"],

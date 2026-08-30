@@ -649,6 +649,17 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-30 - Trolley clearing and live product-heading verification repair (Codex)
+
+The first live Add batch returned `product-not-found` for all three correct saved URLs because New
+World's current product identity was not exposed through the extension's narrow `h1` selectors; the
+saved search names also joined sizes (`Milk2l`, `Bread600g`). Extension 0.1.5 ranks visible accessible
+headings by meaningful product-token overlap, normalises letter/number boundaries, and ignores size
+tokens only for identity comparison. It still rejects a different product before clicking Add; the
+browser smoke check covers both outcomes. The review UI now has **Remove from this trolley** on each
+line and **Clear trolley** for the whole prepared batch. These actions intentionally leave the
+underlying family shopping list unchanged. Live signed-in confirmation remains.
+
 ## 2026-08-30 - Live New World plain Add control repair (Codex)
 
 The first successful 0.1.3 catalogue search exposed the next live boundary: New World's current

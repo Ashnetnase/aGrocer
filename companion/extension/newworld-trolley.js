@@ -8,9 +8,12 @@ const SELECTORS = {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const firstVisible = (selectors) => selectors.map((selector) => document.querySelector(selector)).find((element) => element && element.getClientRects().length);
-const normalise = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const normalise = (value) => value.toLowerCase()
+  .replace(/([a-z])(\d)/g, '$1 $2').replace(/(\d)([a-z])/g, '$1 $2')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
 const genericProductName = (value) => /^(view|see|shop) all\b/i.test(value.trim());
 const isNewWorldHost = (hostname) => hostname === 'newworld.co.nz' || hostname.endsWith('.newworld.co.nz');
+const SIZE_TOKENS = new Set(['g', 'kg', 'ml', 'l', 'ea', 'each', 'pack']);
 
 function accessibleText(element) {
   return (element.getAttribute?.('aria-label') || element.getAttribute?.('title') || element.textContent || '').replace(/\s+/g, ' ').trim();
@@ -22,6 +25,28 @@ function addButton() {
   return [...document.querySelectorAll('button, [role="button"]')].find((element) =>
     element.getClientRects().length && /^(add|add to (?:my )?(?:trolley|cart))(?:\s+item)?$/i.test(accessibleText(element))
   );
+}
+
+function identityTokens(value) {
+  return normalise(value).split(' ').filter((token) => token && !/^\d+$/.test(token) && !SIZE_TOKENS.has(token));
+}
+
+function productHeading(expectedName) {
+  const expected = new Set(identityTokens(expectedName));
+  return [...document.querySelectorAll('main h1, main h2, main h3, h1, h2, h3, [role="heading"], [data-testid*="product-name" i], [class*="product-name" i]')]
+    .filter((element) => element.getClientRects().length && accessibleText(element))
+    .map((element) => ({ element, overlap: identityTokens(accessibleText(element)).filter((token) => expected.has(token)).length }))
+    .sort((left, right) => right.overlap - left.overlap)[0]?.element;
+}
+
+function sameProductIdentity(expectedName, confirmedName) {
+  const expectedNormal = normalise(expectedName);
+  const confirmedNormal = normalise(confirmedName);
+  if (expectedNormal.includes(confirmedNormal) || confirmedNormal.includes(expectedNormal)) return true;
+  const expected = new Set(identityTokens(expectedName));
+  const confirmed = new Set(identityTokens(confirmedName));
+  const overlap = [...expected].filter((token) => confirmed.has(token)).length;
+  return expected.size > 0 && overlap >= 2 && overlap / expected.size >= 0.75;
 }
 
 function productContainer(anchor, queryTokens) {
@@ -162,11 +187,9 @@ async function addCurrent(item) {
   const body = document.body?.innerText || '';
   if (/just a moment|captcha|unusual traffic|access denied/i.test(`${document.title} ${body}`)) return result(item, 'blocked', { message: 'New World presented a security check.' });
   if (firstVisible(SELECTORS.login)) return result(item, 'needs-login', { message: 'Log into New World in this tab, then retry from Agrocer.' });
-  const heading = firstVisible(SELECTORS.productHeading);
+  const heading = productHeading(item.expectedName);
   const confirmedName = heading?.textContent?.replace(/\s+/g, ' ').trim();
-  const expected = normalise(item.expectedName);
-  const confirmed = normalise(confirmedName || '');
-  if (!confirmed || (!confirmed.includes(expected) && !expected.includes(confirmed))) {
+  if (!confirmedName || !sameProductIdentity(item.expectedName, confirmedName)) {
     return result(item, 'product-not-found', { message: `Opened product did not match “${item.expectedName}”${confirmedName ? `; New World showed “${confirmedName}”` : ''}.` });
   }
 

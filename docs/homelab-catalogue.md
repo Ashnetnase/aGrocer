@@ -25,7 +25,7 @@ Visible New World search in normal Chrome
 ```
 
 No second database or catalogue container is required. Every valid product returned by extension
-0.1.4 is now saved, not just the product eventually selected. Phones can browse those saved names,
+0.1.5 is now saved, not just the product eventually selected. Phones can browse those saved names,
 prices and image URLs while the workstation is off. The Shopping screen labels this data **24/7
 household catalogue** and shows when its newest result was recorded.
 
@@ -96,7 +96,7 @@ Reload the unpacked extension first:
 
 1. Open `chrome://extensions` in the normal Chrome profile used for New World.
 2. Find **Agrocer New World Trolley**.
-3. Press **Reload** and confirm version `0.1.4`.
+3. Press **Reload** and confirm version `0.1.5`.
 4. Refresh the Agrocer Shopping page.
 5. Confirm **Chrome trolley extension ready** appears after preparing a trolley.
 
@@ -118,7 +118,7 @@ product has the same age. If New World presents a security check:
 2. Return to Agrocer and retry the search.
 3. Never install stealth plugins or CAPTCHA bypasses.
 
-If a product has no image, search for it again with extension 0.1.4. Older rows saved by extension
+If a product has no image, search for it again with extension 0.1.5. Older rows saved by extension
 0.1.1 did not always contain an image URL and correctly display a placeholder until refreshed.
 
 ## Routine operation

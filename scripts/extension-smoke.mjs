@@ -35,7 +35,7 @@ try {
   });
   await page.setContent(`
     <main>
-      <h1>Anchor Trim Milk 1l</h1>
+      <h2>Anchor Trim Milk</h2>
       <div id="purchase"><button>Add</button></div>
     </main>
   `);
@@ -45,12 +45,18 @@ try {
     });
   });
   const addResult = await page.evaluate(() => addCurrent({
-    shoppingItemId: 'milk-item', expectedName: 'Anchor Trim Milk 1l', quantity: 1,
+    shoppingItemId: 'milk-item', expectedName: 'Anchor Trim Milk1l', quantity: 1,
   }));
   assert.deepEqual(addResult, {
     shoppingItemId: 'milk-item', status: 'added', requestedQuantity: 1,
-    confirmedQuantity: 1, confirmedProductName: 'Anchor Trim Milk 1l',
+    confirmedQuantity: 1, confirmedProductName: 'Anchor Trim Milk',
   });
+  await page.setContent('<main><h2>Mainland Tasty Cheese 500g</h2><button id="wrong-add" onclick="this.dataset.clicked=\'yes\'">Add</button></main>');
+  const wrongProduct = await page.evaluate(() => addCurrent({
+    shoppingItemId: 'chips-item', expectedName: 'Mexicano Tasty Cheese Corn Chips170g', quantity: 1,
+  }));
+  assert.equal(wrongProduct.status, 'product-not-found');
+  assert.equal(await page.locator('#wrong-add').getAttribute('data-clicked'), null);
   console.log('Extension product extraction and verified Add smoke checks passed.');
 } finally {
   await browser.close();

@@ -678,7 +678,7 @@ foundation are implemented and checked. Migration `0010` is applied: 13 tables h
 authenticated household policy each.
 
 The 24/7 New World household catalogue now uses the deployed Agrocer container and Supabase rather
-than a redundant second service (ADR-022). Every valid candidate returned by extension 0.1.4 is
+than a redundant second service (ADR-022). Every valid candidate returned by extension 0.1.5 is
 cached automatically, and phones can browse those products while the workstation is off. The
 timestamp is freshness information, not a live-price promise. Commit `2078ba1` was deployed to
 `192.168.1.49` on 2026-08-30 after its ED25519 host fingerprint was verified. The container was
@@ -697,7 +697,7 @@ section truthfully shows only previously seen cached products. No live catalogue
 
 Phone/tablet replacement search no longer stops at that cache. **Search for a different product**
 shows cached choices immediately and, when no live catalogue is configured, persists a product
-search job for the household. Shopping on the desktop with extension 0.1.4 shows **Product search
+search job for the household. Shopping on the desktop with extension 0.1.5 shows **Product search
 from another device**; the user presses **Process product search**, the visible New World tab is
 searched, and validated exact candidates are stored and polled back to the phone. Selecting one
 replaces the remembered preference and shows an explicit success message. This relay is automated-
@@ -735,7 +735,7 @@ preferences persist, deterministic matching runs before any future AI ranking, a
 separate explicit actions. Run the companion with `npm run companion:newworld`; configuration and
 safety details are in `docs/new-world-companion.md`.
 
-**Next Stage 5 task:** deploy this commit, reload unpacked extension 0.1.4, and live-test the repaired
+**Next Stage 5 task:** deploy this commit, reload unpacked extension 0.1.5, and live-test the repaired
 cross-device path: on phone choose **Search for a different product**, on desktop press **Process
 product search**, confirm exact candidates return to the phone, and select the intended product.
 Then send only one known product at quantity 1 and compare Agrocer's result with the visible New
@@ -802,6 +802,12 @@ Extension 0.1.4 handles New World's live plain-text **Add** button while remaini
 accepts only narrow Add/Add-to-trolley/Add-to-cart labels, then requires the visible quantity to
 appear before reporting success. Failed control discovery includes bounded visible labels so the
 next retailer markup change can be diagnosed from Agrocer rather than guessed.
+
+Extension 0.1.5 repairs the next live failure: current product identity may be an accessible `h2`
+and search names can join the size (`Milk2l`). Heading candidates are ranked by meaningful product
+tokens, letter/number boundaries are normalised, and size tokens are ignored only for identity
+comparison. A wrong product remains a tested rejection. The prepared-trolley card also supports
+removing one line or clearing the whole transient batch without deleting the shopping list.
 
 The old AI verification instructions below are historical and retained for audit context.
 
@@ -967,6 +973,6 @@ upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley and
 jobs, and a separate visible Playwright fallback. The built-in 24/7 household catalogue is deployed
 on the homelab and backed by Supabase; visible extension searches populate it without an unattended
 retailer crawler. Recipe search from an empty planner slot now saves and assigns the new meal in one
-reviewed flow. The extension 0.1.4 candidate/image flow and live New World trolley-add selectors
+reviewed flow. The extension 0.1.5 candidate/image flow and live New World trolley-add selectors
 still need final browser validation. No New World credentials are stored and payment/final checkout
 are not implemented.
