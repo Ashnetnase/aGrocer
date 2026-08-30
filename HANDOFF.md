@@ -677,11 +677,13 @@ product alternatives, specials abstraction/screen, notifications, and the Stage 
 foundation are implemented and checked. Migration `0010` is applied: 13 tables have RLS and one
 authenticated household policy each.
 
-The 24/7 New World household catalogue now uses the already deployed Agrocer container and Supabase
-rather than a redundant second service (ADR-022). Every valid candidate returned by extension 0.1.2
-is cached automatically, and phones can browse those products while the workstation is off. The
-timestamp is freshness information, not a live-price promise. Follow `docs/homelab-catalogue.md`;
-the remaining deployment blocker is manual confirmation of the homelab SSH host fingerprint.
+The 24/7 New World household catalogue now uses the deployed Agrocer container and Supabase rather
+than a redundant second service (ADR-022). Every valid candidate returned by extension 0.1.2 is
+cached automatically, and phones can browse those products while the workstation is off. The
+timestamp is freshness information, not a live-price promise. Commit `2078ba1` was deployed to
+`192.168.1.49` on 2026-08-30 after its ED25519 host fingerprint was verified. The container was
+healthy and both local and public route checks passed. Follow `docs/homelab-catalogue.md` for the
+remaining browser-only live test.
 
 The Meals planner now has a direct **Find a recipe** action in each empty slot. It opens recipe
 search first, keeps the editable review step, then saves and assigns the new meal to the selected
@@ -953,9 +955,9 @@ been merged to `main`, which is ~30 commits behind.
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
 upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley and product-search
-jobs, and a separate
-visible Playwright fallback. It also has the Agrocer side of an authenticated homelab catalogue feed
-and a mobile product browser; the collector itself is still to be deployed. Recipe search from an
-empty planner slot now saves and assigns the new meal in one reviewed flow. Live New World
-trolley-add selectors still need final validation. No New
-World credentials are stored and payment/final checkout are not implemented.
+jobs, and a separate visible Playwright fallback. The built-in 24/7 household catalogue is deployed
+on the homelab and backed by Supabase; visible extension searches populate it without an unattended
+retailer crawler. Recipe search from an empty planner slot now saves and assigns the new meal in one
+reviewed flow. The extension 0.1.2 candidate/image flow and live New World trolley-add selectors
+still need final browser validation. No New World credentials are stored and payment/final checkout
+are not implemented.

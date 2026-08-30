@@ -661,7 +661,9 @@ not implemented: the public search path is disallowed by `robots.txt`, direct pr
 Cloudflare, and the website terms reserve product data/images. Added a teaching-style homelab guide
 at `docs/homelab-catalogue.md`. Verified with 313 unit tests, 13 real-database integration tests,
 typecheck, lint, production build, schema no-op generation, extension syntax checks, and RLS on all
-13 tables. Deployment awaits manual confirmation of the homelab SSH host fingerprint.
+13 tables. Deployed commit `2078ba1` to the homelab after verifying the ED25519 host fingerprint;
+the rebuilt container reported healthy, local and public sign-in/manifest/service-worker checks
+returned 200, and the protected shopping API correctly returned 401 while signed out.
 
 ## 2026-08-30 - New World search-flow and activity UX repair (Codex)
 
