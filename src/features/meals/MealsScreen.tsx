@@ -212,6 +212,8 @@ export function MealsScreen() {
       <RecipeImportSheet
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        initialMode="search"
+        destination="planner"
         onImport={(draft) => {
           // Straight into the normal form: an import is reviewed and saved like anything
           // else, so there is only ever one path into the meal store.
@@ -230,10 +232,16 @@ export function MealsScreen() {
         meal={editingMeal}
         initialDraft={importedDraft}
         products={products}
+        createLabel={importedDraft ? 'Save and plan' : 'Add meal'}
         plannedUses={editingMeal ? countPlannedUses(plan, editingMeal.id) : 0}
         onSave={(draft) => {
           if (editingMeal) void updateMeal(editingMeal.id, draft);
-          else void addMeal(draft);
+          else if (importedDraft) {
+            void (async () => {
+              const meal = await addMeal(draft);
+              await assignMeal(target.day, target.slot, meal.id);
+            })();
+          } else void addMeal(draft);
         }}
         onDelete={editingMeal ? () => void removeMeal(editingMeal.id) : undefined}
       />

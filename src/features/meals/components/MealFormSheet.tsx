@@ -39,6 +39,8 @@ interface MealFormSheetProps {
   initialDraft?: MealDraft | null;
   products: Product[];
   onSave: (draft: MealDraft) => void;
+  /** Optional action copy for flows that save and immediately plan a new recipe. */
+  createLabel?: string;
   onDelete?: () => void;
   /** How many planned slots use this meal, so deleting can warn honestly. */
   plannedUses?: number;
@@ -51,6 +53,7 @@ export function MealFormSheet({
   initialDraft = null,
   products,
   onSave,
+  createLabel = 'Add meal',
   onDelete,
   plannedUses = 0,
 }: MealFormSheetProps) {
@@ -118,7 +121,7 @@ export function MealFormSheet({
             form="meal-form"
             className="h-12 flex-1 rounded-2xl bg-moss-600 text-[15px] font-bold text-white transition-colors duration-150 ease-out hover:bg-moss-700"
           >
-            {meal ? 'Save changes' : 'Add meal'}
+            {meal ? 'Save changes' : createLabel}
           </button>
         </div>
       }

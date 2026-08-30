@@ -45,12 +45,22 @@ interface SearchResult {
 interface RecipeImportSheetProps {
   open: boolean;
   onClose: () => void;
+  /** Which source to show first. Planner entry points lead with search. */
+  initialMode?: Mode;
+  /** Describes what happens after the normal review form is saved. */
+  destination?: 'catalogue' | 'planner';
   /** Hands the reviewed draft to the meal form. This sheet never writes anything itself. */
   onImport: (draft: MealDraft) => void;
 }
 
-export function RecipeImportSheet({ open, onClose, onImport }: RecipeImportSheetProps) {
-  const [mode, setMode] = useState<Mode>('paste');
+export function RecipeImportSheet({
+  open,
+  onClose,
+  initialMode = 'paste',
+  destination = 'catalogue',
+  onImport,
+}: RecipeImportSheetProps) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -60,14 +70,17 @@ export function RecipeImportSheet({ open, onClose, onImport }: RecipeImportSheet
 
   // A sheet that reopens holding the last recipe would be a small horror.
   useEffect(() => {
-    if (open) return;
-    setMode('paste');
+    if (open) {
+      setMode(initialMode);
+      return;
+    }
+    setMode(initialMode);
     setText('');
     setQuery('');
     setResults([]);
     setChosen(undefined);
     setError(undefined);
-  }, [open]);
+  }, [initialMode, open]);
 
   const pasted = text.trim() === '' ? undefined : importRecipeText(text);
   const review: Reviewable | undefined = mode === 'paste' ? pasted : chosen;
@@ -141,8 +154,12 @@ export function RecipeImportSheet({ open, onClose, onImport }: RecipeImportSheet
     <BottomSheet
       open={open}
       onClose={onClose}
-      title="Add a recipe"
-      description="Paste one from anywhere, or search. You'll check it before it's saved."
+      title={destination === 'planner' ? 'Find a recipe' : 'Add a recipe'}
+      description={
+        destination === 'planner'
+          ? "Search or paste a recipe. You'll review it before it is saved and planned."
+          : "Paste one from anywhere, or search. You'll check it before it's saved."
+      }
       footer={
         <div className="flex gap-2.5">
           <button
@@ -158,7 +175,7 @@ export function RecipeImportSheet({ open, onClose, onImport }: RecipeImportSheet
             disabled={found === 0}
             className="h-12 flex-1 rounded-2xl bg-moss-600 text-[15px] font-bold text-white transition-colors duration-150 ease-out hover:bg-moss-700 disabled:cursor-not-allowed disabled:bg-line"
           >
-            Review and edit
+            {destination === 'planner' ? 'Review and plan' : 'Review and edit'}
           </button>
         </div>
       }

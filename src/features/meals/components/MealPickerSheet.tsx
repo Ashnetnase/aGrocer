@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ClipboardPasteIcon, ClockIcon, PencilIcon, PlusIcon, UsersIcon } from 'lucide-react';
+import { ClockIcon, PencilIcon, PlusIcon, SearchIcon, UsersIcon } from 'lucide-react';
 import type { Meal } from '@/domain/schemas/meal';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { SearchField } from '@/components/agrocer/Field';
@@ -15,7 +15,7 @@ interface MealPickerSheetProps {
   slotLabel: string;
   onPick: (mealId: string) => void;
   onCreate: () => void;
-  /** Opens the paste-a-recipe sheet. Same moment as creating one, less typing. */
+  /** Searches for a new recipe to save and place into this planner slot. */
   onImport: () => void;
   onEdit: (meal: Meal) => void;
 }
@@ -68,7 +68,7 @@ export function MealPickerSheet({
           }}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
         >
-          <ClipboardPasteIcon className="h-4 w-4" /> Add a recipe
+          <SearchIcon className="h-4 w-4" /> Find a recipe
         </button>
 
         <div className="space-y-2">

@@ -674,8 +674,12 @@ Added 2026-08-29 for meal feedback UI:
 
 Current state (2026-08-30): recipe/planner AI, voice input/output, reorder and use-soon advice,
 product alternatives, specials abstraction/screen, notifications, and the Stage 5 trolley companion
-foundation are implemented and checked. Migration `0008` is applied: 11 tables have RLS and one
+foundation are implemented and checked. Migration `0009` is applied: 12 tables have RLS and one
 authenticated household policy each.
+
+The Meals planner now has a direct **Find a recipe** action in each empty slot. It opens recipe
+search first, keeps the editable review step, then saves and assigns the new meal to the selected
+day/slot. This avoids making a person save a recipe and then hunt for it in the planner separately.
 
 Stage 5 now supports both preferred integration paths: a future official retailer API and a local,
 visible New World browser companion. It no longer treats an official API as a prerequisite. Product
@@ -873,6 +877,7 @@ Both bit again this session. Check them before debugging code.
 been merged to `main`, which is ~30 commits behind.
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
-upgraded Shopping review UI, and a separate visible Playwright companion. The health endpoint is
-locally smoke-tested, but live New World search/cart selectors have not yet been validated. No New
+upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley jobs, and a separate
+visible Playwright fallback. Recipe search from an empty planner slot now saves and assigns the new
+meal in one reviewed flow. Live New World trolley-add selectors still need final validation. No New
 World credentials are stored and payment/final checkout are not implemented.

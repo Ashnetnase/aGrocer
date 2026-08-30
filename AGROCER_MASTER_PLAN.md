@@ -643,6 +643,14 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-30 - Recipe search plans into the selected meal slot (Codex)
+
+The planner's empty-slot picker now says **Find a recipe** and opens the existing provider-backed
+recipe search directly instead of hiding it behind a paste-first import flow. A searched or pasted
+recipe still goes through the editable review form; saving from this route now creates the meal and
+assigns that exact new meal to the day and slot the person started from. Manual meal creation and
+the saved-meal picker are unchanged. Verified with typecheck, lint and all 308 unit tests.
+
 ## 2026-08-30 - Cross-device trolley jobs and controllable preferences (Codex)
 
 Migration `0009` adds household-scoped trolley jobs and an enabled flag for remembered retailer

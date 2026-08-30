@@ -51,7 +51,7 @@ interface AgrocerActions {
 
   assignMeal: (day: DayKey, slot: Slot, mealId: string) => Promise<void>;
   clearMeal: (day: DayKey, slot: Slot) => Promise<void>;
-  addMeal: (draft: MealDraft) => Promise<void>;
+  addMeal: (draft: MealDraft) => Promise<Meal>;
   updateMeal: (id: string, draft: MealDraft) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
   listMealFeedback: (mealId: string) => Promise<MealFeedback[]>;
@@ -252,8 +252,9 @@ export function AgrocerProvider({
         setState((prev) => ({ ...prev, plan }));
       },
       async addMeal(draft) {
-        await repositories.meals.create(draft);
+        const meal = await repositories.meals.create(draft);
         await refreshMeals();
+        return meal;
       },
       async updateMeal(id, draft) {
         await repositories.meals.update(id, draft);
