@@ -19,8 +19,12 @@ to New World**. The extension opens each exact product in a visible New World ta
 requested quantity, and returns structured results. It reports `added` only when the on-page
 quantity can be verified.
 
-The extension is currently implemented and protocol-tested but its live Add/quantity selectors
-still need one controlled product test against the normal logged-in Chrome session.
+For an unmatched line, press **Search New World**. The extension opens the real New World search
+inside the normal Chrome profile, reads only the visible product cards, and returns candidates to
+Agrocer. Choosing one persists it as the household preference for later shopping lists.
+
+The extension is currently implemented and protocol-tested but its live search/Add/quantity
+selectors still need one controlled product test against the normal logged-in Chrome session.
 
 ## Optional: Playwright companion
 

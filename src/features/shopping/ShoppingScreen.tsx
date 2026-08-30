@@ -15,7 +15,7 @@ import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PreparedTrolley, TrolleyLine } from '@/shopping/types';
 import type { RetailerProduct, TrolleyAddResult } from '@/shopping/schemas';
-import { extensionEventSchema, pingNewWorldExtension, sendBatchToNewWorldExtension } from '@/shopping/extensionBridge';
+import { extensionEventSchema, pingNewWorldExtension, searchWithNewWorldExtension, sendBatchToNewWorldExtension } from '@/shopping/extensionBridge';
 
 export function ShoppingScreen() {
   const router = useRouter();
@@ -29,6 +29,9 @@ export function ShoppingScreen() {
   const [sendResults, setSendResults] = useState<TrolleyAddResult[] | null>(null);
   const [trolleyError, setTrolleyError] = useState<string | null>(null);
   const [extensionOnline, setExtensionOnline] = useState(false);
+  const [extensionCandidates, setExtensionCandidates] = useState<Record<string, RetailerProduct[]>>({});
+  const [extensionSearchMessages, setExtensionSearchMessages] = useState<Record<string, string>>({});
+  const [searchingItemId, setSearchingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>) => {
@@ -37,6 +40,12 @@ export function ShoppingScreen() {
       if (!parsed.success) return;
       if (parsed.data.type === 'AGROCER_NEW_WORLD_READY') setExtensionOnline(true);
       if (parsed.data.type === 'AGROCER_NEW_WORLD_RESULTS') { setSendResults(parsed.data.results); setSending(false); }
+      if (parsed.data.type === 'AGROCER_NEW_WORLD_SEARCH_RESULTS') {
+        const search = parsed.data;
+        setExtensionCandidates((current) => ({ ...current, [search.shoppingItemId]: search.products }));
+        setExtensionSearchMessages((current) => ({ ...current, [search.shoppingItemId]: search.message ?? (search.products.length ? 'Choose the exact product below.' : 'No products found.') }));
+        setSearchingItemId(null);
+      }
       if (parsed.data.type === 'AGROCER_NEW_WORLD_ERROR') { setTrolleyError(parsed.data.message); setSending(false); }
     };
     window.addEventListener('message', receive);
@@ -68,6 +77,12 @@ export function ShoppingScreen() {
     });
     if (!response.ok) { setTrolleyError('Could not remember that product.'); return; }
     await prepareNewWorld();
+  };
+
+  const searchNewWorld = (line: TrolleyLine) => {
+    setSearchingItemId(line.shoppingItem.id);
+    setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Searching in your New World tab…' }));
+    searchWithNewWorldExtension(line.shoppingItem.id, line.requestedText);
   };
 
   const sendToNewWorld = async () => {
@@ -113,7 +128,9 @@ export function ShoppingScreen() {
           {trolley.lines.map((line) => <div key={line.shoppingItem.id} className="rounded-xl bg-white px-3 py-2 text-sm">
             <div className="flex justify-between gap-3"><span>{line.requestedQuantity} {line.shoppingItem.unit} {line.requestedText}</span><span className={line.status === 'ready' ? 'text-moss-700' : 'text-berry-600'}>{line.status === 'ready' ? 'Ready' : line.status === 'unavailable' ? 'Unavailable' : 'Needs review'}</span></div>
             {line.product ? <p className="mt-1 text-xs text-muted">{line.product.name}{line.product.size ? ` · ${line.product.size}` : ''}{line.product.price !== undefined ? ` · ${nzd(line.product.price)}` : ''}<br />{line.source === 'household-preference' ? 'Matched from household preference' : `Match confidence ${Math.round(line.confidence * 100)}%`}</p> : <p className="mt-1 text-xs text-muted">{line.reason}</p>}
-            {line.requiresReview && line.candidates?.length ? <div className="mt-2 space-y-1">{line.candidates.map((candidate) => <button key={candidate.externalProductId ?? candidate.productUrl ?? candidate.name} type="button" onClick={() => void chooseProduct(line, candidate)} className="block w-full rounded-lg border border-line px-2 py-2 text-left text-xs font-semibold text-ink">Choose {candidate.name}{candidate.size ? ` · ${candidate.size}` : ''}</button>)}</div> : null}
+            {line.requiresReview && extensionOnline ? <button type="button" disabled={searchingItemId === line.shoppingItem.id} onClick={() => searchNewWorld(line)} className="mt-2 rounded-lg border border-moss-200 px-2 py-1.5 text-xs font-bold text-moss-700 disabled:opacity-50">{searchingItemId === line.shoppingItem.id ? 'Searching…' : 'Search New World'}</button> : null}
+            {extensionSearchMessages[line.shoppingItem.id] ? <p className="mt-1 text-xs text-muted">{extensionSearchMessages[line.shoppingItem.id]}</p> : null}
+            {line.requiresReview && (extensionCandidates[line.shoppingItem.id] ?? line.candidates)?.length ? <div className="mt-2 space-y-1">{(extensionCandidates[line.shoppingItem.id] ?? line.candidates ?? []).map((candidate) => <button key={candidate.externalProductId ?? candidate.productUrl ?? candidate.name} type="button" onClick={() => void chooseProduct(line, candidate)} className="block w-full rounded-lg border border-line px-2 py-2 text-left text-xs font-semibold text-ink">Choose {candidate.name}{candidate.size ? ` · ${candidate.size}` : ''}{candidate.price !== undefined ? ` · ${nzd(candidate.price)}` : ''}</button>)}</div> : null}
           </div>)}
         </div>
         {sendResults ? <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm"><strong>{sendResults.filter((result) => result.status === 'added').length} / {sendResults.length} added</strong><p className="text-xs text-muted">{sendResults.some((result) => result.status !== 'added') ? 'Some products require your attention.' : 'Your trolley is ready for review.'}</p></div> : null}

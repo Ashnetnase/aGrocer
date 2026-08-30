@@ -13,6 +13,40 @@ function result(item, status, extra = {}) {
   return { shoppingItemId: item.shoppingItemId, status, requestedQuantity: item.quantity, ...extra };
 }
 
+function extractProducts(query) {
+  const body = document.body?.innerText || '';
+  if (/just a moment|captcha|unusual traffic|access denied/i.test(`${document.title} ${body}`)) return { status: 'blocked', products: [], message: 'New World presented a security check.' };
+  const queryTokens = normalise(query).split(' ').filter(Boolean);
+  const seen = new Set();
+  const products = [];
+  for (const anchor of document.querySelectorAll('a[href]')) {
+    let url;
+    try { url = new URL(anchor.href); } catch { continue; }
+    if (url.hostname !== 'www.newworld.co.nz' || url.pathname.includes('/shop/search')) continue;
+    const container = anchor.closest('article, li, [data-testid*="product"], [class*="product"]') || anchor;
+    const containerText = container.textContent?.replace(/\s+/g, ' ').trim() || '';
+    const pathLooksLikeProduct = /\/product\//i.test(url.pathname);
+    const textMatches = queryTokens.some((token) => normalise(containerText).includes(token));
+    if ((!pathLooksLikeProduct && !textMatches) || seen.has(url.href)) continue;
+    const heading = container.querySelector('h1, h2, h3, h4, [data-testid*="name"], [class*="name"]');
+    const image = container.querySelector('img[alt]');
+    const name = (heading?.textContent || image?.alt || anchor.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!name || !queryTokens.some((token) => normalise(`${name} ${containerText}`).includes(token))) continue;
+    const priceText = containerText.match(/\$\s*(\d+(?:\.\d{1,2})?)/)?.[1];
+    seen.add(url.href);
+    products.push({
+      retailer: 'new-world',
+      name,
+      productUrl: url.href,
+      externalProductId: url.pathname.split('/').filter(Boolean).at(-1),
+      availability: /unavailable|out of stock/i.test(containerText) ? 'unavailable' : 'unknown',
+      ...(priceText ? { price: Number(priceText) } : {}),
+    });
+    if (products.length >= 12) break;
+  }
+  return { status: products.length ? 'ok' : 'selector-failed', products, ...(products.length ? {} : { message: 'No product cards could be read from the New World search page.' }) };
+}
+
 async function addCurrent(item) {
   const body = document.body?.innerText || '';
   if (/just a moment|captcha|unusual traffic|access denied/i.test(`${document.title} ${body}`)) return result(item, 'blocked', { message: 'New World presented a security check.' });
@@ -35,6 +69,10 @@ async function addCurrent(item) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'extract-products') {
+    sendResponse(extractProducts(message.query));
+    return;
+  }
   if (message?.type !== 'add-current') return;
   addCurrent(message.item).then((value) => {
     chrome.runtime.sendMessage({ type: 'item-result', result: value });

@@ -13,4 +13,13 @@ describe('New World extension bridge protocol', () => {
   it('rejects a false success without required result fields', () => {
     expect(extensionEventSchema.safeParse({ source: AGROCER_EXTENSION_SOURCE, type: 'AGROCER_NEW_WORLD_RESULTS', results: [{ status: 'added' }] }).success).toBe(false);
   });
+
+  it('validates retailer products returned by extension search', () => {
+    expect(extensionEventSchema.safeParse({
+      source: AGROCER_EXTENSION_SOURCE,
+      type: 'AGROCER_NEW_WORLD_SEARCH_RESULTS',
+      shoppingItemId: 'milk', status: 'ok',
+      products: [{ retailer: 'new-world', name: 'Anchor Blue Milk 2L', productUrl: 'https://www.newworld.co.nz/shop/product/anchor', availability: 'unknown' }],
+    }).success).toBe(true);
+  });
 });

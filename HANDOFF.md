@@ -702,6 +702,11 @@ button. **Next manual step:** load that directory unpacked in `chrome://extensio
 Agrocer, confirm “Chrome trolley extension ready”, then live-test one known exact product. The
 selectors intentionally return failure unless quantity is visibly verified.
 
+The extension can now acquire real candidates too: each unresolved line has **Search New World**,
+which navigates the normal New World tab, extracts visible product cards, and returns candidates to
+Agrocer. Choosing one uses the existing persisted preference endpoint. This is protocol-tested but
+awaits the first live selector result; reload the unpacked extension after pulling this commit.
+
 The old AI verification instructions below are historical and retained for audit context.
 
 The AI recipe tools are now live-verified locally. Deploy this branch and repeat the check
