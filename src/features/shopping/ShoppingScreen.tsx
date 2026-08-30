@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/agrocer/EmptyState';
 import { FloatingAddButton } from '@/components/agrocer/FloatingAddButton';
 import { ShoppingRow } from './components/ShoppingRow';
 import { ShoppingItemSheet } from './components/ShoppingItemSheet';
+import { NewWorldCatalogue } from './components/NewWorldCatalogue';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PreparedTrolley, TrolleyLine } from '@/shopping/types';
@@ -154,8 +155,28 @@ export function ShoppingScreen() {
     await prepareNewWorld();
   };
 
-  const searchNewWorld = (line: TrolleyLine) => {
+  const searchNewWorld = async (line: TrolleyLine) => {
     setSearchingItemId(line.shoppingItem.id);
+    if (!extensionOnline) {
+      setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Searching New World products…' }));
+      try {
+        const parameters = new URLSearchParams({ q: line.requestedText, limit: '20' });
+        const response = await fetch(`/api/retailer/new-world/products?${parameters}`);
+        const body = (await response.json().catch(() => null)) as { products?: RetailerProduct[]; message?: string } | null;
+        if (!response.ok || !body?.products) throw new Error('search failed');
+        const products = body.products;
+        setExtensionCandidates((current) => ({ ...current, [line.shoppingItem.id]: products }));
+        setExtensionSearchMessages((current) => ({
+          ...current,
+          [line.shoppingItem.id]: body.message ?? (products.length ? 'Choose the exact product below.' : 'No products found.'),
+        }));
+      } catch {
+        setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Could not load New World products.' }));
+      } finally {
+        setSearchingItemId(null);
+      }
+      return;
+    }
     setExtensionSearchMessages((current) => ({ ...current, [line.shoppingItem.id]: 'Searching in your New World tab…' }));
     searchWithNewWorldExtension(line.shoppingItem.id, line.requestedText);
     if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
@@ -224,6 +245,7 @@ export function ShoppingScreen() {
 
     <main className="no-scrollbar relative flex-1 overflow-y-auto px-5 pb-24 pt-4">
       {trolleyError ? <p className="mb-3 rounded-2xl bg-berry-50 px-4 py-3 text-sm font-semibold text-berry-700">{trolleyError}</p> : null}
+      {shopping.length ? <NewWorldCatalogue items={shopping} onPreferenceSaved={() => trolley ? prepareNewWorld() : undefined} /> : null}
       {trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
         <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold text-ink">New World trolley</h2><p className="text-xs text-muted">{trolley.summary.total} items · {trolley.summary.ready} ready · {trolley.summary.needsReview} need review · {trolley.summary.unavailable} unavailable</p></div><button type="button" className="text-xs font-bold text-muted" onClick={() => setTrolley(null)}>Close</button></div>
         <div className="mt-3 space-y-2">
@@ -234,7 +256,7 @@ export function ShoppingScreen() {
             <div className="flex justify-between gap-3"><span>{line.requestedQuantity} {line.shoppingItem.unit} {line.requestedText}</span><span className={line.status === 'ready' ? 'text-moss-700' : 'text-berry-600'}>{line.status === 'ready' ? 'Ready' : line.status === 'unavailable' ? 'Unavailable' : 'Needs review'}</span></div>
             {line.product ? <p className="mt-1 text-xs text-muted">{line.product.name}{line.product.size ? ` · ${line.product.size}` : ''}{line.product.price !== undefined ? ` · ${nzd(line.product.price)}` : ''}<br />{line.source === 'household-preference' ? 'Matched from household preference' : `Match confidence ${Math.round(line.confidence * 100)}%`}</p> : <p className="mt-1 text-xs text-muted">{line.reason}</p>}
             {line.source === 'household-preference' ? <button type="button" onClick={() => void togglePreference(line)} className="mr-2 mt-2 rounded-lg border border-line px-2 py-1.5 text-xs font-bold text-muted">{line.preferenceEnabled === false ? 'Use saved product automatically' : 'Pause saved product'}</button> : null}
-            {(line.requiresReview || line.source === 'household-preference') && extensionOnline ? <button type="button" disabled={searchingItemId === line.shoppingItem.id} onClick={() => searchNewWorld(line)} className="mt-2 rounded-lg border border-moss-200 px-2 py-1.5 text-xs font-bold text-moss-700 disabled:opacity-50">{searchingItemId === line.shoppingItem.id ? 'Searching…' : line.source === 'household-preference' ? 'Search for a different product' : 'Search New World'}</button> : null}
+            {line.requiresReview || line.source === 'household-preference' ? <button type="button" disabled={searchingItemId === line.shoppingItem.id} onClick={() => void searchNewWorld(line)} className="mt-2 rounded-lg border border-moss-200 px-2 py-1.5 text-xs font-bold text-moss-700 disabled:opacity-50">{searchingItemId === line.shoppingItem.id ? 'Searching…' : line.source === 'household-preference' ? 'Search for a different product' : 'Choose New World product'}</button> : null}
             {extensionSearchMessages[line.shoppingItem.id] ? <p className="mt-1 text-xs text-muted">{extensionSearchMessages[line.shoppingItem.id]}</p> : null}
             {(extensionCandidates[line.shoppingItem.id] ?? line.candidates)?.length ? <div className="mt-2 space-y-1">{(extensionCandidates[line.shoppingItem.id] ?? line.candidates ?? []).map((candidate) => <button key={candidate.externalProductId ?? candidate.productUrl ?? candidate.name} type="button" onClick={() => void chooseProduct(line, candidate)} className="flex w-full items-center gap-2 rounded-lg border border-line px-2 py-2 text-left text-xs font-semibold text-ink">{candidate.imageUrl ? <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-lg bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${JSON.stringify(candidate.imageUrl)})` }} /> : null}<span>Choose {candidate.name}{candidate.size ? ` · ${candidate.size}` : ''}{candidate.price !== undefined ? ` · ${nzd(candidate.price)}` : ''}</span></button>)}</div> : null}
           </div>)}

@@ -3,7 +3,7 @@
 Describes what the repository **currently** contains, then what is **planned**.
 Scope and stage boundaries: `AGROCER_MASTER_PLAN.md`. Live state: `HANDOFF.md`.
 
-Last updated: 2026-08-27 (Stage 2 in progress).
+Last updated: 2026-08-30 (Stage 5 in progress).
 
 ---
 
@@ -81,7 +81,7 @@ the bulk of the test suite.
 ## Database
 
 Drizzle ORM over postgres-js on Supabase managed PostgreSQL (ADR-013), project `agrocer` in
-ap-southeast-2. Nine tables in `src/db/schema.ts`: `households`, `household_members`,
+ap-southeast-2. Twelve tables in `src/db/schema.ts`: `households`, `household_members`,
 `pantry_items`, `products`, `shopping_items`, `meals`, `plan_entries`, `inventory_events`, and
 `meal_feedback`, `retailer_products`, `shopping_product_preferences`, and `trolley_jobs`.
 Migrations `0000`–`0009` are applied; `0006` adds the nullable
@@ -101,6 +101,18 @@ Meal feedback is append-and-read history, loaded on demand when meal detail open
 belong to the whole family or one household member and records the planned meal date. The
 localStorage implementation deliberately refuses feedback writes: history that exists on one
 device but not another is not household history.
+
+## Retailer catalogue and trolley boundary
+
+The mobile PWA never scrapes or controls New World. An optional household-operated catalogue
+service exposes validated New World product records to Agrocer's server. The server caches only
+products encountered through browse/search and stores explicit household item preferences. A live
+feed failure falls back to labelled cached results. The catalogue token is server-only.
+
+Trolley execution is separate: a visible normal-Chrome extension or Playwright fallback receives
+only exact confirmed products after an explicit user action. Cross-device jobs let a phone queue
+those products for a desktop browser. Neither path stores retailer credentials or performs payment
+or final checkout.
 
 **RLS is enabled on all twelve tables**, with one household policy per table and no anonymous
 access. `npm run db:rls` verifies both the metadata and a publishable-key probe.

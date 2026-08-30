@@ -681,6 +681,12 @@ The Meals planner now has a direct **Find a recipe** action in each empty slot. 
 search first, keeps the editable review step, then saves and assigns the new meal to the selected
 day/slot. This avoids making a person save a recipe and then hunt for it in the planner separately.
 
+Shopping now has a phone-friendly **New World products** section. The deployed app can call a
+household-operated product collector through `NEW_WORLD_CATALOGUE_URL`, validate/cache encountered
+products, show images/current and special prices, and save an exact product against a shopping item.
+The contract is documented in `docs/new-world-companion.md`. Until that collector is deployed, the
+section truthfully shows only previously seen cached products. No live catalogue feed is claimed.
+
 Stage 5 now supports both preferred integration paths: a future official retailer API and a local,
 visible New World browser companion. It no longer treats an official API as a prerequisite. Product
 preferences persist, deterministic matching runs before any future AI ranking, and prepare/send are
@@ -878,6 +884,8 @@ been merged to `main`, which is ~30 commits behind.
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
 upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley jobs, and a separate
-visible Playwright fallback. Recipe search from an empty planner slot now saves and assigns the new
-meal in one reviewed flow. Live New World trolley-add selectors still need final validation. No New
+visible Playwright fallback. It also has the Agrocer side of an authenticated homelab catalogue feed
+and a mobile product browser; the collector itself is still to be deployed. Recipe search from an
+empty planner slot now saves and assigns the new meal in one reviewed flow. Live New World
+trolley-add selectors still need final validation. No New
 World credentials are stored and payment/final checkout are not implemented.

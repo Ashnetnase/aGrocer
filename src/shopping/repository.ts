@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, ilike } from 'drizzle-orm';
 import type { Database } from '@/db/client';
 import { retailerProducts, shoppingProductPreferences } from '@/db/schema';
 import type { ProductPreference, RetailerProduct } from './schemas';
@@ -10,6 +10,7 @@ export interface ShoppingProductRepository {
   removePreferredProduct(itemKey: string, retailer: 'new-world', storeId?: string): Promise<void>;
   setPreferenceEnabled(itemKey: string, retailer: 'new-world', enabled: boolean, storeId?: string): Promise<ProductPreference | undefined>;
   saveProduct(product: RetailerProduct): Promise<RetailerProduct>;
+  searchProducts(query: string | undefined, retailer: 'new-world', storeId?: string, limit?: number): Promise<RetailerProduct[]>;
 }
 
 const cents = (value: number | undefined) => value === undefined ? null : Math.round(value * 100);
@@ -46,6 +47,20 @@ export function createShoppingProductRepository(db: Database, householdId: strin
   }
 
   const repository: ShoppingProductRepository = {
+    async searchProducts(query, retailer, storeId, limit = 40) {
+      const conditions = [
+        eq(retailerProducts.householdId, householdId),
+        eq(retailerProducts.retailer, retailer),
+        ...(storeId ? [eq(retailerProducts.storeId, storeId)] : []),
+        ...(query?.trim() ? [ilike(retailerProducts.name, `%${query.trim()}%`)] : []),
+      ];
+      const rows = await db.select().from(retailerProducts)
+        .where(and(...conditions))
+        .orderBy(desc(retailerProducts.lastSeenAt))
+        .limit(Math.min(Math.max(limit, 1), 100));
+      return rows.map(toProduct);
+    },
+
     async getPreferredProduct(itemKey, retailer, storeId) {
       const rows = await db.select().from(shoppingProductPreferences).where(and(
         eq(shoppingProductPreferences.householdId, householdId),

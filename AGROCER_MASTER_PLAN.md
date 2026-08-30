@@ -493,6 +493,9 @@ Prepare a supermarket trolley for human review without autonomous payment.
 - [x] manual provider and matching/review service
 - [x] New World browser provider communicating with a separate local companion
 - [x] deterministic product matching with confidence, preferences and unresolved-item review
+- [x] authenticated homelab catalogue API seam with Zod validation and encountered-product cache
+- [~] live catalogue acquisition — Shopping browse/search UI is implemented; the collector/feed
+      still needs to be deployed and connected before it can show a store-wide live catalogue
 - [~] substitutions — candidate selection and unavailable replacement state exist
 - [x] quantity reconciliation in the companion request/verified result contract
 - [~] browser cart preparation — normal-Chrome extension fallback implemented after Cloudflare
@@ -642,6 +645,16 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-30 - Mobile New World catalogue and homelab feed seam (Codex)
+
+Shopping now includes a New World product section for phone, tablet and desktop. It browses/searches
+an authenticated server-side catalogue endpoint, displays real product images, sizes, prices and
+special prices, and remembers an exact choice against an existing shopping item. The same catalogue
+is available when resolving uncertain trolley lines without the Chrome extension. Live results are
+Zod-validated and cached per household; a collector outage falls back to clearly labelled previously
+seen products. The homelab collector/API itself is not implemented or live-tested. Verified with
+typecheck, lint, production build, 310 unit tests and 12 real-database integration tests.
 
 ## 2026-08-30 - Recipe search plans into the selected meal slot (Codex)
 

@@ -31,6 +31,58 @@ On a phone/tablet without the extension, the send button creates a household tro
 Shopping page on the desktop with the extension enabled, prepare the view, and press **Process
 queued trolley**. Results are stored so the originating PWA can show completed/attention status.
 
+## Optional homelab product catalogue
+
+The Shopping screen has a **New World products** section that works on phones, tablets and desktop.
+It does not scrape from the PWA. Agrocer calls a server-side catalogue service, validates the
+product records, caches products the household encounters, and lets the user remember an exact
+product for an existing shopping item. Prices and specials are displayed only when supplied by the
+catalogue; Agrocer never invents them.
+
+Configure the deployed Agrocer container with:
+
+```env
+NEW_WORLD_CATALOGUE_URL="http://catalogue:4320"
+NEW_WORLD_CATALOGUE_TOKEN="use-a-long-random-token"
+NEW_WORLD_STORE_ID="your-store-id"
+```
+
+The collector must implement:
+
+```text
+GET /v1/new-world/products?q=milk&storeId=your-store-id&limit=40
+Authorization: Bearer <NEW_WORLD_CATALOGUE_TOKEN>
+```
+
+and return validated retailer records:
+
+```json
+{
+  "products": [
+    {
+      "retailer": "new-world",
+      "storeId": "your-store-id",
+      "externalProductId": "retailer-product-id",
+      "name": "Anchor Blue Milk",
+      "brand": "Anchor",
+      "size": "2L",
+      "price": 5.8,
+      "specialPrice": 5,
+      "productUrl": "https://www.newworld.co.nz/shop/product/...",
+      "imageUrl": "https://...",
+      "availability": "available",
+      "lastSeenAt": "2026-08-30T00:00:00.000Z"
+    }
+  ],
+  "updatedAt": "2026-08-30T00:00:00.000Z"
+}
+```
+
+An empty `q` means browse recent products. Keep retailer acquisition in this separate service so a
+future official API can replace it without changing Agrocer. Do not crawl the entire catalogue on
+every request, bypass CAPTCHA/security checks, or place collector credentials in the Agrocer PWA.
+If the service is offline, Agrocer labels and displays previously seen cached products instead.
+
 The extension is currently implemented and protocol-tested but its live search/Add/quantity
 selectors still need one controlled product test against the normal logged-in Chrome session.
 

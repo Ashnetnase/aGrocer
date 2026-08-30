@@ -231,9 +231,16 @@ Inherited from Stage 1 (ADR-012) — provisioning, not build work:
 
 *AshHome Phase 6.*
 
-## Stage 5 — New World / supermarket trolley preparation — `[ ]` NOT STARTED
+## Stage 5 — New World / supermarket trolley preparation — `[~]` IN PROGRESS
 
-No autonomous purchasing, ever, without an explicit future request.
+- [x] deterministic matching and remembered household products
+- [x] mobile New World catalogue UI and authenticated homelab feed contract
+- [x] encountered-product cache with truthful offline fallback
+- [x] visible Chrome extension and cross-device trolley jobs
+- [ ] deploy/connect the homelab catalogue collector for live store products and prices
+- [ ] live-verify New World Add and quantity selectors
+
+No autonomous purchasing, payment or final checkout.
 
 ## Stage 6 — Hybrid cloud / cloud engineering evolution — `[ ]` NOT STARTED
 

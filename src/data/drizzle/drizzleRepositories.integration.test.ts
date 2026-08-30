@@ -142,6 +142,9 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
     expect(remembered?.product.name).toBe('Anchor Blue Milk 2L');
     expect(remembered?.defaultQuantity).toBe(2);
     expect(remembered?.enabled).toBe(true);
+    expect(await shoppingProducts.searchProducts('blue milk', 'new-world')).toEqual([
+      expect.objectContaining({ externalProductId: 'integration-anchor-2l', name: 'Anchor Blue Milk 2L' }),
+    ]);
 
     await shoppingProducts.setPreferenceEnabled('milk', 'new-world', false);
     expect((await shoppingProducts.getPreferredProduct('milk', 'new-world'))?.enabled).toBe(false);
