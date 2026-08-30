@@ -657,7 +657,9 @@ the extension required. Extension 0.1.4 adds a narrowly matched visible-text fal
 `Add to trolley`, or `Add to cart`, then still requires a visible resulting quantity before it can
 report success. Quantity inputs named for quantity are also recognised, and selector failures now
 list a bounded set of visible control labels for diagnosis. The installed-Chrome smoke check now
-exercises both product extraction and verified Add behavior. Live signed-in confirmation remains.
+exercises both product extraction and verified Add behavior; typecheck, lint, all 313 unit tests,
+and the production build pass. Commit `e8da3fc` is deployed and healthy on the homelab. Live
+signed-in confirmation remains.
 
 ## 2026-08-30 - Live New World nested-card extraction repair (Codex)
 
