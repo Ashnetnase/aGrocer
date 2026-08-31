@@ -32,11 +32,18 @@ Current state of the code lives in `HANDOFF.md`.
 - [x] Phase 9 — controlled AI tool/action system *(9a read tools + 9b the first write tool,
       behind a confirmation gate. The model proposes; a person confirms)*
 - [ ] Phase 10 — pantry-aware AI meal planning
-- [ ] Phase 11 — reminders, scheduler and notifications
-- [~] Phase 12 — kids, chores, family calendar and school-data foundation
-      (child school field + `school_notifications` table, `/kids` screen, hand-entered notice
-      log done; chores, family calendar and `SchoolProvider` abstraction not started)
-- [ ] Phase 13 — Hero/email/calendar school integration
+- [ ] Phase 11 — reminders, scheduler and notifications *(not started — this is the next
+      natural slice: a due-date reminders list, same shape as Chores, no scheduler/push yet)*
+- [~] Phase 12 — kids, chores, family calendar and school-data foundation *(child school field,
+      `school_notifications`, `/kids` screen, Chores (its own screen + both dashboard cards),
+      and a read-only external family calendar (iCloud feed) are all done. What's left: an
+      AshHome-native events table for events created inside the app itself — not needed yet,
+      since the iCloud feed covers today's actual use case — and a real pluggable
+      `SchoolProvider` interface, today `hero-email`/`manual` are two write paths, not yet one
+      shared interface)*
+- [x] Phase 13 — Hero/email/calendar school integration *(Gmail OAuth read-only ingestion,
+      AI extraction with a needs-review fallback, filtered forwarding, cron-polled — built,
+      deployed, and confirmed live: a real Hero email has already come through)*
 - [ ] Phase 14 — wall-dashboard enhancements, kiosk/device configuration and shared-family UX
 - [ ] Phase 15 — homelab deployment, monitoring and backups
 - [ ] Phase 16 — Home Assistant integration
@@ -48,12 +55,12 @@ reconciling: the phase list assumes work that the stage list already completed.
 ### Phase 1 dashboard cards
 
 - [x] `/dashboard` route with its own full-screen kiosk layout
-- [x] Kids / School — real children plus a live notice count, "Open Kids" to the full screen
-- [x] Family schedule — placeholder
-- [x] Reminders — placeholder
+- [x] Kids / School — real children, live notices (Hero + hand-entered), "Open Kids"
+- [x] Family schedule — real, read-only from the iCloud family calendar
+- [ ] Reminders — still the one real placeholder left on the dashboard (Phase 11)
 - [x] Shopping — real, interactive, checkable from the wall
 - [x] Tonight's meal — real
-- [x] Chores — placeholder
+- [x] Chores — real, touch-to-complete, "Open Chores"
 - [x] Ask AshHome — **real, reads real data, and can add to the list with confirmation**
       (slices 8b, 9a, 9b). Answers from the shopping list, pantry and meal plan and labels
       which it consulted; proposes shopping additions behind an Add it / Cancel gate. Cannot
