@@ -42,6 +42,12 @@ export const schoolNotificationSchema = z.object({
   actionType: schoolNotificationActionTypeSchema.nullable(),
   /** Deep-link back to Hero, or wherever the notice came from. */
   sourceLink: z.string().trim().max(500).nullable(),
+  /**
+   * True when extraction wasn't confident in the fields above (CLAUDE.md: "Where extraction
+   * confidence is low, mark the item for user confirmation rather than guessing"). Always
+   * false for hand-entered notifications.
+   */
+  needsReview: z.boolean(),
   read: z.boolean(),
   dismissed: z.boolean(),
 });

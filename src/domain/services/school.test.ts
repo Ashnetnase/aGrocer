@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { childName, visibleNotifications } from './school';
+import { childName, matchChildByName, visibleNotifications } from './school';
 import type { HouseholdMember } from '../schemas/household';
 import type { SchoolNotification } from '../schemas/school';
 
@@ -16,6 +16,7 @@ const notification = (overrides: Partial<SchoolNotification>): SchoolNotificatio
   actionRequired: false,
   actionType: null,
   sourceLink: null,
+  needsReview: false,
   read: false,
   dismissed: false,
   ...overrides,
@@ -67,5 +68,33 @@ describe('childName', () => {
 
   it('returns null when the id matches no member', () => {
     expect(childName(members, 'missing')).toBeNull();
+  });
+});
+
+describe('matchChildByName', () => {
+  const members: HouseholdMember[] = [
+    { id: 'h1', name: 'Ash', initials: 'A', role: 'Adult', colour: 'bg-moss-600', school: null },
+    { id: 'h3', name: 'Milla', initials: 'M', role: 'Child', colour: 'bg-honey-500', school: null },
+    { id: 'h4', name: 'Theo', initials: 'T', role: 'Child', colour: 'bg-moss-400', school: null },
+  ];
+
+  it('matches exactly one child mentioned by first name', () => {
+    expect(matchChildByName(members, 'Milla has swimming on Thursday')).toBe('h3');
+  });
+
+  it('returns null when no child is mentioned', () => {
+    expect(matchChildByName(members, 'The school office will be closed Monday')).toBeNull();
+  });
+
+  it('returns null when more than one child is mentioned, rather than guessing', () => {
+    expect(matchChildByName(members, 'Milla and Theo are both invited')).toBeNull();
+  });
+
+  it('never matches an adult', () => {
+    expect(matchChildByName(members, 'Ash is the emergency contact')).toBeNull();
+  });
+
+  it('does not match a substring of another name', () => {
+    expect(matchChildByName(members, 'The Millard family requested a form')).toBeNull();
   });
 });

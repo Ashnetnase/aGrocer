@@ -217,6 +217,7 @@ export function toSchoolNotification(row: SchoolNotificationRow): SchoolNotifica
     actionRequired: row.actionRequired,
     actionType: row.actionType,
     sourceLink: row.sourceLink,
+    needsReview: row.needsReview,
     read: row.read,
     dismissed: row.dismissed,
   };

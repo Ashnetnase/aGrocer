@@ -107,6 +107,17 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-ap-southeast-2}
 
+      # Phase 13. Hero email ingestion, triggered by a host cron job hitting
+      # /api/school/hero/poll — there is no user session for that call, so this route resolves
+      # its household from AGROCER_HOUSEHOLD_ID directly rather than Supabase Auth, same as the
+      # dev-only escape hatch above but for a legitimate service-to-service call.
+      AGROCER_HOUSEHOLD_ID: ${AGROCER_HOUSEHOLD_ID:-}
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      HERO_SENDER_DOMAIN: ${HERO_SENDER_DOMAIN:-}
+      HERO_POLL_SECRET: ${HERO_POLL_SECRET:-}
+
     # Modest ceilings suited to a small homelab VM.
     deploy:
       resources:

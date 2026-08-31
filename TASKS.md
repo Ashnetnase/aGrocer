@@ -71,13 +71,17 @@ reconciling: the phase list assumes work that the stage list already completed.
       `actionRequired`/`actionType`, `sourceLink`, `read`/`dismissed`)
 - [x] manual notice entry — the `manual` `SchoolNotificationProvider`, working today from
       `/kids` (`NotificationSheet`), with no integration required
-- [ ] `SchoolProvider` abstraction as actual code (`HeroEmailProvider` / `CalendarProvider` /
-      `HeroApiProvider`) — today there is one provider value (`manual`) and one write path;
-      the abstraction is the enum plus the schema, not yet a pluggable interface
-- [ ] Hero email ingestion — **not started, and bound by the rules in `CLAUDE.md`**: no
-      scraping, no stored credentials, no working around Hero security. Decided 2026-08-31:
-      automated Gmail API polling of a dedicated forwarding inbox, once OAuth credentials
-      exist for it — this is the very next slice
+- [x] `SchoolProvider` abstraction as actual code — `hero-email` is now a real, working
+      provider (`src/school/`) alongside `manual`; not a generic pluggable interface yet
+      (`CalendarProvider`/`HeroApiProvider` remain unbuilt), but no longer just an enum value
+- [x] Hero email ingestion — built 2026-08-31: automated Gmail API polling
+      (`gmail.readonly`, `src/school/gmail.ts`), a Gmail filter forwards only `linc-ed.com`
+      mail to a dedicated inbox, AI extraction with a "needs review" fallback
+      (`src/school/heroExtraction.ts`), sender-domain re-verification, and
+      `/api/school/hero/poll` for a cron trigger to call. No Hero credentials stored, no
+      scraping — reads a Gmail inbox Ash chose to forward to. **Not yet deployed or cron-
+      scheduled** — see HANDOFF.md NEXT TASK. **Not yet verified against a real newly-arrived
+      Hero email** — the filter was only just created.
 - [ ] calendar feed import
 - [ ] family calendar model
 - [ ] chores

@@ -235,6 +235,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
           actionRequired: draft.actionRequired,
           actionType: draft.actionType,
           sourceLink: draft.sourceLink,
+          needsReview: draft.needsReview,
         })
         // Same forwarded email ingested twice must not become two rows (see schema comment).
         .onConflictDoNothing({

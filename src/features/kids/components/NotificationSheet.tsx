@@ -62,6 +62,7 @@ export function NotificationSheet({ open, onClose, childMembers, onSave }: Notif
     onSave({
       childId: values.childId || null,
       provider: 'manual',
+      needsReview: false,
       externalReference: null,
       title: values.title,
       summary: values.summary,

@@ -1,0 +1,1 @@
+ALTER TABLE "school_notifications" ADD COLUMN "needs_review" boolean DEFAULT false NOT NULL;

@@ -131,6 +131,14 @@ export function KidsScreen() {
                       {name ? <p className="text-xs text-muted">{name}</p> : null}
                       {notification.summary ? <p className="mt-1 text-sm text-muted">{notification.summary}</p> : null}
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                        {notification.needsReview ? (
+                          <span
+                            className="rounded-full bg-honey-50 px-2 py-0.5 font-bold text-honey-600"
+                            title="Extracted automatically with low confidence — check the details are right."
+                          >
+                            Needs review
+                          </span>
+                        ) : null}
                         {notification.actionType ? (
                           <span className="rounded-full bg-clay-50 px-2 py-0.5 font-bold text-clay-600">
                             {ACTION_LABELS[notification.actionType]}

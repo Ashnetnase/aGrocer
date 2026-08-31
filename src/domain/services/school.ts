@@ -23,3 +23,23 @@ export function childName(members: HouseholdMember[], childId: string | null): s
   if (!childId) return null;
   return members.find((member) => member.id === childId)?.name ?? null;
 }
+
+/**
+ * Best-effort attribution for an ingested Hero notice: literal first-name matching, nothing
+ * cleverer. Returns a child's id only when exactly one child's name appears in the text — one
+ * match is a reasonable guess, zero or several is not, and CLAUDE.md is explicit that
+ * attribution must not be invented where it isn't clear.
+ */
+export function matchChildByName(members: HouseholdMember[], text: string): string | null {
+  const children = members.filter((member) => member.role === 'Child');
+  const lower = text.toLowerCase();
+  const matches = children.filter((child) => {
+    const firstName = child.name.trim().split(/\s+/)[0];
+    return firstName ? new RegExp(`\\b${escapeRegExp(firstName.toLowerCase())}\\b`).test(lower) : false;
+  });
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

@@ -671,6 +671,77 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - Hero email ingestion pipeline built end to end (Claude Code)
+
+The blocked step from the previous two entries — the Gmail OAuth/credential decision — got
+resolved this session, and the full pipeline followed from it. In order:
+
+**Gmail access.** Ash created a Google Cloud project ("AshHome Hero Ingestion"), an OAuth
+consent screen in Testing mode (`007agentuse@gmail.com` as the sole test user — avoids
+Google's verification review entirely), and a Desktop-app OAuth client. `scripts/gmail-
+authorize.ts` (new) runs the one-time consent flow with plain `fetch` against Google's OAuth
+endpoints — no SDK — and prints a refresh token. `GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/
+`GMAIL_REFRESH_TOKEN` now live in `.env.local` and the production `.env`, `gmail.readonly`
+scope only (never send/delete/modify).
+
+**Real Hero data, checked before designing anything.** `scripts/gmail-check.ts` (new,
+read-only) found nothing on the first pass — turned out to be because the one Hero-shaped
+message in the inbox was a *manual* Gmail forward (rewrites `From` to the forwarder), not
+genuine auto-forwarding. Its quoted content still revealed the real sender
+(`Hero <noreply@linc-ed.com>` — Hero was formerly Linc-Ed in NZ schools) and a real digest
+email's shape (event title, date/time, school, location, a tracked "View on Hero" link).
+Domain confirmed: `linc-ed.com`.
+
+**Forwarding, scoped deliberately.** Ash's personal Gmail already had `007agentuse@gmail.com`
+verified as a forwarding address, but blanket forwarding was correctly left disabled. Rather
+than turn on "forward everything," built a Gmail filter instead: `from:(linc-ed.com)` →
+forward to `007agentuse@gmail.com`, "apply to existing 24 matching conversations" deliberately
+left unchecked (24 real historical Hero emails already sat in the inbox back to 2022 — Google
+confirmed old mail would not be forwarded — resurfacing 2022 school notices as "new" would have
+been noise, not backfill). Only new Hero mail forwards from here on, with its real headers
+intact. Set up via the browser (Claude in Chrome), including working through Google's own
+"verify it's you" identity checkpoint, which Ash had to complete directly — that step is
+specifically designed to confirm the real account owner, so it was never something to click
+through on Ash's behalf.
+
+**The pipeline itself:**
+- Migration `0014` — `school_notifications.needs_review` (boolean, default false). CLAUDE.md:
+  "Where extraction confidence is low, mark the item for user confirmation rather than
+  guessing." This is that field. Always false for hand-entered notices.
+- `src/school/gmail.ts` — read-only Gmail REST client (list/get messages, decode MIME parts to
+  plain text), plain `fetch`, no Google SDK.
+- `src/school/heroExtraction.ts` — turns one email into a `SchoolNotificationDraft` via
+  `getSummaryAiProvider()` (the `qwen2.5:14b-instruct` provider from the previous entry, now
+  with its first real caller). The model is told explicitly never to invent a date/amount/
+  requirement and to report its own confidence; anything that fails to parse, fails schema
+  validation, or the model itself flagged unconfident falls back safely — the raw subject/
+  snippet, `needsReview: true` — never dropped, never fabricated. 5 unit tests with a fake
+  `AiProvider` cover the happy path and every fallback branch.
+- `src/domain/services/school.ts` — added `matchChildByName()`: literal first-name matching
+  against the household's children, attributes a notice only when *exactly one* child's name
+  appears in the text (CLAUDE.md: don't invent attribution). 5 new tests.
+- `src/school/heroIngest.ts` — orchestrates list → sender-domain re-check (defense in depth
+  beyond Gmail's own `from:` search, which can match more loosely than an exact address) →
+  extract → attribute → `school.add()` (idempotent on `externalReference`, so a re-poll of an
+  already-ingested message is a safe no-op, not a duplicate).
+- `app/api/school/hero/poll` (`POST`) — the route a cron job calls. No user session exists for
+  a cron trigger, so this route is authenticated by `HERO_POLL_SECRET` (a header, not a
+  session) and resolves the household from `AGROCER_HOUSEHOLD_ID` directly — the same variable
+  `src/server/repositories.ts`'s dev-only auth escape hatch uses, but here for a legitimate
+  service-to-service call, not a convenience. Missing secret configuration means the route
+  refuses to do anything (501), not "open by default."
+- Kids screen shows a "Needs review" badge on any notification the pipeline wasn't confident
+  about.
+
+**Verified locally:** the route returns `{"found":0,"processed":0,"skippedWrongSender":0}`
+against the real Gmail inbox (correct — no new Hero mail has arrived through the just-created
+filter yet), a wrong or missing secret correctly 401s, `npx tsc --noEmit`/`npm run lint` clean,
+`npm test -- --run` — 39 files / 373 tests, `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`
+clean including `/api/school/hero/poll`, migration `0014` applied and RLS-checked against the
+real database. **Not yet verified against a real, newly-arrived Hero email** — that needs an
+actual new notice to land through the filter, which hasn't happened yet in the time since it
+was created.
+
 ## 2026-08-31 - Background AI provider for Hero-email summarization, verified against real models (Claude Code)
 
 Ash offered two more local Ollama models beyond the `qwen3:8b` the interactive assistant uses:

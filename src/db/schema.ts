@@ -563,6 +563,13 @@ export const schoolNotifications = pgTable(
     actionType: schoolNotificationActionTypeEnum('action_type'),
     /** Deep-link back to Hero/the original source — CLAUDE.md's "link back, don't replace it". */
     sourceLink: text('source_link'),
+    /**
+     * True when extraction (the Hero-email pipeline) was not confident in the fields above —
+     * CLAUDE.md: "Where extraction confidence is low, mark the item for user confirmation
+     * rather than guessing." Always false for hand-entered notifications, which are already
+     * exactly what a person typed.
+     */
+    needsReview: boolean('needs_review').notNull().default(false),
     read: boolean('read').notNull().default(false),
     dismissed: boolean('dismissed').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
