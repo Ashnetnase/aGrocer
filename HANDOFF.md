@@ -1568,8 +1568,32 @@ above). This needs, in order:
    verified end-to-end (`npm run ai:summary-check`) — ready for step 2 to call into. The
    interactive assistant's `OLLAMA_MODEL`/`getAiProvider()` are untouched.
 
-Do not start step 1/2/3 without confirming the Gmail OAuth/credential question with Ash first —
-it is a real external credential and inbox-access decision, not a code choice.
+**Resolved and deployed 2026-08-31, later the same day.** The whole pipeline is built and live:
+Gmail OAuth working (`007agentuse@gmail.com`, `gmail.readonly`), a Gmail filter on Ash's
+personal account forwards only `linc-ed.com` mail (verified: 24 historical Hero emails found,
+old mail deliberately not backfilled), extraction via `getSummaryAiProvider()` with a
+`needsReview` fallback for anything the model wasn't confident about, `/api/school/hero/poll`
+authenticated by `HERO_POLL_SECRET`, and a cron entry on `192.168.1.49` (`*/15 * * * *`,
+logging to `/var/log/hero-poll.log`) triggering it. Verified against the real Gmail inbox and
+production deployment — `{"found":0,"processed":0,"skippedWrongSender":0}`, correct, since no
+new Hero mail has arrived through the just-created filter yet. Migration `0014`
+(`school_notifications.needs_review`) applied and RLS-checked. Deployed as commit `e8bb16d`.
+
+**What is NOT yet verified: a real, newly-arrived Hero email actually being ingested
+end-to-end.** The filter was only just created, so nothing has come through it yet. The next
+session (or Ash, whenever a real Hero notice next arrives) should check
+`https://home.ashnetbase.org` → Kids screen for a new notification, or check
+`/var/log/hero-poll.log` on the host, or query `school_notifications` directly, to confirm a
+real notice made it all the way through and extracted sensibly. If extraction quality is poor
+on real data, `src/school/heroExtraction.ts`'s prompt is the place to tune it — do not touch
+the pipeline architecture to fix a prompt problem.
+
+**Also not built:** a real `SchoolProvider` interface (today `hero-email` and `manual` are just
+two provider values with their own separate code paths, not implementations of a shared
+interface — fine for two providers, worth revisiting if a third shows up), a UI action to clear
+the `needsReview` flag once a person has checked a notice (currently just a visible badge; the
+notice can still be marked read/dismissed normally), and `CalendarProvider`/`HeroApiProvider`
+remain unbuilt per CLAUDE.md's original sketch (not needed — email ingestion is doing the job).
 
 ## Do Not Accidentally Change
 
@@ -1635,9 +1659,11 @@ it is a real external credential and inbox-access decision, not a code choice.
 
 ## Last Updated
 
-2026-08-31, on `stage-2/database-schema`. Migrations through `0013` are applied to the real
-database. Kids/School foundation built and verified locally; not yet committed, not yet
-deployed. Nothing has been merged to `main`.
+2026-08-31, on `stage-2/database-schema`. Migrations through `0014` are applied to the real
+database. Kids/School foundation and the Hero email ingestion pipeline are both built, verified
+locally, and deployed (commit `e8bb16d`). Cron polling every 15 minutes on `192.168.1.49`.
+Nothing has been merged to `main`. Next: confirm a real Hero email actually ingests correctly
+once one arrives (see "Current NEXT TASK" above).
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
 upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley and product-search
