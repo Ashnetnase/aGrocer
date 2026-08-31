@@ -7,7 +7,9 @@ import {
   ArrowRightIcon,
   BellIcon,
   CalendarPlusIcon,
+  CheckIcon,
   ChevronRightIcon,
+  ClipboardListIcon,
   ClockIcon,
   GraduationCapIcon,
   PlusIcon,
@@ -22,6 +24,7 @@ import { needsAttention, describeStock } from '@/domain/services/pantry';
 import { isOnList, summariseShopping } from '@/domain/services/shopping';
 import { childName, visibleNotifications } from '@/domain/services/school';
 import type { SchoolNotification } from '@/domain/schemas/school';
+import type { Chore } from '@/domain/schemas/chores';
 import { StockChip } from '@/components/agrocer/StockChip';
 import { MealImage } from '@/components/agrocer/MealImage';
 import { nzd } from '@/lib/format';
@@ -96,6 +99,63 @@ function KidsAndSchoolGlance() {
           </p>
         ) : null}
       </Link>
+    </section>
+  );
+}
+
+/** Same reasoning as `KidsAndSchoolGlance`: touch a chore off from the phone, not just the wall. */
+function ChoresGlance() {
+  const { household, listChores, toggleChore } = useAgrocer();
+  const [chores, setChores] = useState<Chore[]>([]);
+
+  useEffect(() => {
+    void listChores()
+      .then(setChores)
+      .catch(() => setChores([]));
+  }, [listChores]);
+
+  const outstanding = chores.filter((chore) => !chore.done);
+  const memberName = (id: string | null) => (id ? household.members.find((m) => m.id === id)?.name : null);
+
+  const handleToggle = async (chore: Chore) => {
+    await toggleChore(chore.id);
+    setChores((current) => current.map((c) => (c.id === chore.id ? { ...c, done: true } : c)));
+  };
+
+  return (
+    <section aria-labelledby="chores" className="mt-6">
+      <div className="mb-2.5 flex items-baseline justify-between">
+        <h2 id="chores" className="text-base font-bold tracking-tight text-ink">
+          Chores
+        </h2>
+        <Link href="/chores" className="text-xs font-semibold text-moss-700">
+          Open Chores
+        </Link>
+      </div>
+      {outstanding.length === 0 ? (
+        <p className="flex items-center gap-2 rounded-2xl border border-line bg-surface p-4 text-sm text-muted">
+          <ClipboardListIcon className="h-4 w-4" /> Nothing outstanding.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+          {outstanding.slice(0, 4).map((chore) => (
+            <li key={chore.id} className="flex items-center gap-3 bg-surface px-4 py-3">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={false}
+                aria-label={`Mark ${chore.title} as done`}
+                onClick={() => void handleToggle(chore)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border-2 border-line bg-canvas text-transparent transition-colors duration-150 ease-out hover:border-moss-300"
+              >
+                <CheckIcon className="h-4 w-4" strokeWidth={3} />
+              </button>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{chore.title}</span>
+              <span className="shrink-0 text-xs text-muted">{memberName(chore.assignedMemberId) ?? 'Unassigned'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -364,6 +424,8 @@ export function HomeScreen() {
             })}
           </div>
         </section>
+
+        <ChoresGlance />
       </main>
     </>
   );

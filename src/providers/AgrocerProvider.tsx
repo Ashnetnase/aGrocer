@@ -5,6 +5,7 @@ import type { DayKey, Slot } from '@/domain/schemas/common';
 import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
 import type { OrderLineItem, OrderLineItemDraft } from '@/domain/schemas/orderHistory';
 import type { SchoolNotification, SchoolNotificationDraft } from '@/domain/schemas/school';
+import type { Chore, ChoreDraft, ChorePatch } from '@/domain/schemas/chores';
 import type { Household, HouseholdMemberDraft, Settings } from '@/domain/schemas/household';
 import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
@@ -67,6 +68,13 @@ interface AgrocerActions {
   addSchoolNotification: (draft: SchoolNotificationDraft) => Promise<SchoolNotification>;
   markSchoolNotificationRead: (id: string, read: boolean) => Promise<void>;
   dismissSchoolNotification: (id: string) => Promise<void>;
+
+  listChores: () => Promise<Chore[]>;
+  addChore: (draft: ChoreDraft) => Promise<Chore>;
+  updateChore: (id: string, patch: ChorePatch) => Promise<void>;
+  toggleChore: (id: string) => Promise<void>;
+  removeChore: (id: string) => Promise<void>;
+  clearCompletedChores: () => Promise<void>;
 
   toggleFavourite: (id: string) => Promise<void>;
 
@@ -302,6 +310,25 @@ export function AgrocerProvider({
       },
       async dismissSchoolNotification(id) {
         await repositories.school.dismiss(id);
+      },
+
+      async listChores() {
+        return repositories.chores.list();
+      },
+      async addChore(draft) {
+        return repositories.chores.create(draft);
+      },
+      async updateChore(id, patch) {
+        await repositories.chores.update(id, patch);
+      },
+      async toggleChore(id) {
+        await repositories.chores.toggle(id);
+      },
+      async removeChore(id) {
+        await repositories.chores.remove(id);
+      },
+      async clearCompletedChores() {
+        await repositories.chores.clearCompleted();
       },
 
       async toggleFavourite(id) {

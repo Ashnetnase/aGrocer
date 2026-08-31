@@ -4,6 +4,7 @@ import type {
   HouseholdMemberDraft,
   Settings,
 } from '@/domain/schemas/household';
+import type { Chore, ChoreDraft, ChorePatch } from '@/domain/schemas/chores';
 import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
 import type { OrderLineItem, OrderLineItemDraft } from '@/domain/schemas/orderHistory';
 import type { SchoolNotification, SchoolNotificationDraft } from '@/domain/schemas/school';
@@ -103,6 +104,16 @@ export interface SchoolRepository {
   dismiss(id: string): Promise<SchoolNotification | undefined>;
 }
 
+export interface ChoresRepository {
+  list(): Promise<Chore[]>;
+  create(draft: ChoreDraft): Promise<Chore>;
+  update(id: string, patch: ChorePatch): Promise<Chore | undefined>;
+  toggle(id: string): Promise<Chore | undefined>;
+  remove(id: string): Promise<void>;
+  /** Weekly reset — the same "clear checked" pattern the shopping list already uses. */
+  clearCompleted(): Promise<void>;
+}
+
 export interface ProductsRepository {
   list(): Promise<Product[]>;
   update(id: string, patch: ProductPatch): Promise<Product | undefined>;
@@ -127,6 +138,7 @@ export interface AgrocerRepositories {
   feedback: FeedbackRepository;
   orderHistory: OrderHistoryRepository;
   school: SchoolRepository;
+  chores: ChoresRepository;
   /** Wipes Stage 1 persistence and restores the demo data. */
   reset(): Promise<void>;
 }

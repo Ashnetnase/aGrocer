@@ -528,6 +528,34 @@ export const mealFeedback = pgTable(
 ).enableRLS();
 
 /* -------------------------------------------------------------------------- */
+/* Chores (Phase 12)                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Deliberately minimal (CLAUDE.md: "simple touch completion", not a chore-rotation engine).
+ * `assigned_member_id` is nullable and `ON DELETE SET NULL` — an unassigned chore is a normal,
+ * expected state, and a chore must outlive the member who used to do it.
+ */
+export const chores = pgTable(
+  'chores',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    assignedMemberId: uuid('assigned_member_id').references(() => householdMembers.id, {
+      onDelete: 'set null',
+    }),
+    done: boolean('done').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    householdIdx: index('chores_household_idx').on(table.householdId, table.createdAt),
+  }),
+).enableRLS();
+
+/* -------------------------------------------------------------------------- */
 /* Kids / School (Phase 12)                                                    */
 /* -------------------------------------------------------------------------- */
 

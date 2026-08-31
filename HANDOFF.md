@@ -128,7 +128,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 | Reminders         | **Mock** — one example row. Needs Phase 11.                        |
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
 | Tonight's meal    | **Real** — plan, pantry warning, and complete catalogue-priced meal cost. |
-| Chores            | **Mock** — one example row. Needs Phase 12.                        |
+| Chores            | **Real** (2026-08-31) — outstanding chores, who they're assigned to, touch to complete, "clear done" weekly reset. Also on mobile Home. |
 | Ask AshHome       | **Real** — reads list/pantry/plan, searches recipes; proposes list additions and recipe saves, gated. |
 
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an

@@ -84,7 +84,9 @@ reconciling: the phase list assumes work that the stage list already completed.
       Hero email** — the filter was only just created.
 - [ ] calendar feed import
 - [ ] family calendar model
-- [ ] chores
+- [x] chores — `chores` table, `/chores` screen, real dashboard and mobile Home cards, simple
+      touch completion and a "clear done" weekly reset (no recurrence engine, per CLAUDE.md's
+      "don't build an unnecessarily complex system during early stages")
 
 ---
 

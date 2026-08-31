@@ -21,6 +21,7 @@ import { productsSeed } from '@/data/seed/products';
 import { shoppingSeed } from '@/data/seed/shopping';
 import type {
   AgrocerRepositories,
+  ChoresRepository,
   FeedbackRepository,
   HouseholdRepository,
   MealsRepository,
@@ -347,6 +348,28 @@ const school: SchoolRepository = {
   },
 };
 
+/** Same reasoning as `feedback`/`school`: chores are shared across every family device. */
+const choresRepo: ChoresRepository = {
+  async list() {
+    return [];
+  },
+  async create() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async update() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async toggle() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async remove() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async clearCompleted() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+};
+
 export const localRepositories: AgrocerRepositories = {
   pantry,
   inventoryEvents: { async list() { return []; } },
@@ -357,6 +380,7 @@ export const localRepositories: AgrocerRepositories = {
   feedback,
   orderHistory,
   school,
+  chores: choresRepo,
   async reset() {
     clearAll();
   },

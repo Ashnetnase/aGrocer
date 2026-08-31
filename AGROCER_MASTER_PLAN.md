@@ -671,6 +671,40 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - Chores built: the last Phase 12 dashboard placeholder made real (Claude Code)
+
+Ash chose Chores as the next build (offered alongside overdue security cleanup and a calendar-
+integration design discussion). Deliberately the simplest possible version, per CLAUDE.md's
+"do not build an unnecessarily complex system during early stages" and mirroring the shopping
+list's own shape rather than inventing new patterns: `chores` table (`title`,
+`assigned_member_id` nullable/`ON DELETE SET NULL`, `done`), migration `0015`, a
+`ChoresRepository` (list/create/update/toggle/remove/clearCompleted — `clearCompleted()` is the
+weekly reset, the exact same "clear checked" pattern shopping already has). No recurrence
+engine — a household resets the list by hand, same as a fridge whiteboard.
+
+**Shipped:** `/chores` screen (add/edit sheet, touch-to-complete, a "Done" section with its own
+"Clear done" action), a real `ChoresCard` on the wall dashboard (replacing its placeholder —
+Chores was the last one left from the original Phase 1 mock set), and a `ChoresGlance` on the
+mobile Home screen mirroring `KidsAndSchoolGlance`'s shape. Unlike the Kids glance, this one
+always renders (even with zero chores) rather than hiding — every household can have chores,
+where not every household necessarily uses Kids/School, so hiding it would make the feature
+undiscoverable from the phone.
+
+Verified live at mobile width (390×844) against the real database: added "Take the rubbish
+out" assigned to Milla, toggled it done (moved to the Done section, struck through), cleared
+it, confirmed back to the empty state — full round trip, no leftover test data.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (39 files, 373 tests,
+unchanged), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build` (`/chores`, `/api/chores`,
+`/api/chores/[id]`, `/api/chores/completed` all present), `npm run db:migrate` + `npm run
+db:rls` against the real database (`chores`: RLS enabled, 1 policy).
+
+Also discussed, not built: two-way iPhone calendar sync. No family-events data model exists yet
+to sync against (today there's only the meal plan and school notices) — recommended starting
+with a read-only ICS subscribe feed once that model exists, reserving a Google Calendar OAuth
+two-way sync (mirroring the Hero/Gmail pattern already built) for if read-only turns out not to
+be enough. Nothing implemented; a design note for whenever a real family calendar is built.
+
 ## 2026-08-31 - Kids/School updates surfaced on mobile, not just the wall (Claude Code)
 
 Ash asked for phone-accessible dashboard-style content — "calendar and updates" — since the

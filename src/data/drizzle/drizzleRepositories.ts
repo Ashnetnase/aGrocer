@@ -8,6 +8,7 @@ import type { DayKey, Slot } from '@/domain/schemas/common';
 import { initialsOf } from '@/domain/services/household';
 import type {
   AgrocerRepositories,
+  ChoresRepository,
   FeedbackRepository,
   HouseholdRepository,
   MealsRepository,
@@ -24,6 +25,7 @@ import {
   meals,
   inventoryEvents,
   mealFeedback,
+  chores,
   orderLineItems,
   pantryItems,
   planEntries,
@@ -34,6 +36,7 @@ import {
 } from '@/db/schema';
 import {
   priceToCents,
+  toChore,
   toHousehold,
   toHouseholdMember,
   toMeal,
@@ -280,6 +283,59 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
         .where(and(eq(schoolNotifications.id, id), eq(schoolNotifications.householdId, householdId)))
         .returning();
       return row ? toSchoolNotification(row) : undefined;
+    },
+  };
+
+  const choresRepo: ChoresRepository = {
+    async list() {
+      const rows = await db
+        .select()
+        .from(chores)
+        .where(eq(chores.householdId, householdId))
+        .orderBy(desc(chores.createdAt));
+      return rows.map(toChore);
+    },
+
+    async create(draft) {
+      const [row] = await db
+        .insert(chores)
+        .values({
+          householdId,
+          title: draft.title,
+          assignedMemberId: draft.assignedMemberId,
+        })
+        .returning();
+      if (!row) throw new Error('Insert returned no chore row');
+      return toChore(row);
+    },
+
+    async update(id: string, patch) {
+      const [row] = await db
+        .update(chores)
+        .set({
+          ...(patch.title === undefined ? {} : { title: patch.title }),
+          ...(patch.assignedMemberId === undefined ? {} : { assignedMemberId: patch.assignedMemberId }),
+        })
+        .where(and(eq(chores.id, id), eq(chores.householdId, householdId)))
+        .returning();
+      return row ? toChore(row) : undefined;
+    },
+
+    async toggle(id: string) {
+      const [row] = await db
+        .update(chores)
+        .set({ done: sql`NOT ${chores.done}` })
+        .where(and(eq(chores.id, id), eq(chores.householdId, householdId)))
+        .returning();
+      return row ? toChore(row) : undefined;
+    },
+
+    async remove(id: string) {
+      await db.delete(chores).where(and(eq(chores.id, id), eq(chores.householdId, householdId)));
+    },
+
+    async clearCompleted() {
+      await db.delete(chores).where(and(eq(chores.householdId, householdId), eq(chores.done, true)));
     },
   };
 
@@ -659,6 +715,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
     feedback,
     orderHistory,
     school,
+    chores: choresRepo,
     shopping,
     meals: mealsRepo,
     products: productsRepo,

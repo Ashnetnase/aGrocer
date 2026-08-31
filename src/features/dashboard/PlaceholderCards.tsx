@@ -4,16 +4,17 @@ import { cn } from '@/lib/utils';
 import { DashboardCard } from './DashboardCard';
 
 /**
- * Cards whose services do not exist yet (Phase 11, chores from Phase 12).
+ * Cards whose services do not exist yet (Phase 11 — reminders — and Phase 12's family calendar).
  *
  * "Ask AshHome" moved to `AskCard.tsx` when slice 8b made it real. The Kids card moved to
- * `KidsCard.tsx` when Phase 12 made it real too — it lives on its own now that it fetches
- * real data (notifications) rather than reading only what `AgrocerProvider` already holds.
+ * `KidsCard.tsx`, and the Chores card to `ChoresCard.tsx`, when Phase 12 made each of them
+ * real — both live on their own now that they fetch real data rather than reading only what
+ * `AgrocerProvider` already holds.
  *
  * They reserve the layout so the dashboard's shape is settled before the data arrives, and
  * every one of them is labelled as a placeholder. The mock content is deliberately generic —
- * inventing plausible chores for a real family would be indistinguishable from real
- * information on a kitchen wall.
+ * inventing a plausible family schedule would be indistinguishable from real information on a
+ * kitchen wall.
  */
 
 function MockRow({ label, detail, tone }: { label: string; detail: string; tone?: 'urgent' }) {
@@ -37,16 +38,6 @@ export function ScheduleCard() {
     <DashboardCard title="Family schedule" meta="Today" placeholder="Phase 12">
       <ul>
         <MockRow label="Example: swimming" detail="4:00 pm" />
-      </ul>
-    </DashboardCard>
-  );
-}
-
-export function ChoresCard() {
-  return (
-    <DashboardCard title="Chores" placeholder="Phase 12">
-      <ul>
-        <MockRow label="Example: rubbish out" detail="Unassigned" />
       </ul>
     </DashboardCard>
   );

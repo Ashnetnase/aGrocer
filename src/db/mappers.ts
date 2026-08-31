@@ -6,11 +6,13 @@ import type { ShoppingItem } from '@/domain/schemas/shopping';
 import type { MealFeedback } from '@/domain/schemas/feedback';
 import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import type { SchoolNotification } from '@/domain/schemas/school';
+import type { Chore } from '@/domain/schemas/chores';
 import type {
   households,
   householdMembers,
   meals,
   pantryItems,
+  chores,
   mealFeedback,
   orderLineItems,
   planEntries,
@@ -42,6 +44,7 @@ type PlanEntryRow = typeof planEntries.$inferSelect;
 type MealFeedbackRow = typeof mealFeedback.$inferSelect;
 type OrderLineItemRow = typeof orderLineItems.$inferSelect;
 type SchoolNotificationRow = typeof schoolNotifications.$inferSelect;
+type ChoreRow = typeof chores.$inferSelect;
 
 /* -------------------------------------------------------------------------- */
 /* Money                                                                       */
@@ -200,6 +203,15 @@ export function toOrderLineItem(row: OrderLineItemRow): OrderLineItem {
     orderedOn: row.orderedOn,
     matchedProductId: row.matchedProductId ?? undefined,
     matchedProductName: optionalText(row.matchedProductName),
+  };
+}
+
+export function toChore(row: ChoreRow): Chore {
+  return {
+    id: row.id,
+    title: row.title,
+    assignedMemberId: row.assignedMemberId,
+    done: row.done,
   };
 }
 
