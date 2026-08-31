@@ -27,10 +27,18 @@ COPY . .
 # Supplied by docker-compose from the deploying host's environment. The publishable key is
 # public by design (ADR-016) — RLS is what makes that safe — so baking it into the client
 # bundle is correct rather than a leak.
+#
+# NEXT_PUBLIC_AGROCER_SERVER_DATA belongs here too, not in docker-compose.yml's `environment:`
+# block: every NEXT_PUBLIC_* value is inlined into the client bundle at `next build`, so setting
+# it as a *runtime* container variable has no effect at all — the compiled JS already has
+# whatever was true here baked in. This was missing for a real deploy or two, silently leaving
+# the shipped app on localStorage regardless of what the container's environment said.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_AGROCER_SERVER_DATA
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_AGROCER_SERVER_DATA=$NEXT_PUBLIC_AGROCER_SERVER_DATA
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build

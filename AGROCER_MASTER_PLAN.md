@@ -821,6 +821,42 @@ remaining-vs-checked split, honest-empty cases, and budget comparison), build (c
 SDK never reaches the client bundle), clean dev-server restart. Not yet sent a real email — needs
 real SES credentials and a live click-through test.
 
+## 2026-08-31 - Deployed today's session to production (Claude Code)
+
+Ash asked to test the current build for real, confirmed a live homelab deploy explicitly.
+Commit `7458656` (64 files — this entire session had been sitting uncommitted) pushed to
+`stage-2/database-schema`, then deployed: SSH to `192.168.1.49`, `git pull` (clean fast-forward),
+`docker compose up -d --build`.
+
+The build failed once on `ENOSPC` — the host was at 99% disk, unrelated to any code here.
+`docker system df` showed 10GB+ safely reclaimable (old images for services no longer even
+running, plus build cache); pruning both freed 10.9GB without touching any live container or its
+data, and the rebuild succeeded. Verified exactly per `docs/deploy.md`: healthy, `/sign-in` 200,
+`/api/shopping` 401, no error logs, and — the check that matters — `https://home.ashnetbase.org`
+200 from outside the network, through the real tunnel and TLS.
+
+The live app now runs everything from today: order history, catalogue matching, reorder-cadence
+prediction, the AI grounding tools, and the weekly email feature (SES unconfigured there too,
+same as dev — Ash's step).
+
+Worth remembering: the homelab host runs close to its disk ceiling. Check `df -h` or prune before
+a future deploy rather than after it fails.
+
+## 2026-08-31 - The deployed app has been running on localStorage, not Postgres (Claude Code)
+
+Ash checked Settings on the site right after the deploy above and it showed the Stage 1
+localStorage message and no Order History/Email sections — both gated on server-data mode.
+`NEXT_PUBLIC_AGROCER_SERVER_DATA` is a `NEXT_PUBLIC_*` value, inlined at `next build` exactly like
+the two Supabase values beside it — but it was set under `docker-compose.yml`'s `environment:`
+(runtime), which does nothing for a build-time-inlined value. The compiled client bundle has
+always read it as unset. This means the deployed container may never have genuinely used the
+household database from a browser, contradicting earlier browser-verified claims that were almost
+certainly checked against the dev server instead.
+
+Fixed by moving it into the `Dockerfile`'s `ARG`/`ENV` pair and `docker-compose.yml`'s
+`build.args:`, mirroring the two Supabase values exactly. Redeployed. Not proven correct by
+static bundle inspection (inconclusive); real confirmation is Ash re-checking Settings live.
+
 ## 2026-08-31 - Multi-order import, and a silent "Use this product" bug fixed (Claude Code)
 
 `parseNewWorldOrderBatch` splits a paste covering several invoices — Ash's real order history

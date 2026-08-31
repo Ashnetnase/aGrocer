@@ -886,9 +886,68 @@ when a target is set), `npm run build` (confirms `@aws-sdk/client-sesv2` never r
 bundle — only the server route imports it), clean dev-server restart. **Not yet sent a real
 email** — needs Ash's SES credentials in `.env.local` first, then a live click-through test.
 
+**2026-08-31 — Deployed to production (Claude Code).** Ash asked to test the current build for
+real; after a local Docker smoke test (port 3003, confirmed healthy), asked about deploying to
+the live homelab host and confirmed explicitly via a direct yes/no. All of this session's work
+(commit `7458656`, 64 files) was committed and pushed to `stage-2/database-schema` — it had been
+sitting uncommitted locally the entire session — then deployed for real:
+
+1. SSH to `192.168.1.49` (key + host fingerprint already present from prior sessions),
+   `git pull` — fast-forwarded cleanly to `7458656`.
+2. `docker compose up -d --build` **failed the first time**: the host was at 99% disk (372MB
+   free) — `ENOSPC` mid-`npm ci`. Not a code problem. `docker system df` showed 10GB+ safely
+   reclaimable in unused images (old sonarr/radarr/qbittorrent/jellyseerr/etc. leftovers, not
+   anything currently running) and build cache. `docker builder prune -af` +
+   `docker image prune -af` freed 10.9GB (99%→41% used, 11GB free) without touching any running
+   container or its data, then the build succeeded.
+3. Verified exactly per `docs/deploy.md`: `docker compose ps` healthy, `127.0.0.1:3000/sign-in`
+   200, `127.0.0.1:3000/api/shopping` 401 (auth enforced), no error logs. Then from **outside the
+   network** (not just the host): `https://home.ashnetbase.org/sign-in` → 200 through the real
+   Cloudflare Tunnel and TLS.
+
+**The live production app now has today's entire session**: order history import/matching,
+cadence-based reorder prediction, `getCommonOrder` + the fast-path fix, and the weekly email
+feature (SES still unconfigured on this host too, so the button correctly reports "not
+configured" there as well — Ash's step, not done on their behalf).
+
+**Worth remembering for next time:** the homelab host runs close to its disk ceiling. A
+`docker builder prune` before a deploy, or checking `df -h` first, would avoid hitting this again
+— the host was carrying old images for services (sonarr/radarr/etc.) that were no longer even
+running.
+
+**2026-08-31, same day — found and fixed: the deployed app has been running on localStorage, not
+Postgres (Claude Code).** Ash checked Settings on the freshly deployed production site and it
+showed the Stage 1 localStorage message ("stored on this device only") instead of the household-
+database one, and Order History/Email were missing entirely (both gated on `serverData`).
+
+**Root cause:** `NEXT_PUBLIC_AGROCER_SERVER_DATA` is a `NEXT_PUBLIC_*` value, which Next.js
+inlines into the client bundle **at `next build`** — exactly like `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which is why the `Dockerfile` already had a comment
+explaining this rule. But unlike those two, `NEXT_PUBLIC_AGROCER_SERVER_DATA` was set under
+`docker-compose.yml`'s `environment:` block — **runtime**, not a build arg — which has zero
+effect on a value that gets baked in at build time. The compiled client bundle has always read it
+as unset, so `usesServerData()` has always returned `false` in the deployed image, regardless of
+what the container's live environment said.
+
+**This means the live production app may never have actually used the household database from
+the browser**, despite `HANDOFF.md`'s Stage 2 completion notes describing browser-verified
+Postgres persistence — that verification was almost certainly against the dev server, not a
+specifically re-checked deployed container. Worth treating any *browser-verified* claim about the
+deployed image specifically (as opposed to the dev server) with more suspicion until re-confirmed.
+
+**Fixed**: `NEXT_PUBLIC_AGROCER_SERVER_DATA` moved to a Dockerfile `ARG`/`ENV` pair (mirroring the
+two Supabase values exactly) and to `docker-compose.yml`'s `build.args:` (hardcoded `'1'`, not
+read from `.env` — production should always be on), removed from the ineffective `environment:`
+block with a comment warning against putting it back there. Rebuilt and redeployed to
+`192.168.1.49` the same way as the earlier deploy this session (build succeeded cleanly this
+time — the disk-space cleanup from earlier still holds). **Not independently proven correct by
+static analysis** — minified bundle inspection was inconclusive either way — so the real
+confirmation is Ash checking Settings again after this redeploy.
+
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
-setting up real SES credentials and doing a live send test, (2) matching more of the household
-catalogue as Shopping/trolley use grows it, (3) whatever Ash wants next.
+confirming the server-data fix actually shows Order History/Email and the household-database
+message on the live site, (2) setting up real SES credentials and doing a live send test, (3)
+matching more of the household catalogue as Shopping/trolley use grows it.
 
 Verified: `npm run typecheck`, `npm run lint`, `npm run test` (337 tests), `npm run test:db` (15
 integration tests against the real database, including a live match-and-never-twice check with a
