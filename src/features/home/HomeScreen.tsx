@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -8,6 +9,7 @@ import {
   CalendarPlusIcon,
   ChevronRightIcon,
   ClockIcon,
+  GraduationCapIcon,
   PlusIcon,
   ShoppingCartIcon,
   UsersIcon,
@@ -18,10 +20,85 @@ import { rotateToToday } from '@/domain/services/dates';
 import { findMeal, mealFor, pantryItemToShoppingDraft } from '@/domain/services/meals';
 import { needsAttention, describeStock } from '@/domain/services/pantry';
 import { isOnList, summariseShopping } from '@/domain/services/shopping';
+import { childName, visibleNotifications } from '@/domain/services/school';
+import type { SchoolNotification } from '@/domain/schemas/school';
 import { StockChip } from '@/components/agrocer/StockChip';
 import { MealImage } from '@/components/agrocer/MealImage';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+/**
+ * Glanceable Kids/School updates on the phone, not just the wall (2026-08-31): the same
+ * `school.list()` and `visibleNotifications()` ordering the dashboard's `KidsCard` uses, so
+ * "check the tablet" was never the only way to see what needs a reply. Fetched on mount, same
+ * reasoning as the dashboard card — shared history, not part of the app's initial load.
+ */
+function KidsAndSchoolGlance() {
+  const { household, listSchoolNotifications } = useAgrocer();
+  const [notifications, setNotifications] = useState<SchoolNotification[]>([]);
+  const children = household.members.filter((member) => member.role === 'Child');
+
+  useEffect(() => {
+    void listSchoolNotifications()
+      .then(setNotifications)
+      .catch(() => setNotifications([]));
+  }, [listSchoolNotifications]);
+
+  if (children.length === 0) return null;
+
+  const visible = visibleNotifications(notifications);
+  const unread = visible.filter((notification) => !notification.read).length;
+  const topThree = visible.slice(0, 3);
+
+  return (
+    <section aria-labelledby="kids-school" className="mt-5">
+      <div className="mb-2.5 flex items-baseline justify-between">
+        <h2 id="kids-school" className="text-base font-bold tracking-tight text-ink">
+          Kids &amp; School
+        </h2>
+        <Link href="/kids" className="text-xs font-semibold text-moss-700">
+          Open Kids
+        </Link>
+      </div>
+      <Link
+        href="/kids"
+        className="block w-full rounded-3xl border border-line bg-surface p-4 text-left shadow-card transition-colors duration-150 ease-out hover:border-moss-200"
+      >
+        {topThree.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <GraduationCapIcon className="h-4 w-4" /> No notices right now.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {topThree.map((notification) => (
+              <li key={notification.id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold text-ink">{notification.title}</p>
+                  <p className="truncate text-xs text-muted">
+                    {childName(household.members, notification.childId) ?? 'Family'}
+                    {notification.dueDate ? ` · Due ${notification.dueDate}` : ''}
+                  </p>
+                </div>
+                {notification.actionRequired ? (
+                  <span className="shrink-0 rounded-full bg-clay-50 px-2 py-0.5 text-[11px] font-bold text-clay-600">
+                    Action
+                  </span>
+                ) : !notification.read ? (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-moss-600" aria-label="Unread" />
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {unread > 0 ? (
+          <p className="mt-3 border-t border-line pt-2 text-xs font-semibold text-moss-700">
+            {unread} unread
+          </p>
+        ) : null}
+      </Link>
+    </section>
+  );
+}
 
 const QUICK_ACTIONS = [
   { label: 'Add pantry', icon: PlusIcon, href: '/pantry?add=1' },
@@ -94,6 +171,8 @@ export function HomeScreen() {
             Manage
           </Link>
         </div>
+
+        <KidsAndSchoolGlance />
 
         <section aria-labelledby="tonight" className="mt-5">
           <div className="mb-2.5 flex items-baseline justify-between">

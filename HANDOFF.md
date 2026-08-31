@@ -123,7 +123,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 
 | Dashboard card    | Data                                                              |
 | ----------------- | ----------------------------------------------------------------- |
-| Kids / School     | **Real** (2026-08-31) — the household's actual children plus a live unread-notice count, top 3 notices, "Open Kids" to `/kids`. |
+| Kids / School     | **Real** (2026-08-31) — the household's actual children plus a live unread-notice count, top 3 notices, "Open Kids" to `/kids`. Also on the mobile Home screen now (`KidsAndSchoolGlance`), not wall-only. |
 | Family schedule   | **Mock** — one example row. Needs Phase 12.                        |
 | Reminders         | **Mock** — one example row. Needs Phase 11.                        |
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |

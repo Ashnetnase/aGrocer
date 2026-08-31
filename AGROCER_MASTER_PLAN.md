@@ -671,6 +671,38 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - Kids/School updates surfaced on mobile, not just the wall (Claude Code)
+
+Ash asked for phone-accessible dashboard-style content — "calendar and updates" — since the
+family uses mobile more than the wall tablet, and gave open design latitude ("you make the
+choice"). CLAUDE.md's real family calendar (Phase 12, an events model beyond meal planning)
+doesn't exist yet, so rather than build a hollow calendar page with nothing behind it, the
+choice made was to bring the one genuinely new "updates" source — Kids/School notifications,
+just built this session — onto the mobile Home screen, reusing exactly the same domain logic
+the wall dashboard's `KidsCard` already uses (`visibleNotifications()`, `childName()`):
+`KidsAndSchoolGlance` in `src/features/home/HomeScreen.tsx`, positioned right after the
+household strip — CLAUDE.md's information hierarchy puts "urgent family/school actions" first,
+and this is the mobile equivalent. Shows up to 3 notices, an "Action" badge, unread count, and
+an "Open Kids" link to the full `/kids` screen. No child in the household → the section renders
+nothing, same "don't show an empty dashboard for no reason" instinct as the wall card.
+
+Verified live in a real mobile-width (390×844) browser session, signed in as Ash against the
+real database, not just at the component level: empty state ("No notices right now"), then a
+full round trip — logged a real test notice ("Sports day permission", Milla, Permission,
+action-required) from `/kids`, confirmed it appeared correctly on the mobile Home glance card,
+then dismissed it to leave the household's real data as found. `/kids` itself also confirmed
+mobile-clean at this width — avatar chips, notice list, and the log-notice sheet (including its
+date inputs and the "What kind" chip grid) all render and interact correctly at 390px.
+
+No calendar page was built. `/dashboard` (the wall tablet layout) is untouched — CLAUDE.md
+already treats it as its own dedicated layout, not something that should also try to be the
+phone's home screen. A real family calendar (events beyond meals and school notices) stays
+Phase 12 future work, same as before this session.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (39 files, 373 tests,
+unchanged — no new domain logic, this reused what already existed),
+`NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`.
+
 ## 2026-08-31 - Hero email ingestion pipeline built end to end (Claude Code)
 
 The blocked step from the previous two entries — the Gmail OAuth/credential decision — got
