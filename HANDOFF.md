@@ -1130,8 +1130,10 @@ live.
 (child profiles + a real Kids screen), Hero email ingestion right after — see the 2026-08-31
 "Kids/School foundation" entry at the top of this file and the matching entry in
 `AGROCER_MASTER_PLAN.md`'s progress log for exactly what shipped. Verified locally (typecheck,
-lint, 363 tests, production build, `db:migrate` + `db:rls` against the real database) but **not
-yet deployed** — see "Current NEXT TASK (2026-08-31)" near the end of this section.
+lint, 363 tests, production build, `db:migrate` + `db:rls` against the real database) and
+**deployed** (commit `830e60b`, `192.168.1.49`, healthy, confirmed 200 on `/sign-in` locally and
+via `https://home.ashnetbase.org/sign-in`, `/api/school` correctly 401s without a session) —
+see "Current NEXT TASK (2026-08-31)" near the end of this section for what's next.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
