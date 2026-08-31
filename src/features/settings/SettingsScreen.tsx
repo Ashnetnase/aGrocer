@@ -7,7 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckIcon, ChevronRightIcon, HistoryIcon, LayoutDashboardIcon, LinkIcon, MailIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
 import { settingsSchema, type Settings } from '@/domain/schemas/household';
 import { describeHousehold } from '@/domain/services/household';
-import { summariseCommonOrder } from '@/domain/services/orderHistory';
+import { summariseCommonOrder, type CommonOrderEntry } from '@/domain/services/orderHistory';
+import { guessCategory } from '@/domain/services/categoryGuess';
 import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { usesServerData } from '@/data/api/repositories';
@@ -22,7 +23,11 @@ import { SignOutButton } from '@/features/auth/SignOutButton';
 import { OrderImportSheet } from './components/OrderImportSheet';
 
 export function SettingsScreen() {
-  const { household, updateSettings, resetDemoData, listOrderHistory, importOrderHistory, matchOrderHistory } = useAgrocer();
+  const {
+    household, products, updateSettings, resetDemoData,
+    listOrderHistory, importOrderHistory, matchOrderHistory,
+    addShoppingItem, addShoppingItems,
+  } = useAgrocer();
   const [confirmReset, setConfirmReset] = useState(false);
   // Read once: it is a build-time constant, not something that changes while the app runs.
   const serverData = usesServerData();
@@ -61,6 +66,32 @@ export function SettingsScreen() {
 
   const commonOrder = summariseCommonOrder(orderHistory, { limit: 10 });
   const matchedCount = orderHistory.filter((line) => line.matchedProductId).length;
+  const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
+  const [addingAll, setAddingAll] = useState(false);
+
+  const draftFor = (entry: CommonOrderEntry) => ({
+    name: entry.name,
+    category: guessCategory(entry.name, products) ?? ('Pantry' as const),
+    quantity: Math.max(1, Math.round(entry.typicalQuantity)),
+    unit: entry.unit,
+    price: 0,
+    priority: false,
+  });
+
+  const addCommonOrderEntry = async (entry: CommonOrderEntry) => {
+    await addShoppingItem(draftFor(entry));
+    setAddedNames((current) => new Set(current).add(entry.name));
+  };
+
+  const addAllCommonOrder = async () => {
+    setAddingAll(true);
+    try {
+      await addShoppingItems(commonOrder.map(draftFor));
+      setAddedNames(new Set(commonOrder.map((entry) => entry.name)));
+    } finally {
+      setAddingAll(false);
+    }
+  };
 
   const runMatch = async () => {
     setMatching(true);
@@ -246,25 +277,46 @@ export function SettingsScreen() {
 
               {commonOrder.length > 0 ? (
                 <div className="mt-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted">
-                    Your common order, from {orderHistory.length} imported item{orderHistory.length === 1 ? '' : 's'}
-                    {matchedCount > 0 ? ` · ${matchedCount} matched to a product` : ''}
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                      Your common order, from {orderHistory.length} imported item{orderHistory.length === 1 ? '' : 's'}
+                      {matchedCount > 0 ? ` · ${matchedCount} matched to a product` : ''}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void addAllCommonOrder()}
+                      disabled={addingAll}
+                      className="shrink-0 text-xs font-bold text-moss-700 disabled:opacity-50"
+                    >
+                      {addingAll ? 'Adding…' : 'Add all'}
+                    </button>
+                  </div>
                   <ul className="mt-2 space-y-1.5">
-                    {commonOrder.map((entry) => (
-                      <li
-                        key={entry.name}
-                        className="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3 py-2 text-sm"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-ink">
-                          {entry.name}
-                          {entry.matchedProductId ? <CheckIcon className="ml-1.5 inline h-3.5 w-3.5 text-moss-600" aria-label="Matched to a New World product" /> : null}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted">
-                          {entry.timesOrdered}× · last {entry.lastOrderedOn}
-                        </span>
-                      </li>
-                    ))}
+                    {commonOrder.map((entry) => {
+                      const added = addedNames.has(entry.name);
+                      return (
+                        <li
+                          key={entry.name}
+                          className="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-ink">
+                            {entry.name}
+                            {entry.matchedProductId ? <CheckIcon className="ml-1.5 inline h-3.5 w-3.5 text-moss-600" aria-label="Matched to a New World product" /> : null}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted">
+                            {entry.timesOrdered}× · last {entry.lastOrderedOn}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void addCommonOrderEntry(entry)}
+                            disabled={added}
+                            className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-moss-700 shadow-sm disabled:opacity-50"
+                          >
+                            {added ? 'Added' : 'Add'}
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ) : null}

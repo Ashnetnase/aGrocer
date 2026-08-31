@@ -36,7 +36,7 @@ function withPreparedLines(trolley: PreparedTrolley, lines: TrolleyLine[]): Prep
 export function ShoppingScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { shopping, household, toggleShoppingItem, addShoppingItem, updateShoppingItem, removeShoppingItem, clearChecked } = useAgrocer();
+  const { shopping, household, products, toggleShoppingItem, addShoppingItem, updateShoppingItem, removeShoppingItem, clearChecked } = useAgrocer();
   const [sheetOpen, setSheetOpen] = useState(searchParams.get('add') === '1');
   const [editing, setEditing] = useState<ShoppingItem | null>(null);
   const [trolley, setTrolley] = useState<PreparedTrolley | null>(null);
@@ -462,6 +462,7 @@ export function ShoppingScreen() {
       open={sheetOpen}
       onClose={() => setSheetOpen(false)}
       item={editing}
+      products={products}
       onSave={handleSave}
       onDelete={editing ? () => void removeShoppingItem(editing.id) : undefined}
       extensionOnline={extensionOnline}

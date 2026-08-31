@@ -10,6 +10,8 @@ import {
   type ShoppingItem,
   type ShoppingItemDraft,
 } from '@/domain/schemas/shopping';
+import type { Product } from '@/domain/schemas/product';
+import { guessCategory } from '@/domain/services/categoryGuess';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import {
   FormChipSelect,
@@ -36,6 +38,7 @@ interface ShoppingItemSheetProps {
   open: boolean;
   onClose: () => void;
   item: ShoppingItem | null;
+  products: Product[];
   onSave: (draft: ShoppingItemDraft) => void;
   onDelete?: () => void;
   extensionOnline: boolean;
@@ -47,7 +50,7 @@ interface ShoppingItemSheetProps {
 }
 
 export function ShoppingItemSheet({
-  open, onClose, item, onSave, onDelete,
+  open, onClose, item, products, onSave, onDelete,
   extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onProductMatched,
 }: ShoppingItemSheetProps) {
   const form = useForm<ShoppingItemDraft>({
@@ -81,6 +84,15 @@ export function ShoppingItemSheet({
 
   const watchedName = form.watch('name');
   const watchedQuantity = form.watch('quantity');
+
+  // Suggests a category from the name as it's typed — never on edit (an explicit category
+  // already chosen for an existing item is never second-guessed), and never once the person has
+  // picked a category themselves, so the guess only ever fills a blank, it never overrides one.
+  useEffect(() => {
+    if (item || form.formState.dirtyFields.category) return;
+    const guess = guessCategory(watchedName, products);
+    if (guess) form.setValue('category', guess);
+  }, [watchedName, item, products, form]);
 
   const submit = form.handleSubmit((values) => {
     onSave({ ...values, note: values.note?.trim() ? values.note.trim() : undefined });

@@ -941,8 +941,36 @@ read from `.env` — production should always be on), removed from the ineffecti
 block with a comment warning against putting it back there. Rebuilt and redeployed to
 `192.168.1.49` the same way as the earlier deploy this session (build succeeded cleanly this
 time — the disk-space cleanup from earlier still holds). **Not independently proven correct by
-static analysis** — minified bundle inspection was inconclusive either way — so the real
-confirmation is Ash checking Settings again after this redeploy.
+static analysis** — a bundle grep cannot actually distinguish fixed-from-broken here, since both
+ternary text branches (`serverData ? a : b`) remain in the compiled code either way, selected at
+runtime rather than eliminated at build time; that check was tried and correctly abandoned as
+inconclusive, not treated as proof. Redeployed (commit `79fb2df`); confirmed healthy and 200
+through the public URL again. **Real confirmation is Ash checking Settings live** — this note
+stays here until that happens; update it with the actual result once known.
+
+**2026-08-31, same day — cleanup + two small feature requests (Claude Code).** After the
+server-data fix, checked the real Postgres `shopping_items` table directly: it had exactly 3 old
+items (`tastey cheese`, `Bread`, `Milk`) left over from earlier trolley testing, and nothing Ash
+had just tried to add — confirming those adds genuinely never reached the database (most likely a
+cached service worker/PWA still serving the pre-fix build; told Ash to unregister it). Deleted the
+3 leftover items with explicit confirmation.
+
+Two feature requests, both built:
+
+- **Add common-order items straight to the shopping list.** Settings' "Your common order" list
+  now has a per-item "Add" button and an "Add all" bulk action, building a draft from
+  `CommonOrderEntry` (rounded typical quantity, its unit, a guessed category) and calling the
+  existing `addShoppingItem`/`addShoppingItems`.
+- **Auto-guessed category when adding an item.** New `guessCategory()`
+  (`src/domain/services/categoryGuess.ts`): checks the household's own products list first (an
+  exact name match wins outright), then a curated NZ-grocery keyword list, returning `undefined`
+  rather than a wrong guess when nothing matches. Wired into `ShoppingItemSheet` as a `useEffect`
+  keyed off the name field — never on edit (an existing item's category is never second-guessed),
+  and never once the person has touched the category chip themselves (checked via React Hook
+  Form's `dirtyFields`), so it only ever fills a blank, never overrides a choice.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (357 tests, up from 352), `npm run
+build`. Not yet deployed — that's the next step.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
