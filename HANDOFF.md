@@ -1043,6 +1043,7 @@ false-"added" bug for real, not just by code review.
   Household and Pantry's add buttons, not just Shopping's.
 
 Verified: typecheck, lint, 357 tests (unchanged — UI/feedback wiring, no new pure logic), build.
+Deployed (commit `7f4adb2`), healthy, confirmed 200 through the public URL.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
