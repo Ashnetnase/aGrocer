@@ -14,6 +14,44 @@ Current state of the code lives in `HANDOFF.md`.
 
 ---
 
+## Family-life pipeline (queued 2026-08-31, easy → hard)
+
+Ash's own list, after New World was made optional: what else would genuinely help a family of
+5 (3 kids, both parents) — scheduling and home life, not grocery/trolley automation. Sequenced
+by real implementation effort against the current architecture, not by importance; each one is
+picked up top-down unless Ash says otherwise. `AGROCER_MASTER_PLAN.md` gets a Definition of
+Done for whichever is in progress; this list is just the queue and the order, and why.
+
+1. [ ] **Reminders** (Phase 11 foundation) — a due-date list, same shape as Chores: title, due
+       date, optional assignee, touch-to-complete. No scheduler/push notifications yet, just a
+       list a person checks. Easiest: pure CRUD, the exact pattern Chores already proved.
+2. [ ] **Chores points/rewards for kids** — a `points` value per chore and a running per-child
+       total from completed chores. Small addition on top of the existing Chores table, no new
+       architecture.
+3. [ ] **Meal feedback actually feeding suggestions** — stop Ask AshHome (and any future meal
+       planner) suggesting a meal the family already rated poorly. The rating data exists
+       (`meal_feedback`, since Stage 2); this is prompt/tool logic, not new storage — small,
+       but touches AI behaviour rather than plain CRUD, hence above the two CRUD items but
+       below the aggregation/reasoning-heavy ones.
+4. [ ] **"Week ahead" view** — one screen combining this week's meal plan, family calendar
+       events, and outstanding chores/reminders. No new backend once #1 exists — mostly
+       composing data that already exists — but touches four data sources and needs real UI
+       design work to stay glanceable, not cluttered.
+5. [ ] **Household maintenance reminders + reference info** — recurring reminders ("smoke
+       alarm battery every 6 months") need real recurrence logic (next-occurrence
+       calculation, not just a due date), which #1's simple version won't have yet. The
+       reference-info half (appliance manuals, warranties) is either a plain notes field
+       (easy) or Obsidian read-only search (bigger — see the assessment from earlier this
+       session). Harder than it looks because of the recurrence piece.
+6. [ ] **Pantry-aware AI meal planning** (Phase 10) — "we have chicken and mince, plan 5
+       dinners under $120, add what's missing to the list." Hardest: a new AI tool that
+       reasons over pantry + budget + (ideally) meal feedback all at once, proposes several
+       meals and a shopping-list diff together, and needs real live testing against the local
+       model the way every AI feature this session has (results are never right on the first
+       prompt). Most ambitious, most aligned with the original product vision, most work.
+
+---
+
 ## AshHome phases
 
 - [x] Phase 0 — repository baseline, documentation and persistent handoff
