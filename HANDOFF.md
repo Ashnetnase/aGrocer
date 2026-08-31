@@ -1045,6 +1045,32 @@ false-"added" bug for real, not just by code review.
 Verified: typecheck, lint, 357 tests (unchanged — UI/feedback wiring, no new pure logic), build.
 Deployed (commit `7f4adb2`), healthy, confirmed 200 through the public URL.
 
+**2026-08-31, same day — the real bug behind "added but can't see it," and it was serious
+(Claude Code).** Ash pressed "Add all" (10 common-order items), got the new confirmation banner,
+but the shopping list did not show them. Checked the live database directly: **all 10 rows were
+genuinely there**, correctly formed, valid categories, one batch insert — the add worked
+perfectly server-side. This meant the browser was showing stale data despite the real data being
+correct, which is the same *symptom* as the earlier "localStorage vs Postgres" bug but a
+completely different, more serious cause underneath.
+
+**Root cause, in `public/sw.js`:** the fetch handler special-cases page navigations (network
+first) and otherwise falls through to a "static assets: cache first" branch — which every
+`/api/*` GET request also fell into, since nothing excluded them. Once `/api/shopping` had been
+cached even once, the service worker could keep serving that exact stale JSON response
+**indefinitely**, for every future add, edit, remove or check-off, regardless of what actually
+changed in the database — with no error, and no way for the running app to know its own data was
+wrong. This is not specific to shopping: `/api/pantry`, `/api/orders`, `/api/meals`, all of it
+were equally exposed. Given how many "added it, can't see it" reports have come up this session,
+this is very likely the real explanation for more than one of them, not just this one.
+
+**Fixed:** every `/api/*` GET now bypasses the cache entirely and always hits the network.
+`CACHE` bumped to `agrocer-shell-v2` so `activate` actually purges any old cache still holding a
+stale `/api/*` entry from an already-installed PWA, rather than requiring Ash to manually clear
+site data (which had been the standing advice, and evidently wasn't reliable — this is why).
+
+Verified: `node --check public/sw.js` (plain browser script, no test harness for it), typecheck,
+lint, 357 tests (unchanged — this file isn't part of the TS build), build.
+
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
 message on the live site, (2) setting up real SES credentials and doing a live send test, (3)

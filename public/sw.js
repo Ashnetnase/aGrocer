@@ -7,7 +7,10 @@
  * changing how the app behaves.
  */
 
-const CACHE = 'agrocer-shell-v1';
+// Bumped from v1: the old cache could hold a stale /api/* GET response (see the fetch handler
+// below), and `activate` only deletes caches whose name has changed — bumping it is what
+// actually clears that stale data out of an installed PWA rather than leaving it there forever.
+const CACHE = 'agrocer-shell-v2';
 const OFFLINE_URL = '/offline';
 
 const PRECACHE = [OFFLINE_URL, '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
@@ -33,7 +36,19 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  // Live household data — every /api/* GET must always hit the network. This used to fall
+  // through to the "static assets" cache-first branch below, which is exactly backwards for a
+  // dynamic endpoint: once /api/shopping was cached once, every future add/edit/remove could
+  // keep being shadowed by that same stale response indefinitely, with no error and no way for
+  // the app to know its own data was wrong. Real bug, found from a real "I added it but can't
+  // see it" report — not a hypothetical.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Navigations: network first so the family always gets fresh markup, falling
   // back to the cached page and finally the offline screen.
