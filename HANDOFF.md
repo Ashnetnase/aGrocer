@@ -1093,7 +1093,16 @@ building anything further there ("for now just a message... let's move on to nex
 so a future session does not duplicate this, but nothing new was built for it this pass.
 
 Verified: typecheck, lint, 357 tests (unchanged — UI wiring against already-tested pure
-functions), build.
+functions), build. Deployed (commit `7fcef09`), healthy, confirmed 200 through the public URL.
+
+**Shopping is now considered feature-complete for this stage, per Ash: "the shopping works, let's
+move on to next stage."** Everything in this and the preceding several entries (order history
+import/matching, reorder prediction, common-order quick-add with duplicate awareness, New World
+matching fixes, the trolley false-success bug, the service worker cache bug) is deployed and
+live. **NEXT TASK for a future session: ask Ash what "next stage" means before starting anything**
+— not stated in this conversation, and the AshHome roadmap has several plausible directions
+(Kids/School module, Phase 10 AI meal planning, Phase 11 reminders, or something else entirely).
+Do not guess and start building.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
