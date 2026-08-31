@@ -8,6 +8,7 @@ const settings = {
   pinDemoDate: false,
   pinnedDate: '2026-08-29',
   showBreakfastAndLunch: false,
+  shoppingAddMode: 'new-world' as const,
 };
 
 describe('settingsSchema weeklyBudget', () => {

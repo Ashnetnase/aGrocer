@@ -140,6 +140,7 @@ export function toSettings(row: HouseholdRow): Settings {
     pinDemoDate: row.pinDemoDate,
     pinnedDate: row.pinnedDate,
     showBreakfastAndLunch: row.showBreakfastAndLunch,
+    shoppingAddMode: row.shoppingAddMode,
   };
 }
 

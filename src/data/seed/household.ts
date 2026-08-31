@@ -21,5 +21,6 @@ export const householdSeed: Household = {
     pinDemoDate: false,
     pinnedDate: toIsoDate(new Date()),
     showBreakfastAndLunch: false,
+    shoppingAddMode: 'new-world',
   },
 };

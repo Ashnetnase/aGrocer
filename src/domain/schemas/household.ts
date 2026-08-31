@@ -37,11 +37,21 @@ export type HouseholdMember = z.infer<typeof householdMemberSchema>;
 export const householdMemberDraftSchema = householdMemberSchema.omit({ id: true, initials: true });
 export type HouseholdMemberDraft = z.infer<typeof householdMemberDraftSchema>;
 
+/**
+ * What the "+" button on the shopping list opens by default. Both stay reachable regardless —
+ * this only decides which one is the one-tap default (2026-08-31, Ash: adding a generic item
+ * and then separately matching it to a New World product is double handling for someone who
+ * already knows exactly which product they want).
+ */
+export const shoppingAddModeSchema = z.enum(['new-world', 'manual']);
+export type ShoppingAddMode = z.infer<typeof shoppingAddModeSchema>;
+
 export const settingsSchema = z.object({
   householdName: nameSchema,
   /** Shown in the shopping screen subtitle, e.g. "New World Thursday". */
   shopLabel: z.string().trim().max(40),
   currency: z.literal('NZD'),
+  shoppingAddMode: shoppingAddModeSchema,
   /** Blank/null means the household has not chosen a weekly grocery target yet. */
   weeklyBudget: priceSchema.min(1, 'Enter at least $1').nullable().optional(),
   /** When true the planner pins to `pinnedDate` instead of the real today (ADR-005). */

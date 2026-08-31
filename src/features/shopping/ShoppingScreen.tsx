@@ -12,6 +12,7 @@ import { FloatingAddButton } from '@/components/agrocer/FloatingAddButton';
 import { ShoppingRow } from './components/ShoppingRow';
 import { ShoppingItemSheet } from './components/ShoppingItemSheet';
 import { NewWorldCatalogue } from './components/NewWorldCatalogue';
+import { BrowseNewWorldSheet } from './components/BrowseNewWorldSheet';
 import { CommonOrderQuickAdd } from './components/CommonOrderQuickAdd';
 import { ProductThumbnail } from './components/ProductThumbnail';
 import { nzd } from '@/lib/format';
@@ -38,7 +39,9 @@ export function ShoppingScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { shopping, household, products, toggleShoppingItem, addShoppingItem, updateShoppingItem, removeShoppingItem, clearChecked } = useAgrocer();
-  const [sheetOpen, setSheetOpen] = useState(searchParams.get('add') === '1');
+  const wantsBrowse = household.settings.shoppingAddMode === 'new-world';
+  const [sheetOpen, setSheetOpen] = useState(searchParams.get('add') === '1' && !wantsBrowse);
+  const [browseOpen, setBrowseOpen] = useState(searchParams.get('add') === '1' && wantsBrowse);
   const [editing, setEditing] = useState<ShoppingItem | null>(null);
   const [trolley, setTrolley] = useState<PreparedTrolley | null>(null);
   const [preparing, setPreparing] = useState(false);
@@ -208,8 +211,20 @@ export function ShoppingScreen() {
 
   const groups = useMemo(() => groupByCategory(shopping), [shopping]);
   const draftMatchId = editing?.id ?? '__draft__';
-  const openAdd = () => { setEditing(null); setSheetOpen(true); };
+  const openAdd = () => {
+    setEditing(null);
+    if (household.settings.shoppingAddMode === 'new-world') setBrowseOpen(true);
+    else setSheetOpen(true);
+  };
   const handleSave = (draft: ShoppingItemDraft) => editing ? void updateShoppingItem(editing.id, draft) : void addShoppingItem(draft);
+
+  const saveNewWorldMatch = async (name: string, product: RetailerProduct, quantity: number) => {
+    await fetch('/api/trolley/preferences', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ shoppingItemKey: name, product, defaultQuantity: quantity }),
+    }).catch(() => undefined);
+  };
 
   const prepareNewWorld = async () => {
     setPreparing(true); setTrolleyError(null);
@@ -481,6 +496,18 @@ export function ShoppingScreen() {
       onLiveSearch={(query) => void searchNewWorldItem({ id: draftMatchId, name: query }, query)}
       onCancelSearch={() => cancelNewWorldSearch(draftMatchId)}
       onProductMatched={(message) => setActionMessage(message)}
+    />
+    <BrowseNewWorldSheet
+      open={browseOpen}
+      onClose={() => setBrowseOpen(false)}
+      products={products}
+      onAdd={async (draft) => { await addShoppingItem(draft); }}
+      onSaveMatch={saveNewWorldMatch}
+      onSwitchToManual={() => {
+        setBrowseOpen(false);
+        setEditing(null);
+        setSheetOpen(true);
+      }}
     />
   </>;
 }

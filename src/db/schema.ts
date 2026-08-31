@@ -97,6 +97,9 @@ export const schoolNotificationActionTypeEnum = pgEnum('school_notification_acti
   'info',
 ]);
 
+/** What the shopping list's "+" button opens by default (see `settingsSchema`). */
+export const shoppingAddModeEnum = pgEnum('shopping_add_mode', ['new-world', 'manual']);
+
 /* -------------------------------------------------------------------------- */
 /* Households                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -122,6 +125,7 @@ export const households = pgTable('households', {
     .notNull()
     .default(sql`CURRENT_DATE`),
   showBreakfastAndLunch: boolean('show_breakfast_and_lunch').notNull().default(false),
+  shoppingAddMode: shoppingAddModeEnum('shopping_add_mode').notNull().default('new-world'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();

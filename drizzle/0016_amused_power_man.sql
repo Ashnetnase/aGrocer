@@ -1,0 +1,2 @@
+CREATE TYPE "public"."shopping_add_mode" AS ENUM('new-world', 'manual');--> statement-breakpoint
+ALTER TABLE "households" ADD COLUMN "shopping_add_mode" "shopping_add_mode" DEFAULT 'new-world' NOT NULL;

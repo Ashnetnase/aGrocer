@@ -671,6 +671,44 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - "Browse New World" add flow, replacing the add-then-match round trip (Claude Code)
+
+Ash's real complaint, once decoded: adding an item and then separately matching it to a New
+World product (the existing `NewWorldCatalogue`/`MatchNewWorldProduct` flow) is double
+handling for someone who already knows exactly which product they want — worse than just using
+the New World app directly. Confirmed the design (browse-first, specials/cheap sorted up top,
+load more, add-straight-to-list, plus a Settings default toggle) with Ash before building,
+given this reworks an already-shipped, heavily-iterated feature.
+
+**Shipped:**
+- `settingsSchema.shoppingAddMode` (`'new-world' | 'manual'`, migration `0016`, default
+  `new-world`) — what the shopping list's "+" button opens by default. Both modes stay
+  reachable regardless of the setting; this only decides the one-tap default.
+- `BrowseNewWorldSheet.tsx` — a new, standalone catalogue browser, not tied to an existing list
+  item (unlike `NewWorldCatalogue`/`MatchNewWorldProduct`, which still exist for matching an
+  *already-added* item). Search, "Load more" (re-fetches with a bigger `limit` — the cached
+  catalogue is small enough that real offset pagination would be complexity for no benefit),
+  and a "Search on New World's site instead" fallback link. Tapping a product both creates the
+  shopping-list item *and* saves the New World match in one action (`school.add()`-style
+  idempotent write to the existing trolley-preferences table) — no second step to find it later.
+- `/api/retailer/new-world/products?sort=value` — specials first, then cheapest-first,
+  opt-in via a new query param so the existing name-search matching tools (which want
+  "most recently seen," not "cheapest") are unaffected by default.
+- A `FormChipSelect` in Settings ("Adding shopping items": Browse New World / Type it in).
+
+**Verified live**, not just at the component level, against the real household data: Browse
+New World opens by default per the seeded setting, added a real product ("Havana Super Deluxe
+Coffee Beans200g," specials-sorted list) straight to the list with its real New World price and
+a guessed category — no second matching step — then removed the test item. Switched the
+Settings toggle to "Type it in," confirmed the "+" button now opens the plain add form instead,
+switched back to the default, confirmed via network requests that both saves actually
+round-tripped through `PATCH /api/household` (200) rather than just looking right client-side.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (40 files, 388 tests,
+unchanged — this feature is mostly UI/repository wiring, no new pure domain logic worth a
+dedicated test beyond what the live verification already covered),
+`NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`, migration `0016` applied and RLS-checked.
+
 ## 2026-08-31 - Family calendar: read-only iCloud feed, "Family schedule" made real (Claude Code)
 
 Ash clarified the calendar requirement precisely: one person (their partner) creates events on

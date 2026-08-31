@@ -132,6 +132,7 @@ const initialState: AgrocerState = {
       pinDemoDate: false,
       pinnedDate: toIsoDate(new Date()),
       showBreakfastAndLunch: false,
+      shoppingAddMode: 'new-world',
     },
   },
   hydrated: false,

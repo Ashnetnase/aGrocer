@@ -4,7 +4,7 @@ import { failed, parseJson } from '@/server/http';
 import { serverShoppingProductRepository } from '@/server/repositories';
 import { NewWorldCatalogueClient } from '@/shopping/catalogue';
 import { isSpecificNewWorldProduct } from '@/shopping/matching';
-import { retailerProductBatchSchema } from '@/shopping/schemas';
+import { retailerProductBatchSchema, type RetailerProduct } from '@/shopping/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,24 @@ const querySchema = z.object({
   q: z.string().trim().max(120).optional(),
   storeId: z.string().trim().max(100).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(40),
+  /**
+   * `value` sorts specials first, then cheapest-first — for browsing the catalogue itself
+   * (Settings' "Browse New World" shopping-add mode). Left unset (`recent`, the default)
+   * everywhere this route already had a caller — the item-matching tools search by name and
+   * want the most-recently-seen match first, not the cheapest thing that matches.
+   */
+  sort: z.enum(['recent', 'value']).default('recent'),
 });
+
+/** Specials first, then cheapest current price first. Undefined prices sort last either way. */
+function byValue(a: RetailerProduct, b: RetailerProduct): number {
+  const aSpecial = a.specialPrice !== undefined;
+  const bSpecial = b.specialPrice !== undefined;
+  if (aSpecial !== bSpecial) return aSpecial ? -1 : 1;
+  const aPrice = a.specialPrice ?? a.price ?? Number.POSITIVE_INFINITY;
+  const bPrice = b.specialPrice ?? b.price ?? Number.POSITIVE_INFINITY;
+  return aPrice - bPrice;
+}
 
 export async function GET(request: Request) {
   try {
@@ -21,6 +38,7 @@ export async function GET(request: Request) {
       q: url.searchParams.get('q') || undefined,
       storeId: url.searchParams.get('storeId') || process.env.NEW_WORLD_STORE_ID || undefined,
       limit: url.searchParams.get('limit') || undefined,
+      sort: url.searchParams.get('sort') || undefined,
     });
     if (!parsed.success) return NextResponse.json({ error: 'Invalid catalogue search.' }, { status: 400 });
 
@@ -31,6 +49,7 @@ export async function GET(request: Request) {
         const products = (await catalogue.search(parsed.data.q, parsed.data.storeId, parsed.data.limit))
           .filter(isSpecificNewWorldProduct);
         const saved = await Promise.all(products.map((product) => repository.saveProduct(product)));
+        if (parsed.data.sort === 'value') saved.sort(byValue);
         return NextResponse.json({ products: saved, source: 'live', storeId: parsed.data.storeId, updatedAt: new Date().toISOString() });
       } catch (error) {
         console.error('[new-world-catalogue] live search failed; using cache', error);
@@ -43,6 +62,7 @@ export async function GET(request: Request) {
       parsed.data.storeId,
       parsed.data.limit,
     )).filter(isSpecificNewWorldProduct);
+    if (parsed.data.sort === 'value') products.sort(byValue);
     return NextResponse.json({
       products,
       source: 'cache',

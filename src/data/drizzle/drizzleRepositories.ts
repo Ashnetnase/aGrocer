@@ -687,6 +687,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
           ...(patch.showBreakfastAndLunch === undefined
             ? {}
             : { showBreakfastAndLunch: patch.showBreakfastAndLunch }),
+          ...(patch.shoppingAddMode === undefined ? {} : { shoppingAddMode: patch.shoppingAddMode }),
           updatedAt: new Date(),
         })
         .where(eq(households.id, householdId))
