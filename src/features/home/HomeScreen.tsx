@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowRightIcon,
   BellIcon,
+  CalendarDaysIcon,
   CalendarPlusIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -25,6 +26,8 @@ import { isOnList, summariseShopping } from '@/domain/services/shopping';
 import { childName, visibleNotifications } from '@/domain/services/school';
 import type { SchoolNotification } from '@/domain/schemas/school';
 import type { Chore } from '@/domain/schemas/chores';
+import { listFamilyCalendarEvents } from '@/calendar/client';
+import { localWallClock, upcomingEvents, type CalendarEvent } from '@/calendar/ics';
 import { StockChip } from '@/components/agrocer/StockChip';
 import { MealImage } from '@/components/agrocer/MealImage';
 import { nzd } from '@/lib/format';
@@ -99,6 +102,67 @@ function KidsAndSchoolGlance() {
           </p>
         ) : null}
       </Link>
+    </section>
+  );
+}
+
+const eventDayFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+const eventTimeFormatter = new Intl.DateTimeFormat('en-NZ', { hour: 'numeric', minute: '2-digit' });
+
+function parseLocalEventStart(value: string): Date {
+  const [datePart, timePart] = value.split('T');
+  const [year, month, day] = (datePart ?? '').split('-').map(Number);
+  if (!timePart) return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
+  const [hour, minute] = timePart.split(':').map(Number);
+  return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0);
+}
+
+/**
+ * The family calendar (2026-08-31), read-only from one iPhone's iCloud "Public Calendar" share
+ * link (`src/calendar/`) — whoever creates events, everyone signed in sees them here, no
+ * per-device calendar subscription needed. Same on-demand fetch shape as the other glances.
+ */
+function FamilyScheduleGlance() {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    void listFamilyCalendarEvents()
+      .then(setEvents)
+      .catch(() => setEvents([]))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  if (!loaded) return null;
+
+  const upcoming = upcomingEvents(events, localWallClock(new Date()), 3);
+
+  return (
+    <section aria-labelledby="family-schedule" className="mt-5">
+      <h2 id="family-schedule" className="mb-2.5 text-base font-bold tracking-tight text-ink">
+        Family schedule
+      </h2>
+      <div className="rounded-3xl border border-line bg-surface p-4 shadow-card">
+        {upcoming.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <CalendarDaysIcon className="h-4 w-4" /> Nothing coming up.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {upcoming.map((event) => {
+              const day = eventDayFormatter.format(parseLocalEventStart(event.start));
+              return (
+                <li key={event.uid} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{event.title}</span>
+                  <span className="shrink-0 text-xs font-semibold text-muted">
+                    {event.allDay ? day : `${day}, ${eventTimeFormatter.format(parseLocalEventStart(event.start))}`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }
@@ -233,6 +297,7 @@ export function HomeScreen() {
         </div>
 
         <KidsAndSchoolGlance />
+        <FamilyScheduleGlance />
 
         <section aria-labelledby="tonight" className="mt-5">
           <div className="mb-2.5 flex items-baseline justify-between">

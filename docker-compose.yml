@@ -118,6 +118,9 @@ services:
       HERO_SENDER_DOMAIN: ${HERO_SENDER_DOMAIN:-}
       HERO_POLL_SECRET: ${HERO_POLL_SECRET:-}
 
+      # Family calendar (Phase 12) — read-only iCloud "Public Calendar" share link.
+      FAMILY_CALENDAR_ICS_URL: ${FAMILY_CALENDAR_ICS_URL:-}
+
     # Modest ceilings suited to a small homelab VM.
     deploy:
       resources:

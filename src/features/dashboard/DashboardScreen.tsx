@@ -8,7 +8,8 @@ import { ShoppingCard } from './ShoppingCard';
 import { TonightCard } from './TonightCard';
 import { KidsCard } from './KidsCard';
 import { ChoresCard } from './ChoresCard';
-import { RemindersCard, ScheduleCard } from './PlaceholderCards';
+import { ScheduleCard } from './ScheduleCard';
+import { RemindersCard } from './PlaceholderCards';
 import { AskCard } from './AskCard';
 
 /**

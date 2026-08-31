@@ -82,8 +82,15 @@ reconciling: the phase list assumes work that the stage list already completed.
       scraping — reads a Gmail inbox Ash chose to forward to. **Not yet deployed or cron-
       scheduled** — see HANDOFF.md NEXT TASK. **Not yet verified against a real newly-arrived
       Hero email** — the filter was only just created.
-- [ ] calendar feed import
-- [ ] family calendar model
+- [x] calendar feed import — read-only iCloud "Public Calendar" ICS feed
+      (`src/calendar/`, `FAMILY_CALENDAR_ICS_URL`), no OAuth/login, revocable via iOS Settings.
+      One person creates events on their iPhone, every signed-in family member sees them in
+      Agrocer (wall dashboard's "Family schedule" card + mobile Home) without subscribing to
+      anything themselves. Real "Family" calendar tested live, including the app's own parser
+      against a real captured iCloud export (`src/calendar/ics.test.ts`)
+- [ ] family calendar model — this reads an *external* calendar; there is still no
+      AshHome-native events table (manual events, birthdays, appointments created inside the
+      app itself). Not needed yet since the iCloud feed covers the stated use case
 - [x] chores — `chores` table, `/chores` screen, real dashboard and mobile Home cards, simple
       touch completion and a "clear done" weekly reset (no recurrence engine, per CLAUDE.md's
       "don't build an unnecessarily complex system during early stages")

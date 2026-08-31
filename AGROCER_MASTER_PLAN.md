@@ -671,6 +671,50 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - Family calendar: read-only iCloud feed, "Family schedule" made real (Claude Code)
+
+Ash clarified the calendar requirement precisely: one person (their partner) creates events on
+their iPhone; Ash just needs to see them, in Agrocer, on both phones. That's strictly read-only
+and single-source, which rules out CalDAV/Google two-way sync as over-engineering for the actual
+ask — the right fit is iOS's own "Public Calendar" sharing: Settings on the calendar → Public
+Calendar → Share Link, which produces a `webcal://` URL needing no Apple ID, no OAuth, no login
+at all. Verified this genuinely was the right level of engineering before building anything:
+fetched the link with `curl` first (empty calendar, 149 bytes, confirmed the connection and
+format), asked Ash to add one real test event, re-fetched, and got a real `VEVENT` with a full
+`VTIMEZONE` block — that captured export became a test fixture rather than a guess at the format.
+
+**Built:** `src/calendar/ics.ts` — a small hand-written RFC 5545 parser (line unfolding, text
+unescaping, `VALARM` stripping, all-day vs. timed `DTSTART`/`DTEND`), not a library, because the
+only thing being read is `VEVENT` blocks from one known source. Two explicit non-goals, stated
+in the code rather than left implicit: no `RRULE` recurrence expansion (a recurring event shows
+once, at its own start, not as a series — real complexity with no need yet), and no
+`TZID`/UTC timezone conversion (the household is single-timezone NZ, so times are read and
+displayed as the wall-clock values iCloud published, via `localWallClock()` — deliberately never
+`Date.toISOString()`, which is always UTC regardless of the runtime's timezone and would put
+events out by NZ's whole offset if a server container's clock were used for "now"). 15 unit
+tests, including the real captured event as a fixture.
+
+`src/calendar/feed.ts` (server-only fetch, `FAMILY_CALENDAR_ICS_URL` → `webcal://` rewritten to
+`https://`) and `app/api/calendar` (GET, behind the same auth every route requires, matching how
+`/api/specials` guards external non-household data). `ScheduleCard.tsx` replaces the wall
+dashboard's last calendar placeholder; a matching `FamilyScheduleGlance` sits on mobile Home
+right after Kids/School, per CLAUDE.md's urgent-then-schedule hierarchy.
+
+**Verified live**, not just at the component level: the real `.ics` URL end to end — wall
+dashboard and mobile Home (390×844) both correctly showed "Test event · Tue, 1 Sept, 9:00 am"
+against the actual iCloud feed. Also noticed, unprompted, that a real Hero notification
+("Great day of learning") had come through the ingestion pipeline built earlier today — first
+live confirmation that pipeline actually works end to end, not just against the empty-inbox
+smoke test from before.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (40 files, 388 tests — 15 new
+in `src/calendar/ics.test.ts`), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build` (`/api/calendar`
+present), deployed and confirmed healthy in production.
+
+**Not built:** an AshHome-native calendar events table (manual events created inside the app
+itself, not sourced from iCloud). The iCloud feed covers the stated need; a native model would
+only be worth adding if events needed to originate from inside Agrocer, which nobody asked for.
+
 ## 2026-08-31 - Chores built: the last Phase 12 dashboard placeholder made real (Claude Code)
 
 Ash chose Chores as the next build (offered alongside overdue security cleanup and a calendar-
