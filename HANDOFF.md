@@ -1018,7 +1018,12 @@ match.
 **This fix needs the unpacked extension reloaded in `chrome://extensions` — it is not part of the
 web app's Docker deploy at all**, so redeploying the site does nothing for this bug. Verified:
 `npm run extension:check` (including the new regression case), typecheck, lint, 357 unit tests,
-build. Live re-test after reloading the extension is the next step, not yet done.
+build. Web app deployed (commit `041738e`, for the updated "reload extension 0.1.6" message
+text), healthy, confirmed 200 through the public URL.
+
+**Confirmed working by Ash after reloading extension 0.1.6** — the batch-add now genuinely adds
+items to the real New World trolley rather than reporting false success. This closes out the
+false-"added" bug for real, not just by code review.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database

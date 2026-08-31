@@ -857,6 +857,34 @@ Fixed by moving it into the `Dockerfile`'s `ARG`/`ENV` pair and `docker-compose.
 `build.args:`, mirroring the two Supabase values exactly. Redeployed. Not proven correct by
 static bundle inspection (inconclusive); real confirmation is Ash re-checking Settings live.
 
+## 2026-08-31 - Shopping UX fixes, and a serious trolley false-success bug (Claude Code)
+
+Same day, continued live testing against production. Cleared 3 leftover test items from the real
+shopping list (confirmed with Ash first). Built two requested features: per-item and bulk "Add"
+buttons on Settings' common-order list (now also duplicated onto the Shopping screen itself via
+`CommonOrderQuickAdd`, so it doesn't need a detour to Settings), and `guessCategory()` — auto-
+suggests a shopping item's category from its name (household products checked first, then a
+keyword list), wired to never override an explicit choice or an existing item's category on edit.
+
+Also, at Ash's confirmed request: choosing a New World product for an item now renames the item to
+New World's exact title (not just saved as a preference under the typed name), and a live search
+can now be cancelled with a "Stop" button instead of waiting out the 60s timeout.
+
+**The serious one:** Ash's live batch-add reported "3/3 added" while nothing reached the real New
+World trolley. Root cause in the extension's `addCurrent()`: it trusted any visible quantity
+number *before* trying to click Add — New World shows a "how many would you like?" selector
+defaulting to `1` before anything is actually added, and the code mistook that default for
+"already in the trolley," skipping the click entirely and reporting false success. Fixed: Add is
+now always clicked first when present; a pre-existing quantity is only trusted when no Add button
+exists at all. New regression test in `scripts/extension-smoke.mjs` pins the exact scenario.
+Extension bumped to 0.1.6 — **confirmed working live by Ash after reloading it**, not just by
+code review.
+
+Verified: typecheck, lint, 357 unit tests, `npm run extension:check`, build. Web app deployed
+(commits `d3fbc9c`, `34dd51d`, `041738e`), healthy, confirmed live through the public URL each
+time. The extension fix needed a separate manual reload in `chrome://extensions` — it is not part
+of the Docker/web deploy at all.
+
 ## 2026-08-31 - Multi-order import, and a silent "Use this product" bug fixed (Claude Code)
 
 `parseNewWorldOrderBatch` splits a paste covering several invoices — Ash's real order history
