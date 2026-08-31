@@ -4,11 +4,13 @@ import { useMemo, useState } from 'react';
 import { CarrotIcon, CheckIcon, PackageSearchIcon, ShoppingCartIcon, StarIcon } from 'lucide-react';
 import { CATEGORIES, type Category } from '@/domain/schemas/common';
 import { isOnList } from '@/domain/services/shopping';
+import { findProductAlternatives } from '@/domain/services/productAlternatives';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { FilterChips, SearchField } from '@/components/agrocer/Field';
 import { EmptyState } from '@/components/agrocer/EmptyState';
 import { nzd } from '@/lib/format';
+import { fuzzyMatch } from '@/lib/search';
 import { cn } from '@/lib/utils';
 
 const FILTERS = ['Favourites', 'All', ...CATEGORIES] as const;
@@ -20,11 +22,9 @@ export function ProductsScreen() {
   const [filter, setFilter] = useState<Filter>('Favourites');
 
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     return products
       .filter((product) => {
-        const matchesQuery =
-          product.name.toLowerCase().includes(needle) || product.brand.toLowerCase().includes(needle);
+        const matchesQuery = fuzzyMatch(`${product.name} ${product.brand}`, query);
         const matchesFilter =
           filter === 'All'
             ? true
@@ -59,6 +59,7 @@ export function ProductsScreen() {
         ) : (
           <ul className="space-y-2.5">
             {visible.map((product) => {
+              const alternatives = findProductAlternatives(product, products);
               const onList = isOnList(shopping, product.name);
               const inPantry = pantry.some(
                 (item) => item.name.toLowerCase() === product.name.toLowerCase(),
@@ -134,6 +135,16 @@ export function ProductsScreen() {
                       {inPantry ? 'In pantry' : 'Add to pantry'}
                     </button>
                   </div>
+                  {alternatives.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <span>Alternatives:</span>
+                      {alternatives.map((item) => (
+                        <button key={item.id} type="button" onClick={() => void addShoppingItem({ name: item.name, category: item.category, quantity: item.defaultQuantity, unit: item.unit, price: item.price, priority: false, note: undefined })} className="rounded-full border border-line px-2 py-1 font-semibold text-ink hover:bg-canvas">
+                          {item.name} ({nzd(item.price)})
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}

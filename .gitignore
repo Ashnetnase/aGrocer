@@ -37,3 +37,13 @@ pnpm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# Local browser companion runtime. Contains authenticated browser session data.
+.runtime/
+companion/.runtime/
+
+# Database dumps. A full pg_dump includes auth.users — password hashes — so these must
+# never be committed. See docs/backup.md.
+backups/
+*.sql.gz
+*.dump

@@ -23,6 +23,32 @@ export function summariseShopping(items: ShoppingItem[]): ShoppingSummary {
   return { total, trolleyTotal, remaining, checked, progress };
 }
 
+export interface ShoppingBudgetSummary {
+  target: number;
+  total: number;
+  /** Positive while under budget, negative when the list is over. */
+  remaining: number;
+  /** Capped at 100 for a progress bar; `over` carries the important overflow state. */
+  progress: number;
+  over: boolean;
+}
+
+/** Compares the current list estimate with the household's optional weekly target. */
+export function summariseShoppingBudget(
+  total: number,
+  target: number | null | undefined,
+): ShoppingBudgetSummary | undefined {
+  if (target == null || target <= 0) return undefined;
+  const remaining = target - total;
+  return {
+    target,
+    total,
+    remaining,
+    progress: Math.min((total / target) * 100, 100),
+    over: remaining < 0,
+  };
+}
+
 export interface CategoryGroup {
   category: Category;
   items: ShoppingItem[];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FlagIcon, Trash2Icon } from 'lucide-react';
@@ -10,6 +10,8 @@ import {
   type ShoppingItem,
   type ShoppingItemDraft,
 } from '@/domain/schemas/shopping';
+import type { Product } from '@/domain/schemas/product';
+import { guessCategory } from '@/domain/services/categoryGuess';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import {
   FormChipSelect,
@@ -19,6 +21,8 @@ import {
   FormToggleCard,
 } from '@/components/agrocer/form/FormFields';
 import { cn } from '@/lib/utils';
+import type { RetailerProduct } from '@/shopping/schemas';
+import { MatchNewWorldProduct } from './MatchNewWorldProduct';
 
 const emptyValues: ShoppingItemDraft = {
   name: '',
@@ -34,18 +38,38 @@ interface ShoppingItemSheetProps {
   open: boolean;
   onClose: () => void;
   item: ShoppingItem | null;
+  products: Product[];
   onSave: (draft: ShoppingItemDraft) => void;
   onDelete?: () => void;
+  /** Off hides the New World matching step entirely — a plain add/edit form. */
+  newWorldEnabled: boolean;
+  extensionOnline: boolean;
+  liveProducts: RetailerProduct[];
+  liveMessage?: string;
+  searching: boolean;
+  onLiveSearch: (query: string) => void;
+  onCancelSearch: () => void;
+  onProductMatched: (message: string) => void;
 }
 
-export function ShoppingItemSheet({ open, onClose, item, onSave, onDelete }: ShoppingItemSheetProps) {
+export function ShoppingItemSheet({
+  open, onClose, item, products, onSave, onDelete, newWorldEnabled,
+  extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onCancelSearch, onProductMatched,
+}: ShoppingItemSheetProps) {
   const form = useForm<ShoppingItemDraft>({
     resolver: zodResolver(shoppingItemDraftSchema),
     defaultValues: emptyValues,
   });
 
+  // Forces MatchNewWorldProduct to remount each time the sheet opens, so a match made for one
+  // item (or a previous add) can never be shown stale against the next item.
+  const sessionRef = useRef(0);
+  const [session, setSession] = useState(0);
+
   useEffect(() => {
     if (!open) return;
+    sessionRef.current += 1;
+    setSession(sessionRef.current);
     form.reset(
       item
         ? {
@@ -60,6 +84,18 @@ export function ShoppingItemSheet({ open, onClose, item, onSave, onDelete }: Sho
         : emptyValues,
     );
   }, [open, item, form]);
+
+  const watchedName = form.watch('name');
+  const watchedQuantity = form.watch('quantity');
+
+  // Suggests a category from the name as it's typed — never on edit (an explicit category
+  // already chosen for an existing item is never second-guessed), and never once the person has
+  // picked a category themselves, so the guess only ever fills a blank, it never overrides one.
+  useEffect(() => {
+    if (item || form.formState.dirtyFields.category) return;
+    const guess = guessCategory(watchedName, products);
+    if (guess) form.setValue('category', guess);
+  }, [watchedName, item, products, form]);
 
   const submit = form.handleSubmit((values) => {
     onSave({ ...values, note: values.note?.trim() ? values.note.trim() : undefined });
@@ -121,6 +157,23 @@ export function ShoppingItemSheet({ open, onClose, item, onSave, onDelete }: Sho
         />
         <FormTextField control={form.control} name="note" label="Note (optional)" placeholder="e.g. Blue top" />
       </form>
+      {newWorldEnabled ? (
+        <div className="mt-4">
+          <MatchNewWorldProduct
+            key={session}
+            itemName={watchedName}
+            quantity={watchedQuantity}
+            extensionOnline={extensionOnline}
+            liveProducts={liveProducts}
+            liveMessage={liveMessage}
+            searching={searching}
+            onLiveSearch={onLiveSearch}
+            onCancelSearch={onCancelSearch}
+            onSaved={onProductMatched}
+            onMatchedName={(name) => form.setValue('name', name, { shouldDirty: true, shouldTouch: true })}
+          />
+        </div>
+      ) : null}
     </BottomSheet>
   );
 }

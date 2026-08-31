@@ -21,10 +21,14 @@ import { productsSeed } from '@/data/seed/products';
 import { shoppingSeed } from '@/data/seed/shopping';
 import type {
   AgrocerRepositories,
+  ChoresRepository,
+  FeedbackRepository,
   HouseholdRepository,
   MealsRepository,
+  OrderHistoryRepository,
   PantryRepository,
   ProductsRepository,
+  SchoolRepository,
   ShoppingRepository,
 } from '@/data/repositories/types';
 import { createId } from './ids';
@@ -286,12 +290,97 @@ const household: HouseholdRepository = {
   },
 };
 
+/**
+ * Feedback history has no localStorage implementation, on purpose.
+ *
+ * It exists to accumulate a record the household can learn from in Stage 4, and a history
+ * kept in one browser's storage is not that — it vanishes with a cleared cache and never
+ * agrees between the phone and the wall tablet. Reading returns nothing rather than
+ * pretending; writing refuses rather than silently storing something that will be lost.
+ */
+const feedback: FeedbackRepository = {
+  async list() {
+    return [];
+  },
+  async add() {
+    throw new Error(
+      'Meal feedback needs the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+};
+
+/** Same reasoning as `feedback`: order history is shared, cross-device history, not one browser's cache. */
+const orderHistory: OrderHistoryRepository = {
+  async list() {
+    return [];
+  },
+  async importLines() {
+    throw new Error(
+      'Order history needs the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+  async matchToCatalogue() {
+    throw new Error(
+      'Order history needs the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+};
+
+/** Same reasoning as `feedback`: notifications must be visible from every family device. */
+const school: SchoolRepository = {
+  async list() {
+    return [];
+  },
+  async add() {
+    throw new Error(
+      'School notifications need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+  async markRead() {
+    throw new Error(
+      'School notifications need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+  async dismiss() {
+    throw new Error(
+      'School notifications need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+};
+
+/** Same reasoning as `feedback`/`school`: chores are shared across every family device. */
+const choresRepo: ChoresRepository = {
+  async list() {
+    return [];
+  },
+  async create() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async update() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async toggle() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async remove() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+  async clearCompleted() {
+    throw new Error('Chores need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".');
+  },
+};
+
 export const localRepositories: AgrocerRepositories = {
   pantry,
+  inventoryEvents: { async list() { return []; } },
   shopping,
   meals,
   products,
   household,
+  feedback,
+  orderHistory,
+  school,
+  chores: choresRepo,
   async reset() {
     clearAll();
   },

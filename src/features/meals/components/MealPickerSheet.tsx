@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ClockIcon, PencilIcon, PlusIcon, UsersIcon } from 'lucide-react';
+import { ClockIcon, PencilIcon, PlusIcon, SearchIcon, UsersIcon } from 'lucide-react';
 import type { Meal } from '@/domain/schemas/meal';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { SearchField } from '@/components/agrocer/Field';
 import { MealImage } from '@/components/agrocer/MealImage';
+import { fuzzyMatch } from '@/lib/search';
 
 interface MealPickerSheetProps {
   open: boolean;
@@ -15,6 +16,8 @@ interface MealPickerSheetProps {
   slotLabel: string;
   onPick: (mealId: string) => void;
   onCreate: () => void;
+  /** Searches for a new recipe to save and place into this planner slot. */
+  onImport: () => void;
   onEdit: (meal: Meal) => void;
 }
 
@@ -26,10 +29,11 @@ export function MealPickerSheet({
   slotLabel,
   onPick,
   onCreate,
+  onImport,
   onEdit,
 }: MealPickerSheetProps) {
   const [query, setQuery] = useState('');
-  const visible = meals.filter((meal) => meal.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = meals.filter((meal) => fuzzyMatch(`${meal.name} ${meal.ingredients.join(' ')}`, query));
 
   return (
     <BottomSheet
@@ -39,7 +43,7 @@ export function MealPickerSheet({
       description={`Choose a meal for ${dayLabel}.`}
     >
       <div className="space-y-3">
-        <SearchField value={query} onChange={setQuery} placeholder="Search meals" />
+        <SearchField value={query} onChange={setQuery} placeholder="Search meals or ingredients" />
 
         <button
           type="button"
@@ -50,6 +54,22 @@ export function MealPickerSheet({
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
         >
           <PlusIcon className="h-4 w-4" /> Create a new meal
+        </button>
+
+        {/*
+          Beside "create", because this is the same moment — you wanted a meal you do not
+          have. Pasting is usually faster than typing a recipe out, and it lands in the same
+          form for review either way.
+        */}
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onImport();
+          }}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 transition-colors duration-150 ease-out hover:bg-moss-50"
+        >
+          <SearchIcon className="h-4 w-4" /> Find a recipe
         </button>
 
         <div className="space-y-2">

@@ -341,7 +341,8 @@ secure context, which is why installing from a phone waits on the HTTPS decision
 
 ## Stage 2 — Real backend and household data
 
-**STATUS: NOT STARTED**
+**STATUS: COMPLETE (2026-08-23 → 2026-08-29)** — deployed to `192.168.1.49` behind the
+Cloudflare Tunnel, verified from outside the network, and installed as a PWA on a phone.
 
 ### Goal
 
@@ -349,33 +350,55 @@ Replace Stage 1 local persistence with a real backend and database while keeping
 
 ### Planned scope
 
-- [ ] PostgreSQL
-- [ ] backend/API architecture
-- [ ] authentication
-- [ ] household/user permissions
-- [ ] persistent pantry
-- [ ] persistent products
-- [ ] persistent shopping lists
-- [ ] persistent meal plans
-- [ ] meal feedback history
-- [ ] audit-friendly inventory events
-- [ ] migrations
-- [ ] backup/restore plan
-- [ ] Docker Compose deployment
-- [ ] CI checks
-- [ ] staging deployment pipeline
+- [x] Supabase project provisioned (managed PostgreSQL — ADR-013) — `agrocer` /
+      `ojlzjjvrtnslcxqdmpay`, ap-southeast-2; schema applied, 9 tables confirmed
+- [x] Drizzle schema and migrations — 9 tables, migrations `0000`–`0007`
+- [x] backend/API architecture — route handlers for all five features
+- [x] authentication (Supabase Auth, ADR-017) — email + password, session in cookies,
+      household from `household_members.user_id`; every data-bearing/action route refuses
+      without one (`/api/ai/chat` is the raw data-free transport exception)
+- [x] RLS enabled on all 9 tables (ADR-016). Closes the publishable-key exposure and is
+      verified with `npm run db:rls`; authenticated household policies are live
+- [x] household/user permissions — RLS policies granting `authenticated` its own household
+      (`drizzle/0003_household_rls_policies.sql`). Defence in depth; the app still bypasses RLS
+- [x] persistent pantry — route handlers + HTTP repository, verified end to end
+- [x] persistent products — route handlers + HTTP repository, verified end to end
+- [x] persistent shopping lists — route handlers + HTTP repository, verified end to end
+- [x] persistent meal plans — route handlers + HTTP repository, verified end to end
+- [x] meal feedback history — `meal_feedback` (migration `0004`), repository, `/api/feedback`.
+      Append-and-read only: history, not state. Stage 4 meal detail now records and reads it
+- [x] audit-friendly inventory events — `inventory_events` (migration `0004`), written
+      automatically by the pantry repository so the log cannot drift from what happened.
+      `ON DELETE SET NULL` plus a denormalised name, so the history outlives the item
+- [x] migrations — `0000`–`0007`; `npm run db:migrate` and `npm run db:generate` are both
+      clean no-ops against the live database
+- [x] backup/restore plan — `docs/backup.md`, with the commands actually run against the live
+      project. Note a full dump contains `auth.users`, so it is a credential store
+- [x] Docker Compose deployment — Stage 2 compose + Dockerfile build args for the
+      `NEXT_PUBLIC_*` values, which are compiled into the bundle rather than read at runtime
+- [x] CI checks — `.github/workflows/ci.yml`: typecheck, lint, test, build, plus integration
+      tests and an RLS check that fails if the publishable key can read anything
+- [ ] staging deployment pipeline — the runbook is `docs/deploy.md`; the deploy itself is
+      Ash's, since it needs the homelab host
 
 Inherited from Stage 1 (ADR-012) — the container and runbook already exist, so this is
 provisioning rather than build work:
 
-- [ ] provision the `agrocer-stg01` VM (spec in section 12)
-- [ ] deploy the existing `agrocer:stage1` image via `docker compose up -d --build`
-- [ ] **decide the HTTPS approach** — Tailscale, Caddy with an internal CA, or a real domain.
-      A LAN address over plain HTTP is not a secure context, so without this the service
-      worker will not register and the PWA cannot be installed on a phone. `docs/staging.md`
-      compares the options; Tailscale is the standing recommendation.
-- [ ] open Agrocer from a phone on the home network and install it
-- [ ] confirm it stays reachable with the Ryzen desktop powered off (ADR-007)
+- [x] **HTTPS decided (ADR-019)** — the existing Cloudflare Tunnel `homelab` on
+      `ashnetbase.org`, which Ash already runs for `chat`, `vault` and `status`. Real
+      certificate, so a secure context, so the PWA installs. No inbound port. Free.
+      Tailscale rejected only because the tunnel already exists; AWS rejected on cost for
+      something the homelab already does
+- [x] `home.ashnetbase.org` added to the `homelab` tunnel → `HTTP` → `192.168.1.49:3000`
+- [x] `docker compose up -d --build` on `192.168.1.49`
+- [x] **verified from outside the network**: `/` and `/dashboard` redirect to `/sign-in`,
+      `/sign-in` 200, `/api/shopping` 401, `sw.js` and `manifest.webmanifest` 200 over a real
+      certificate
+- [x] **installed as a PWA on a phone** — the thing the HTTPS question had blocked since
+      Stage 1
+- [x] reachable with the workstation powered off — the app runs on the homelab and depends on
+      it for nothing. The AI assistant is the one exception and returns 503 `unreachable`,
+      which is the correct failure (ADR-020 is how that gets fixed)
 
 ### Not yet
 
@@ -385,7 +408,10 @@ No supermarket automation or autonomous AI agents unless the stage is explicitly
 
 ## Stage 3 — AI meal and grocery assistant
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS** — slices 8a, 8b and 9a landed 2026-08-28/29 (the provider abstraction,
+the AI service route, the wall dashboard's "Ask AshHome" card, and the read-only tool system).
+Deliberately sliced: see the progress log entries for the ladder. The next rung, 9b's first
+write tool, is gated on Auth + RLS.
 
 ### Goal
 
@@ -393,22 +419,26 @@ Add a controlled AI assistant that uses tools over Agrocer's structured data.
 
 ### Planned scope
 
-- [ ] AI provider abstraction
-- [ ] cloud AI fallback
-- [ ] optional local AI when RTX desktop is on
-- [ ] tool calling
-- [ ] get pantry
+- [x] AI provider abstraction — `src/ai/types.ts`, `src/ai/provider.ts`
+- [ ] cloud AI fallback — the seam exists (`AI_PROVIDER`), no implementation
+- [x] optional local AI when RTX desktop is on — `src/ai/ollamaProvider.ts`, `/api/ai/chat`
+- [x] a family-facing entry point — "Ask AshHome" on the wall dashboard (slice 8b)
+- [x] tool calling — an orchestrator with an explicit allow-list (slice 9a)
+- [x] get pantry — `getPantry`
+- [x] get the shopping list — `getShoppingList`
+- [x] get the meal plan — `getMealPlan`
 - [ ] get household preferences
 - [ ] get meal history
 - [ ] get recipes
 - [ ] get budget
-- [ ] build/update shopping list
+- [~] build/update shopping list — additions work with confirmation, including multi-item
+      requests; editing/removing items is not implemented
 - [ ] meal suggestions
 - [ ] weekly plan suggestions
 - [ ] family feedback learning
-- [ ] human confirmation for important actions
+- [x] human confirmation for AI writes, including one confirmation over a complete action list
 - [ ] cost controls
-- [ ] prompt/evaluation tests
+- [x] prompt/tool-loop tests for the implemented read and shopping-add capabilities
 
 ### Architecture principle
 
@@ -418,7 +448,8 @@ Use one orchestrator with tools first. Do not create many autonomous agents unle
 
 ## Stage 4 — Recipes, consumption learning, budget and specials
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS (started 2026-08-29)** — pantry-to-recipe matching first, because it is
+the item most of the rest depends on.
 
 ### Goal
 
@@ -426,24 +457,31 @@ Make Agrocer smarter using household history and external grocery information.
 
 ### Planned scope
 
-- [ ] recipe discovery/search
-- [ ] recipe import
-- [ ] pantry-to-recipe matching
-- [ ] consumption history
+- [x] recipe discovery/search
+- [x] recipe import
+- [x] pantry-to-recipe matching — `src/domain/services/recipeMatch.ts`, surfaced as the
+      Tonight's meal card's missing-ingredient warning. Presence only, not quantities
+- [~] consumption history — `inventory_events` accumulates it (Stage 2); nothing reads it yet
 - [ ] low-stock prediction
 - [ ] staple reorder prediction
-- [ ] weekly budget target
-- [ ] meal cost estimation
-- [ ] product alternatives
+- [x] weekly budget target — optional NZD household setting, compared with the current list
+      estimate on shopping, shopping mode, and the wall dashboard
+- [x] meal cost estimation — structured ingredient amounts are stored alongside legacy recipe
+      text; complete catalogue-priced estimates appear in meal detail and on the wall dashboard
+- [x] meal feedback capture — whole-family or named-member ratings recorded from meal detail;
+      three newest entries shown, with append-only corrections
+- [~] product alternatives
 - [ ] supermarket price/specials provider abstraction
 - [ ] waste/use-soon recommendations
-- [ ] notifications
+- [x] notifications — authenticated in-app advisory endpoint
 
 ---
 
 ## Stage 5 — New World / supermarket trolley preparation
 
-**STATUS: NOT STARTED**
+**STATUS: IN PROGRESS (2026-08-30)** — deterministic matching, household product memory and the
+local visible-browser companion foundation are implemented. Live New World selectors remain to be
+validated against the user's session before trolley addition can be called working.
 
 ### Goal
 
@@ -451,18 +489,47 @@ Prepare a supermarket trolley for human review without autonomous payment.
 
 ### Planned scope
 
-- [ ] `ShoppingProvider` abstraction
-- [ ] manual provider
-- [ ] New World provider
-- [ ] product matching
-- [ ] substitutions
-- [ ] quantity reconciliation
-- [ ] browser-assisted cart preparation if permitted/viable
-- [ ] background job handling
-- [ ] retry/error handling
-- [ ] cart review
-- [ ] user approval
-- [ ] final checkout remains manual
+- [x] `ShoppingProvider` abstraction (`src/shopping/types.ts`)
+- [x] manual provider and matching/review service
+- [x] New World browser provider communicating with a separate local companion
+- [x] deterministic product matching with confidence, preferences and unresolved-item review
+- [x] authenticated homelab catalogue API seam with Zod validation and encountered-product cache
+- [x] 24/7 household catalogue — the deployed app and Supabase serve cached products continuously;
+      every validated visible-Chrome search result refreshes it (ADR-022)
+- [~] live catalogue acquisition — Shopping browse/search UI is implemented; the collector/feed
+      still needs to be deployed and connected before it can show a store-wide live catalogue
+- [~] substitutions — candidate selection and unavailable replacement state exist
+- [x] quantity reconciliation in the companion request/verified result contract
+- [~] browser cart preparation — normal-Chrome extension fallback implemented after Cloudflare
+      rejected Playwright; extension selectors are protocol-tested but not live-site validated
+- [x] persisted cross-device trolley jobs with explicit desktop processing
+- [x] persisted cross-device product-search jobs returning live extension candidates to phone/tablet
+- [x] explicit partial-failure/error states; background retries remain future work
+- [x] cart review UI with ready/review/unavailable summaries
+- [x] separate explicit user action before sending ready products to the companion
+- [x] final checkout remains manual by construction
+- [x] paste-based past-order import (`order_line_items`, migration `0012`) and a "common order"
+      frequency summary in Settings — the foundation for reorder prediction and AI meal
+      suggestions, neither of which reads it yet
+- [x] imported order lines matched to the household's New World catalogue —
+      `OrderHistoryRepository.matchToCatalogue()`, same 0.86 confidence bar as trolley "ready",
+      idempotent, a Settings button. Real catalogue currently only has 67 cached products, so most
+      of Ash's 214 imported lines are not yet matched — improves automatically as the cache grows
+- [x] reorder/running-low prediction upgraded to read order history —
+      `predictReordersFromHistory`, an average-gap-between-orders cadence signal, merged with the
+      existing pantry-event heuristic in `/api/pantry/suggestions`
+- [x] AI meal suggestions built from order history — `getCommonOrder` plus a fixed
+      `directRecipeSearch()` fast-path (`NEEDS_HOUSEHOLD_GROUNDING` guard), live-verified against
+      qwen3:8b: "suggest a recipe using something we buy often" now correctly chains
+      `getCommonOrder` → `searchRecipes` and finds a real recipe from an actual common-order item.
+      Recipe *quality* still depends on TheMealDB's catalogue breadth — not something to fix here.
+      Known remaining gap: "What do we usually buy?" specifically still doesn't reliably call
+      `getCommonOrder` (Phase 10)
+- [x] weekly meal-plan + shopping-list email — `src/email/` (provider abstraction mirroring
+      `src/ai/`, AWS SES the only implementation), `buildWeeklyDigest()` (deterministic, not
+      AI-written — same "never invent a quantity" rule as everywhere else in the app), manual
+      button in Settings sending only to the signed-in person's own address. Not yet sent for
+      real — needs Ash's SES credentials in `.env.local`
 
 ### Safety/product rule
 
@@ -489,7 +556,7 @@ Use Agrocer as a strong real-world cloud engineering portfolio project.
 - [ ] EventBridge
 - [ ] Secrets Manager
 - [ ] CloudWatch
-- [ ] Cognito
+- [ ] ~~Cognito~~ — redundant while Supabase Auth owns identity (ADR-013); revisit only if Agrocer leaves Supabase
 - [ ] Bedrock where useful
 - [ ] backup/export strategy
 
@@ -603,6 +670,1881 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-31 - New World integration made optional; Ask AshHome learns Chores and School (Claude Code)
+
+Two changes, both from the same conversation: Ash found the New World trolley/matching flow
+still too much friction even with today's "Browse New World" improvement — the fundamental
+issue (no New World API, so live search/cart automation genuinely needs a desktop with the
+Chrome extension) doesn't go away just because adding is easier. Ash's own proposed fix was
+right: make it optional, default off, and fall back to a plain list (plus the existing weekly
+email). Also asked, separately, to extend "Ask AshHome" now that Chores and School notices are
+real data — a decision from the Hermes/Obsidian assessment two entries up, followed through on.
+
+Also assessed, per Ash's explicit request, whether to integrate a locally-run "Hermes" agent
+(Nous Research, autonomous, terminal/filesystem access, already looked at once before this
+session for Hero email and set aside for the same reason) and Obsidian as a family knowledge
+base. Recommendation given (not built, "do not implement anything yet" per Ash): Hermes as a
+write-capable orchestrator over Agrocer is the wrong shape — it duplicates the tool-gated,
+confirmation-required "Ask AshHome" that already exists (ADR-014/015/018) with a broader-
+capability, less-audited path. Obsidian is a reasonable *read-only* source for genuinely
+unstructured household reference (manuals, warranties) that Agrocer's structured data
+shouldn't hold — never a second copy of anything the database already owns. Full 7-point
+answer (what stays in the DB vs. Obsidian, what Hermes should read/write, the safe
+communication path, sequencing) given in conversation; nothing implemented.
+
+**Shipped — `settingsSchema.newWorldEnabled`** (migration `0017`, default `false`): off, the
+whole New World integration disappears from Shopping — no "Prepare New World trolley" button,
+no "New World products" panel, no live-search/queued-job banners, no trolley review section,
+no inline matching step in the add/edit sheet, and the "+" button always opens the plain add
+form regardless of `shoppingAddMode`. On, everything works exactly as before (`shoppingAddMode`
+only becomes meaningful once this is on — the Settings UI hides that chip select while off).
+Nothing about the underlying trolley/matching code changed; this is purely a visibility gate,
+reversible any time from Settings.
+
+**Shipped — two new read-only tools**, `getChores` and `getSchoolNotifications`
+(`src/ai/tools/readOnly.ts`), following slice 9a's exact pattern: no arguments, prose not JSON,
+compact enough for a small local model to read reliably. `getChores` separates outstanding
+from done and names the assignee; `getSchoolNotifications` reuses `visibleNotifications()` (so
+dismissed notices stay excluded, same as the Kids screen) and names the child, whether a
+response is needed, and any due date. The system prompt and the dashboard card's own footnote
+were updated to stop claiming the assistant can't see chores/school — both now genuinely can,
+and CLAUDE.md's honesty rule (never let the assistant claim more or less than it can actually
+do) applies to prose describing capabilities as much as to answers.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (40 files, 395 tests — 8 new:
+`getChores`/`getSchoolNotifications` coverage in `readOnly.test.ts`, updated capability
+assertions in `assistant.test.ts`), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`, migration
+`0017` applied and RLS-checked. Live-verified the toggle at mobile width: off correctly hides
+every New World UI element and the "+" button opens the plain form; the Settings chip select
+for the add-mode default correctly hides itself while the toggle is off.
+
+## 2026-08-31 - "Browse New World" add flow, replacing the add-then-match round trip (Claude Code)
+
+Ash's real complaint, once decoded: adding an item and then separately matching it to a New
+World product (the existing `NewWorldCatalogue`/`MatchNewWorldProduct` flow) is double
+handling for someone who already knows exactly which product they want — worse than just using
+the New World app directly. Confirmed the design (browse-first, specials/cheap sorted up top,
+load more, add-straight-to-list, plus a Settings default toggle) with Ash before building,
+given this reworks an already-shipped, heavily-iterated feature.
+
+**Shipped:**
+- `settingsSchema.shoppingAddMode` (`'new-world' | 'manual'`, migration `0016`, default
+  `new-world`) — what the shopping list's "+" button opens by default. Both modes stay
+  reachable regardless of the setting; this only decides the one-tap default.
+- `BrowseNewWorldSheet.tsx` — a new, standalone catalogue browser, not tied to an existing list
+  item (unlike `NewWorldCatalogue`/`MatchNewWorldProduct`, which still exist for matching an
+  *already-added* item). Search, "Load more" (re-fetches with a bigger `limit` — the cached
+  catalogue is small enough that real offset pagination would be complexity for no benefit),
+  and a "Search on New World's site instead" fallback link. Tapping a product both creates the
+  shopping-list item *and* saves the New World match in one action (`school.add()`-style
+  idempotent write to the existing trolley-preferences table) — no second step to find it later.
+- `/api/retailer/new-world/products?sort=value` — specials first, then cheapest-first,
+  opt-in via a new query param so the existing name-search matching tools (which want
+  "most recently seen," not "cheapest") are unaffected by default.
+- A `FormChipSelect` in Settings ("Adding shopping items": Browse New World / Type it in).
+
+**Verified live**, not just at the component level, against the real household data: Browse
+New World opens by default per the seeded setting, added a real product ("Havana Super Deluxe
+Coffee Beans200g," specials-sorted list) straight to the list with its real New World price and
+a guessed category — no second matching step — then removed the test item. Switched the
+Settings toggle to "Type it in," confirmed the "+" button now opens the plain add form instead,
+switched back to the default, confirmed via network requests that both saves actually
+round-tripped through `PATCH /api/household` (200) rather than just looking right client-side.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (40 files, 388 tests,
+unchanged — this feature is mostly UI/repository wiring, no new pure domain logic worth a
+dedicated test beyond what the live verification already covered),
+`NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`, migration `0016` applied and RLS-checked.
+
+## 2026-08-31 - Family calendar: read-only iCloud feed, "Family schedule" made real (Claude Code)
+
+Ash clarified the calendar requirement precisely: one person (their partner) creates events on
+their iPhone; Ash just needs to see them, in Agrocer, on both phones. That's strictly read-only
+and single-source, which rules out CalDAV/Google two-way sync as over-engineering for the actual
+ask — the right fit is iOS's own "Public Calendar" sharing: Settings on the calendar → Public
+Calendar → Share Link, which produces a `webcal://` URL needing no Apple ID, no OAuth, no login
+at all. Verified this genuinely was the right level of engineering before building anything:
+fetched the link with `curl` first (empty calendar, 149 bytes, confirmed the connection and
+format), asked Ash to add one real test event, re-fetched, and got a real `VEVENT` with a full
+`VTIMEZONE` block — that captured export became a test fixture rather than a guess at the format.
+
+**Built:** `src/calendar/ics.ts` — a small hand-written RFC 5545 parser (line unfolding, text
+unescaping, `VALARM` stripping, all-day vs. timed `DTSTART`/`DTEND`), not a library, because the
+only thing being read is `VEVENT` blocks from one known source. Two explicit non-goals, stated
+in the code rather than left implicit: no `RRULE` recurrence expansion (a recurring event shows
+once, at its own start, not as a series — real complexity with no need yet), and no
+`TZID`/UTC timezone conversion (the household is single-timezone NZ, so times are read and
+displayed as the wall-clock values iCloud published, via `localWallClock()` — deliberately never
+`Date.toISOString()`, which is always UTC regardless of the runtime's timezone and would put
+events out by NZ's whole offset if a server container's clock were used for "now"). 15 unit
+tests, including the real captured event as a fixture.
+
+`src/calendar/feed.ts` (server-only fetch, `FAMILY_CALENDAR_ICS_URL` → `webcal://` rewritten to
+`https://`) and `app/api/calendar` (GET, behind the same auth every route requires, matching how
+`/api/specials` guards external non-household data). `ScheduleCard.tsx` replaces the wall
+dashboard's last calendar placeholder; a matching `FamilyScheduleGlance` sits on mobile Home
+right after Kids/School, per CLAUDE.md's urgent-then-schedule hierarchy.
+
+**Verified live**, not just at the component level: the real `.ics` URL end to end — wall
+dashboard and mobile Home (390×844) both correctly showed "Test event · Tue, 1 Sept, 9:00 am"
+against the actual iCloud feed. Also noticed, unprompted, that a real Hero notification
+("Great day of learning") had come through the ingestion pipeline built earlier today — first
+live confirmation that pipeline actually works end to end, not just against the empty-inbox
+smoke test from before.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (40 files, 388 tests — 15 new
+in `src/calendar/ics.test.ts`), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build` (`/api/calendar`
+present), deployed and confirmed healthy in production.
+
+**Not built:** an AshHome-native calendar events table (manual events created inside the app
+itself, not sourced from iCloud). The iCloud feed covers the stated need; a native model would
+only be worth adding if events needed to originate from inside Agrocer, which nobody asked for.
+
+## 2026-08-31 - Chores built: the last Phase 12 dashboard placeholder made real (Claude Code)
+
+Ash chose Chores as the next build (offered alongside overdue security cleanup and a calendar-
+integration design discussion). Deliberately the simplest possible version, per CLAUDE.md's
+"do not build an unnecessarily complex system during early stages" and mirroring the shopping
+list's own shape rather than inventing new patterns: `chores` table (`title`,
+`assigned_member_id` nullable/`ON DELETE SET NULL`, `done`), migration `0015`, a
+`ChoresRepository` (list/create/update/toggle/remove/clearCompleted — `clearCompleted()` is the
+weekly reset, the exact same "clear checked" pattern shopping already has). No recurrence
+engine — a household resets the list by hand, same as a fridge whiteboard.
+
+**Shipped:** `/chores` screen (add/edit sheet, touch-to-complete, a "Done" section with its own
+"Clear done" action), a real `ChoresCard` on the wall dashboard (replacing its placeholder —
+Chores was the last one left from the original Phase 1 mock set), and a `ChoresGlance` on the
+mobile Home screen mirroring `KidsAndSchoolGlance`'s shape. Unlike the Kids glance, this one
+always renders (even with zero chores) rather than hiding — every household can have chores,
+where not every household necessarily uses Kids/School, so hiding it would make the feature
+undiscoverable from the phone.
+
+Verified live at mobile width (390×844) against the real database: added "Take the rubbish
+out" assigned to Milla, toggled it done (moved to the Done section, struck through), cleared
+it, confirmed back to the empty state — full round trip, no leftover test data.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (39 files, 373 tests,
+unchanged), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build` (`/chores`, `/api/chores`,
+`/api/chores/[id]`, `/api/chores/completed` all present), `npm run db:migrate` + `npm run
+db:rls` against the real database (`chores`: RLS enabled, 1 policy).
+
+Also discussed, not built: two-way iPhone calendar sync. No family-events data model exists yet
+to sync against (today there's only the meal plan and school notices) — recommended starting
+with a read-only ICS subscribe feed once that model exists, reserving a Google Calendar OAuth
+two-way sync (mirroring the Hero/Gmail pattern already built) for if read-only turns out not to
+be enough. Nothing implemented; a design note for whenever a real family calendar is built.
+
+## 2026-08-31 - Kids/School updates surfaced on mobile, not just the wall (Claude Code)
+
+Ash asked for phone-accessible dashboard-style content — "calendar and updates" — since the
+family uses mobile more than the wall tablet, and gave open design latitude ("you make the
+choice"). CLAUDE.md's real family calendar (Phase 12, an events model beyond meal planning)
+doesn't exist yet, so rather than build a hollow calendar page with nothing behind it, the
+choice made was to bring the one genuinely new "updates" source — Kids/School notifications,
+just built this session — onto the mobile Home screen, reusing exactly the same domain logic
+the wall dashboard's `KidsCard` already uses (`visibleNotifications()`, `childName()`):
+`KidsAndSchoolGlance` in `src/features/home/HomeScreen.tsx`, positioned right after the
+household strip — CLAUDE.md's information hierarchy puts "urgent family/school actions" first,
+and this is the mobile equivalent. Shows up to 3 notices, an "Action" badge, unread count, and
+an "Open Kids" link to the full `/kids` screen. No child in the household → the section renders
+nothing, same "don't show an empty dashboard for no reason" instinct as the wall card.
+
+Verified live in a real mobile-width (390×844) browser session, signed in as Ash against the
+real database, not just at the component level: empty state ("No notices right now"), then a
+full round trip — logged a real test notice ("Sports day permission", Milla, Permission,
+action-required) from `/kids`, confirmed it appeared correctly on the mobile Home glance card,
+then dismissed it to leave the household's real data as found. `/kids` itself also confirmed
+mobile-clean at this width — avatar chips, notice list, and the log-notice sheet (including its
+date inputs and the "What kind" chip grid) all render and interact correctly at 390px.
+
+No calendar page was built. `/dashboard` (the wall tablet layout) is untouched — CLAUDE.md
+already treats it as its own dedicated layout, not something that should also try to be the
+phone's home screen. A real family calendar (events beyond meals and school notices) stays
+Phase 12 future work, same as before this session.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (39 files, 373 tests,
+unchanged — no new domain logic, this reused what already existed),
+`NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`.
+
+## 2026-08-31 - Hero email ingestion pipeline built end to end (Claude Code)
+
+The blocked step from the previous two entries — the Gmail OAuth/credential decision — got
+resolved this session, and the full pipeline followed from it. In order:
+
+**Gmail access.** Ash created a Google Cloud project ("AshHome Hero Ingestion"), an OAuth
+consent screen in Testing mode (`007agentuse@gmail.com` as the sole test user — avoids
+Google's verification review entirely), and a Desktop-app OAuth client. `scripts/gmail-
+authorize.ts` (new) runs the one-time consent flow with plain `fetch` against Google's OAuth
+endpoints — no SDK — and prints a refresh token. `GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/
+`GMAIL_REFRESH_TOKEN` now live in `.env.local` and the production `.env`, `gmail.readonly`
+scope only (never send/delete/modify).
+
+**Real Hero data, checked before designing anything.** `scripts/gmail-check.ts` (new,
+read-only) found nothing on the first pass — turned out to be because the one Hero-shaped
+message in the inbox was a *manual* Gmail forward (rewrites `From` to the forwarder), not
+genuine auto-forwarding. Its quoted content still revealed the real sender
+(`Hero <noreply@linc-ed.com>` — Hero was formerly Linc-Ed in NZ schools) and a real digest
+email's shape (event title, date/time, school, location, a tracked "View on Hero" link).
+Domain confirmed: `linc-ed.com`.
+
+**Forwarding, scoped deliberately.** Ash's personal Gmail already had `007agentuse@gmail.com`
+verified as a forwarding address, but blanket forwarding was correctly left disabled. Rather
+than turn on "forward everything," built a Gmail filter instead: `from:(linc-ed.com)` →
+forward to `007agentuse@gmail.com`, "apply to existing 24 matching conversations" deliberately
+left unchecked (24 real historical Hero emails already sat in the inbox back to 2022 — Google
+confirmed old mail would not be forwarded — resurfacing 2022 school notices as "new" would have
+been noise, not backfill). Only new Hero mail forwards from here on, with its real headers
+intact. Set up via the browser (Claude in Chrome), including working through Google's own
+"verify it's you" identity checkpoint, which Ash had to complete directly — that step is
+specifically designed to confirm the real account owner, so it was never something to click
+through on Ash's behalf.
+
+**The pipeline itself:**
+- Migration `0014` — `school_notifications.needs_review` (boolean, default false). CLAUDE.md:
+  "Where extraction confidence is low, mark the item for user confirmation rather than
+  guessing." This is that field. Always false for hand-entered notices.
+- `src/school/gmail.ts` — read-only Gmail REST client (list/get messages, decode MIME parts to
+  plain text), plain `fetch`, no Google SDK.
+- `src/school/heroExtraction.ts` — turns one email into a `SchoolNotificationDraft` via
+  `getSummaryAiProvider()` (the `qwen2.5:14b-instruct` provider from the previous entry, now
+  with its first real caller). The model is told explicitly never to invent a date/amount/
+  requirement and to report its own confidence; anything that fails to parse, fails schema
+  validation, or the model itself flagged unconfident falls back safely — the raw subject/
+  snippet, `needsReview: true` — never dropped, never fabricated. 5 unit tests with a fake
+  `AiProvider` cover the happy path and every fallback branch.
+- `src/domain/services/school.ts` — added `matchChildByName()`: literal first-name matching
+  against the household's children, attributes a notice only when *exactly one* child's name
+  appears in the text (CLAUDE.md: don't invent attribution). 5 new tests.
+- `src/school/heroIngest.ts` — orchestrates list → sender-domain re-check (defense in depth
+  beyond Gmail's own `from:` search, which can match more loosely than an exact address) →
+  extract → attribute → `school.add()` (idempotent on `externalReference`, so a re-poll of an
+  already-ingested message is a safe no-op, not a duplicate).
+- `app/api/school/hero/poll` (`POST`) — the route a cron job calls. No user session exists for
+  a cron trigger, so this route is authenticated by `HERO_POLL_SECRET` (a header, not a
+  session) and resolves the household from `AGROCER_HOUSEHOLD_ID` directly — the same variable
+  `src/server/repositories.ts`'s dev-only auth escape hatch uses, but here for a legitimate
+  service-to-service call, not a convenience. Missing secret configuration means the route
+  refuses to do anything (501), not "open by default."
+- Kids screen shows a "Needs review" badge on any notification the pipeline wasn't confident
+  about.
+
+**Verified locally:** the route returns `{"found":0,"processed":0,"skippedWrongSender":0}`
+against the real Gmail inbox (correct — no new Hero mail has arrived through the just-created
+filter yet), a wrong or missing secret correctly 401s, `npx tsc --noEmit`/`npm run lint` clean,
+`npm test -- --run` — 39 files / 373 tests, `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`
+clean including `/api/school/hero/poll`, migration `0014` applied and RLS-checked against the
+real database. **Not yet verified against a real, newly-arrived Hero email** — that needs an
+actual new notice to land through the filter, which hasn't happened yet in the time since it
+was created.
+
+## 2026-08-31 - Background AI provider for Hero-email summarization, verified against real models (Claude Code)
+
+Ash offered two more local Ollama models beyond the `qwen3:8b` the interactive assistant uses:
+`qwen2.5-14b-64k` (custom 65536-context Modelfile) and `qwen2.5:14b-instruct`. Also described a
+separate "Hermes agent" (Nous Research's `hermes-agent`, an autonomous Docker agent with
+terminal/filesystem/web-search access, dashboard on `:9119`) — assessed and set aside: it is
+the opposite of this project's AI-safety design (ADR-014/015/018, fixed tool allow-lists,
+confirmation gates, no unrestricted system access), and Hero access specifically has to stay
+narrow per CLAUDE.md's hard rules, not delegated to a broad autonomous agent. The underlying
+model behind it, not the agent framework, is what's useful here.
+
+Verified both 14B models with `npm run ai:check` (raw Ollama connectivity) before deciding:
+`qwen2.5-14b-64k:latest` — 931 tokens in 77.6s (~12 tok/s); `qwen2.5:14b-instruct` — 889 tokens
+in 52.9s (~17 tok/s). Both far too slow to become the interactive `OLLAMA_MODEL` default — a
+family member waiting 50-80s for "what's for dinner" on the wall tablet is a worse experience
+than today's `qwen3:8b` — but exactly right for a background job nobody is watching, like
+summarizing a Hero email. Ash chose `qwen2.5:14b-instruct`.
+
+**What shipped:** `getSummaryAiProvider()` in `src/ai/provider.ts` — a second, independently
+cached `AiProvider` instance (`OLLAMA_SUMMARY_MODEL`, default `qwen2.5:14b-instruct`, longer
+180s timeout than the interactive provider's 120s) alongside the existing `getAiProvider()`.
+`getAiProvider()` and `OLLAMA_MODEL` are completely untouched — this is additive, not a swap.
+`npm run ai:summary-check` (`scripts/ai-summary-check.ts`) proves it end-to-end through the
+real `AiProvider.chat()` path (not raw `fetch`, so it's the actual seam a future caller will
+use), against a school-notice summarization prompt: correctly produced a one-sentence summary
+and flagged that a reply was needed, in 1.0s for that short prompt.
+
+**Nothing calls this provider yet.** It exists so the Hero email ingestion pipeline (Phase 13)
+starts from a proven, chosen model rather than a default guessed at implementation time. That
+pipeline itself remains blocked on the Gmail OAuth/credential decision recorded in the previous
+entry and in HANDOFF.md's NEXT TASK.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (38 files, 363 tests,
+unchanged — no new domain logic, just a second provider instance), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`.
+
+## 2026-08-31 - Kids/School foundation: child school field, notifications table, `/kids` screen (Claude Code)
+
+Ash closed out the shopping/order-history work ("i think the shopping works lets move on to
+next stage") and asked to start the Kids/School module, adding two new pieces of context: a
+dedicated Gmail inbox (`007agentuse@gmail.com`, not committed anywhere) that Hero notification
+emails are being forwarded to "for agents to access", and a second local model ("hermes",
+`qwen2.5-14b-64k`) available alongside the existing `qwen3:8b` Ollama provider.
+
+Scoped via `AskUserQuestion` before writing anything, per CLAUDE.md's Hero rules (no scraping,
+no stored Hero credentials, email ingestion is the preferred first integration path) and the
+size of the ask (a new module spanning two AshHome phases):
+
+- **Gmail access mechanism** — automated Gmail API polling, not a paste-based importer.
+  Deliberately deferred building the actual OAuth/polling pipeline to a follow-up slice: it
+  needs a Google Cloud OAuth app and credential storage design that has not happened yet, and
+  building it blind against a "let me know if any use" aside would have been guessing at
+  Ash's intent rather than confirming it.
+- **Build order** — foundation first (child profiles + a real Kids screen), Hero ingestion
+  right after. This session built the foundation only.
+
+**What shipped**, all against the real Supabase database (migration `0013`, applied and
+RLS-checked — `school_notifications` now shows in `npm run db:rls` with 1 policy, matching
+every other table):
+
+- `household_members.school` — free-text school name, `Child` members only (least-data
+  principle: enough to label whose notice is whose, nothing that identifies the child to a
+  third party). Editable from the existing Household screen's member sheet.
+- `school_notifications` table and `SchoolRepository` (`list`/`add`/`markRead`/`dismiss`),
+  the normalised shape CLAUDE.md sketched: `childId` (nullable — CLAUDE.md: "must not invent
+  missing dates, requirements or school information", so an unattributed notice is kept, not
+  guessed at), `provider`, `externalReference` (Hero-email dedup key, unique per household +
+  provider so an ingestion retry can never double-insert), `title`/`summary`, `eventDate`/
+  `dueDate` (separate, nullable — a notice can carry either, both or neither), `actionRequired`/
+  `actionType`, `sourceLink` (deep-link back to the source, never a replacement for it),
+  `read`/`dismissed`.
+- `schoolNotificationProviderSchema` is `'hero-email' | 'manual'` today — the enum and the
+  storage shape exist, but there is no `SchoolProvider` interface with pluggable
+  implementations yet, just the one write path (`manual`). That interface is Phase 13 work,
+  built when there is a second provider that actually needs it.
+- `/kids` screen: each child's avatar/name/school, and a notice list sorted so an unread
+  action-required item beats an older-but-handled one regardless of age
+  (`visibleNotifications` in `src/domain/services/school.ts`) — the "urgent family/school
+  actions first" ordering CLAUDE.md's information hierarchy asks for. Mark read/unread,
+  dismiss (soft — dismissed rows stay in the database, just filtered out of what's shown).
+- `NotificationSheet` — hand-enter a notice (title, details, which child, event/due date,
+  action-required + type, source link). This is the same `school.add()` a future Hero-email
+  pipeline will call into; nothing about the storage or the screen changes when that lands,
+  it just stops being the only way a notice gets in.
+- Dashboard Kids card promoted from `PlaceholderCards.tsx` to its own `KidsCard.tsx`: real
+  children, unread-notice count, top 3 notices with an urgent badge, "Open Kids" action —
+  no longer labelled "Placeholder — real data arrives with Phases 12–13".
+- localStorage repository refuses school reads/writes with the same "needs the database"
+  message as feedback/order-history — this is shared, cross-device family data, and a
+  browser-local copy of it would be actively wrong, not just incomplete.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `npm test -- --run` — 38
+files / 363 tests passing (6 new: `src/domain/services/school.test.ts`), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build` clean including the new `/kids`, `/api/school`, `/api/school/[id]`
+routes, `npm run db:migrate` and `npm run db:rls` run against the real database.
+
+Not yet deployed to production (SSH + `docker compose up -d --build`) as of this entry — see
+HANDOFF.md for the exact next step.
+
+## 2026-08-31 - Order import batch cap and review-noise fixes (Claude Code)
+
+Ash pasted the real invoice text directly into the running app — the correct path — and the
+multi-order splitter read all 5 orders correctly (214 items, matching the earlier parser-only
+count), but the save failed. `app/api/orders/route.ts` capped a batch at 200 lines; a five-order
+paste sends every line in one POST, so 214 tripped it with a 400 the UI reported only as "Could
+not save these orders." Cap raised to 2,000, and the sheet's error message now includes the real
+thrown text rather than a fixed string.
+
+Also trimmed review noise Ash flagged: liquor-licence footers, a standalone `Total` line, a bare
+fee amount on its own line, and an out-of-stock item's shorter one-price echo are now recognised
+and skipped silently instead of appearing under "couldn't be read."
+
+Verified: typecheck, lint, 337 tests, build, and a clean dev-server restart (200 on `/sign-in`).
+Noted for future sessions: running `npm run build` while `npm run dev` shares the same `.next`
+directory corrupts the dev server's webpack cache — delete `.next` and restart dev if that
+happens.
+
+**Resolved later the same day.** The retry still failed at first, but not from the app: Ash's
+browser was pointed at port 3000, served by a separate pre-existing process with the old code, not
+the restarted instance on :3002. Once corrected, the real import succeeded — **214 lines across 5
+real, correctly-dated orders**, confirmed directly in the live database. Order-history import is
+now done and working end to end, not just parser-tested. "Common order" in Settings shows real
+data, led by Pams NZ Spring Water 3l, Pams Large & Thick Tissues, Organic Fairtrade Bananas, Pams
+Classic Brie Cheese and Pams Pure Butter, all 5/5 orders.
+
+## 2026-08-31 - Order history matched to the New World catalogue (Claude Code)
+
+`OrderHistoryRepository.matchToCatalogue()` links unmatched `order_line_items` to cached
+`retailer_products`, reusing `rankProduct` and the same 0.86 confidence bar the trolley uses for
+"ready" — automatic matching stays exact/high-confidence only, consistent with how the rest of the
+app treats New World matching. Enrichment, not a violation of the table's append-and-read-only
+design: the historical fact is untouched, only a foreign-key link is backfilled, and it is safe to
+re-run any time. `POST /api/orders/match`, a Settings button, a checkmark per matched item in the
+common-order list.
+
+The household's real catalogue cache only has 67 products right now (mostly milk/bread/cheese from
+earlier testing), so most of Ash's 214 real imported lines are not yet matched — expected, and it
+improves on its own as the cache grows through ordinary Shopping/trolley use.
+
+Verified: typecheck, lint, 337 unit tests, `npm run test:db` (15 integration tests including a
+live match-and-never-twice check against a throwaway household, cleaned up after; the real
+household's 214 rows confirmed untouched), build.
+
+## 2026-08-31 - Reorder prediction reads order-history cadence (Claude Code)
+
+New `predictReordersFromHistory` averages the real gaps between an item's past order dates and
+flags it once that many days have passed since the last order — a materially stronger signal than
+the existing pantry-event heuristic (`predictReorders`, unchanged, still runs). Needs two distinct
+order dates before it says anything about an item; a single purchase teaches it nothing, so
+nothing is guessed at. `/api/pantry/suggestions` merges both signals, the cadence one winning on
+overlap since it is backed by real dates. Pantry's "Keep an eye on" card shows the new reason
+inline; the "Add" button is unchanged — still one manual action, no automation added.
+
+Verified: typecheck, lint, 342 tests (up from 337), build, clean dev-server restart.
+
+## 2026-08-31 - "Matched 0 of 214" traced to a threshold bug, fixed (Claude Code)
+
+Ash ran the New World catalogue match against the real 214-line import and got zero matches,
+despite the catalogue holding several milks that are plainly the same products. Cause: New
+World's own product names glue the size onto the name (`Milk3l`); a PDF invoice prints it with a
+space (`Milk 3l`). `rankProduct`'s token-overlap branch does recognise every token matches once it
+tokenises, but the formula's ceiling for a *perfect* overlap is exactly `0.85` — the `0.86` bar
+copied from the trolley's "ready" threshold rejected every 100%-overlap match categorically. Not
+a conservative choice, a threshold bug. Lowered to `0.85` specifically for order-history matching,
+justified at the call site: this backfills metadata on recorded history, not something entering a
+cart unreviewed. Pinned with a new integration test reproducing the exact glued/spaced scenario.
+
+Verified: `npm run test:db` (16 tests, up from 15), typecheck, lint, 342 unit tests, build, clean
+dev-server restart. Ash needs to press "Match to New World catalogue" again for it to take effect.
+
+## 2026-08-31 - getCommonOrder assistant tool, and reorder suggestions merged (Claude Code)
+
+New read-only tool `getCommonOrder` reads `summariseCommonOrder` so "Ask AshHome" can ground an
+answer in what the household actually buys, not guess. `getReorderSuggestions` now merges the
+pantry-event signal with the order-history cadence signal via a shared `mergeReorderSuggestions()`
+helper used identically by `/api/pantry/suggestions` and this tool, so the two surfaces cannot
+drift apart. System prompt updated accordingly.
+
+Deliberately not attempted: a full "plan 5 dinners from what we usually buy" flow. The tools exist
+now, but whether the assistant's 3-tool-round cap is enough for that sequence in one exchange is
+untested — try it against the real model before assuming it needs a bigger budget or a dedicated
+tool.
+
+Verified: typecheck, lint, 345 tests (up from 342), build, clean dev-server restart.
+
+## 2026-08-31 - Live-tested against qwen3:8b: real findings, not all fixed (Claude Code)
+
+New `scripts/ai-ask-check.ts` (`npm run ai:ask`) calls `askAssistant()` in-process against the
+real household, bypassing the auth `/api/ai/ask` needs. Two honest findings from actually running
+it, not assumed:
+
+`getCommonOrder` works and answers correctly for most phrasings against Ash's real 214-line
+import — but "What do we usually buy?" reliably gets a hollow "I'll check..." with no tool call,
+reproduced twice. A system-prompt line forbidding exactly that did not fix this specific case;
+recorded as a known gap, not solved by one guessed sentence.
+
+The previous entry's worry about the assistant's 3-tool-round budget was the wrong worry. The
+real blocker for "suggest a recipe from what we usually buy" is that `assistant.ts`'s pre-existing
+regex fast-path `directRecipeSearch()` (built before order history existed) intercepts any
+question matching find/suggest + recipe **before the model gets a turn**, and feeds the whole
+question text as a literal search query — reproduced twice with garbage queries and failed
+searches. Pre-existing architecture, not introduced this session, but the real next task: narrow
+the fast-paths to skip when the question also references order history, pantry or the plan.
+
+Verified: typecheck, lint, 345 tests (unchanged — this is a product-behaviour finding, not new
+coverage), clean dev-server restart.
+
+## 2026-08-31 - Fast-path fix: order-history recipe requests now actually chain tools (Claude Code)
+
+Fixed both reproduced failures from the previous entry. `NEEDS_HOUSEHOLD_GROUNDING` regex in
+`assistant.ts` makes `directRecipeSearch()` back off when a recipe request also references order
+history, common order or buying habits, instead of feeding the whole question as a garbage search
+query. Live-reverified against qwen3:8b: both previously-broken questions now correctly chain
+`getCommonOrder → searchRecipes` and answer from real data (one found a real recipe from an actual
+top common-order item; the other used the full 3-round budget productively and answered honestly
+when nothing matched — confirming the round cap was never the real constraint). No regression: a
+plain recipe request still hits the fast path, 1.3s vs 4.5-8.3s for the full loop.
+
+The `getCommonOrder` phrasing gap ("What do we usually buy?" not calling the tool) remains open —
+a separate, still-unsolved issue.
+
+Verified: typecheck, lint, 347 tests (up from 345), build, clean dev-server restart, and live
+re-verification against the real provider for all three cases, not just unit tests.
+
+## 2026-08-31 - Weekly meal-plan/shopping-list email via AWS SES (Claude Code)
+
+Ash confirmed AWS SES is available and answered the two scoping questions: content = weekly meal
+plan + shopping list; trigger/recipient = manual button in Settings, sent only to the signed-in
+person's own address, no scheduling, no recipient field.
+
+Deliberately not AI-written — `buildWeeklyDigest()` assembles the email from the same real data
+the app already shows, in code, matching the project's "never invent a quantity" rule everywhere
+else. New `src/email/` mirrors `src/ai/`'s provider-abstraction shape exactly: `types.ts`
+(`EmailProvider`, `EmailError`), `sesProvider.ts` (new dependency `@aws-sdk/client-sesv2`),
+`provider.ts` (`getEmailProvider()`, cached like the AI provider and DB client). `POST
+/api/email/weekly` resolves the signed-in user's own email and sends — no recipient field exists
+anywhere in the request. The button press is the confirmation this project's rules require before
+external email goes out; no extra dialog for a self-addressed, non-destructive send.
+
+New env vars: `EMAIL_PROVIDER`, `SES_FROM_EMAIL` (must be a verified SES identity),
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`. None are set yet — Ash's step, never
+filled in on their behalf. Until then the button correctly fails with "Email is not configured
+yet." rather than crashing.
+
+Verified: typecheck, lint, 352 tests (up from 347 — `buildWeeklyDigest` covers the dinner list,
+remaining-vs-checked split, honest-empty cases, and budget comparison), build (confirms the AWS
+SDK never reaches the client bundle), clean dev-server restart. Not yet sent a real email — needs
+real SES credentials and a live click-through test.
+
+## 2026-08-31 - Deployed today's session to production (Claude Code)
+
+Ash asked to test the current build for real, confirmed a live homelab deploy explicitly.
+Commit `7458656` (64 files — this entire session had been sitting uncommitted) pushed to
+`stage-2/database-schema`, then deployed: SSH to `192.168.1.49`, `git pull` (clean fast-forward),
+`docker compose up -d --build`.
+
+The build failed once on `ENOSPC` — the host was at 99% disk, unrelated to any code here.
+`docker system df` showed 10GB+ safely reclaimable (old images for services no longer even
+running, plus build cache); pruning both freed 10.9GB without touching any live container or its
+data, and the rebuild succeeded. Verified exactly per `docs/deploy.md`: healthy, `/sign-in` 200,
+`/api/shopping` 401, no error logs, and — the check that matters — `https://home.ashnetbase.org`
+200 from outside the network, through the real tunnel and TLS.
+
+The live app now runs everything from today: order history, catalogue matching, reorder-cadence
+prediction, the AI grounding tools, and the weekly email feature (SES unconfigured there too,
+same as dev — Ash's step).
+
+Worth remembering: the homelab host runs close to its disk ceiling. Check `df -h` or prune before
+a future deploy rather than after it fails.
+
+## 2026-08-31 - The deployed app has been running on localStorage, not Postgres (Claude Code)
+
+Ash checked Settings on the site right after the deploy above and it showed the Stage 1
+localStorage message and no Order History/Email sections — both gated on server-data mode.
+`NEXT_PUBLIC_AGROCER_SERVER_DATA` is a `NEXT_PUBLIC_*` value, inlined at `next build` exactly like
+the two Supabase values beside it — but it was set under `docker-compose.yml`'s `environment:`
+(runtime), which does nothing for a build-time-inlined value. The compiled client bundle has
+always read it as unset. This means the deployed container may never have genuinely used the
+household database from a browser, contradicting earlier browser-verified claims that were almost
+certainly checked against the dev server instead.
+
+Fixed by moving it into the `Dockerfile`'s `ARG`/`ENV` pair and `docker-compose.yml`'s
+`build.args:`, mirroring the two Supabase values exactly. Redeployed. Not proven correct by
+static bundle inspection (inconclusive); real confirmation is Ash re-checking Settings live.
+
+## 2026-08-31 - Shopping UX fixes, and a serious trolley false-success bug (Claude Code)
+
+Same day, continued live testing against production. Cleared 3 leftover test items from the real
+shopping list (confirmed with Ash first). Built two requested features: per-item and bulk "Add"
+buttons on Settings' common-order list (now also duplicated onto the Shopping screen itself via
+`CommonOrderQuickAdd`, so it doesn't need a detour to Settings), and `guessCategory()` — auto-
+suggests a shopping item's category from its name (household products checked first, then a
+keyword list), wired to never override an explicit choice or an existing item's category on edit.
+
+Also, at Ash's confirmed request: choosing a New World product for an item now renames the item to
+New World's exact title (not just saved as a preference under the typed name), and a live search
+can now be cancelled with a "Stop" button instead of waiting out the 60s timeout.
+
+**The serious one:** Ash's live batch-add reported "3/3 added" while nothing reached the real New
+World trolley. Root cause in the extension's `addCurrent()`: it trusted any visible quantity
+number *before* trying to click Add — New World shows a "how many would you like?" selector
+defaulting to `1` before anything is actually added, and the code mistook that default for
+"already in the trolley," skipping the click entirely and reporting false success. Fixed: Add is
+now always clicked first when present; a pre-existing quantity is only trusted when no Add button
+exists at all. New regression test in `scripts/extension-smoke.mjs` pins the exact scenario.
+Extension bumped to 0.1.6 — **confirmed working live by Ash after reloading it**, not just by
+code review.
+
+Verified: typecheck, lint, 357 unit tests, `npm run extension:check`, build. Web app deployed
+(commits `d3fbc9c`, `34dd51d`, `041738e`), healthy, confirmed live through the public URL each
+time. The extension fix needed a separate manual reload in `chrome://extensions` — it is not part
+of the Docker/web deploy at all.
+
+## 2026-08-31 - Multi-order import, and a silent "Use this product" bug fixed (Claude Code)
+
+`parseNewWorldOrderBatch` splits a paste covering several invoices — Ash's real order history
+turned out to be five separate confirmations concatenated together — on a *changed* "Tax Invoice
+N" number, so a multi-page invoice's repeated header does not split it into several orders.
+`OrderImportSheet` reviews one date-grouped section per order. `scripts/import-orders.ts`
+(`npm run orders:import`) does the same from a file, for bulk backfills.
+
+A live import of the real orders was attempted and rolled back. There is no way to paste a user's
+message verbatim into a file with the available tools — the text has to be regenerated — and
+across roughly 700 lines that drifted: the first order's line-item total came to $324.04 against
+an actual invoice subtotal of $253.50. All 214 rows were deleted and `order_line_items` confirmed
+empty rather than risk leaving wrong numbers in real financial history. The correct path is
+pasting directly into the Settings importer, never through an agent retyping the source text.
+
+Separately, `MatchNewWorldProduct` (the add/edit item sheet's inline matcher) looked broken:
+"Use this product" saved the preference correctly, but the only feedback was the shared banner in
+`ShoppingScreen`, sitting behind the open sheet and invisible. It now collapses to a
+"Matched: <product>" state immediately on success. Also fixed while looking at this: the matcher
+never reset between items, so a match for one item could show stale against the next; the sheet
+now keys it on a counter incremented every time it opens.
+
+Verified: typecheck, lint, 336 tests, build. Migrations `0011`-`0012` are applied to the live
+Supabase project; `npm run db:rls` confirms all 14 tables RLS-protected and `order_line_items`
+empty. Not yet visually re-verified in a browser.
+
+## 2026-08-31 - Order history import and "common order" summary (Claude Code)
+
+The start of a larger plan Ash asked for: paste past New World order confirmations, learn what
+the household usually buys, then (in later, separate tasks) match that against the New World
+catalogue, upgrade reorder prediction to use it, and build AI-suggested meal plans from it. This
+step is the import and storage foundation only — nothing after "common order" is built yet.
+
+**`src/domain/services/orderImport.ts`** parses a pasted invoice into line items: name, quantity
+(the *supplied* quantity, not ordered — an out-of-stock line has nothing bought), unit and price.
+It reads a substitution ("(sub) ...") as the real purchase and drops the out-of-stock original.
+**It never reads a customer name, address, phone number, or order/invoice number** — those don't
+match the product-line shape it looks for, so nothing about them is extracted, which is why it is
+safe to point at a real household invoice. A money-looking line that isn't a recognised product
+or known invoice boilerplate (subtotal, GST, etc.) is surfaced as "unparsed" rather than guessed
+at or silently dropped, the same rule `recipeImport.ts` follows.
+
+**`order_line_items`** (migration `0012`, RLS policy hand-added following the `0010` pattern) is
+append-and-read only, the same shape as `meal_feedback` — a line imported wrong is deleted and
+re-imported, never edited in place. `OrderHistoryRepository` follows `FeedbackRepository` exactly:
+local storage refuses writes (shared cross-device history cannot live in one browser), Drizzle and
+the API route implement it for real.
+
+**`OrderImportSheet`** (Settings → Order history) is paste → review → confirm, matching
+`RecipeImportSheet`'s shape: every parsed line is shown before saving, removable individually, with
+an editable order date (defaulting to whatever date the parser found). **`summariseCommonOrder`**
+(`src/domain/services/orderHistory.ts`) is a pure frequency ranking over imported lines, shown as
+"Your common order" once anything has been imported. It accepts an `excludeNames` option for
+staples bought elsewhere (Ash mentioned bread) — not yet wired to a persisted setting, since that
+belongs with whichever later feature actually reads it.
+
+**Deliberately not done in this pass**, and each is its own next task: matching imported lines to
+`retailer_products` (the schema already has optional `matchedProductId`/`matchedProductName` so
+this doesn't need another migration), upgrading reorder prediction to use order history instead of
+only `inventory_events`, and an AI read-only tool for order-history-based meal suggestions
+(Phase 10). AI-generated emails were explicitly separated out as needing their own scoping —
+SMTP credentials, a trigger design, and human confirmation before sending, per the project's
+sensitive-action rules — and are not planned here at all yet.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (333 tests, up from 321), `npm run
+build`, `npm run db:generate` (migration `0012` reviewed by hand, reruns clean). Migration `0012`
+is not yet applied to the live Supabase project. Not yet visually verified in a browser.
+
+## 2026-08-31 - Recipe instructions/photo wired through, and typo-tolerant search (Claude Code)
+
+Three of the four items Ash picked from the earlier meals/search survey. `mealSchema` gained an
+optional `instructions` field (migration `0011`, additive nullable column) and TheMealDB's
+instructions/thumbnail — already fetched by `/api/recipes/:id` but discarded on import — now flow
+into it; pasted recipes also capture everything after a "Method"/"Instructions"/"Steps" heading.
+`MealFormSheet` gained a "How to cook it" textarea (new `FormTextareaField` primitive) and
+`MealDetailSheet` displays it. `next.config.ts` now allowlists `www.themealdb.com/images/**` for
+`next/image`, since a real external thumbnail can reach `meal.image` for the first time. The meal
+picker's search now matches ingredients as well as name. New `src/lib/search.ts` →
+`fuzzyMatch()` adds typo tolerance (substring first, then per-word edit distance) to Products,
+Pantry and the meal picker — **deliberately not** applied to New World retailer matching
+(`src/shopping/matching.ts`), which stays exact/token-overlap on purpose since it decides what is
+safe to add to a real trolley automatically.
+
+New World specials integration (the fourth item) was surveyed but not started — it is Stage-5-
+sized (same Cloudflare/companion-extension constraints as the catalogue) and needs its own task.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (321 tests, up from 313),
+`npm run build`, `npm run db:generate` (migration `0011` reviewed by hand). Migration `0011` is
+not yet applied to the live Supabase project. Not yet visually verified in a browser.
+
+## 2026-08-31 - Inline New World matching in the add/edit item sheet (Claude Code)
+
+Ash asked for the earlier-deferred fast-follow after all. `ShoppingItemSheet` now offers a
+collapsed-by-default "Match a New World product now" expander (`MatchNewWorldProduct.tsx`) so a
+product can be matched to New World right when a shopping item is added or edited, instead of
+requiring a separate "Prepare New World trolley" pass afterward. It shares the same search paths
+(desktop extension when online, 24/7 catalogue otherwise) and saves through the existing
+`POST /api/trolley/preferences` endpoint keyed by the typed item name text — this works even for a
+brand-new item that has not been saved yet, since preferences are keyed by normalised name, not by
+shopping item id. `ShoppingScreen` threads its existing extension state through using a synthetic
+draft key for new items and the real item id when editing. No schema or API change.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (313 tests), `npm run build`. Not yet
+verified visually in a browser or against the live desktop extension — no browser connection was
+available this session.
+
+## 2026-08-31 - New World product-search feedback and batch-add stall fixed (Claude Code)
+
+Two more issues surfaced from live use of the New World trolley. First, the standalone "New World
+products" browse panel gave no visible confirmation when a product was chosen as the household
+preference — the save worked, but the only feedback was a tiny status line inside the still-open
+panel, silent entirely when no trolley had been prepared yet. `NewWorldCatalogue.onPreferenceSaved`
+now carries the confirmation message up to `ShoppingScreen`'s shared banner and the panel closes
+itself after a successful save. Second, the Chrome batch-add extension could silently stall after
+adding only the first ready item: `background.js` awaited the content script's response with no
+timeout, so an unresponsive page left the whole batch hung with nothing surfaced. A 25-second
+per-item timeout now records a failure and advances to the next item instead.
+
+Also confirmed, not a bug: a saved preference that keeps failing plausibility (like the
+"tastey cheese" → corn chips case) is expected to keep showing "Needs review" every prepare until
+someone explicitly replaces it via "Search for a different product" — the wrong preference is
+never auto-deleted, by design, only forced out of the ready state.
+
+Inline New World product matching from the add/edit-item sheet was proposed as a fast-follow and
+explicitly deferred by Ash — tracked as a future task, not started.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (313 tests), `npm run extension:check`.
+
+## 2026-08-31 - Stale prepared-trolley card fixed (Claude Code)
+
+Ash reported the New World trolley card on Shopping kept showing items no longer on the shopping
+list. The prepared trolley (`/api/trolley/prepare`) correctly snapshots only currently-unchecked
+shopping items at the moment it is pressed, but `ShoppingScreen` held that snapshot in local state
+with nothing to invalidate it afterward — checking an item off, removing it, or editing the list
+from another device or the AI assistant left ghost lines on the card until "Clear trolley" was
+pressed by hand. A `useEffect` now drops any trolley line whose shopping item is no longer on the
+live unchecked list, and clears the card entirely once nothing valid remains. No API/schema
+change. Verified: typecheck, lint, and all 313 unit tests pass.
+
+## 2026-08-30 - Trolley clearing and live product-heading verification repair (Codex)
+
+The first live Add batch returned `product-not-found` for all three correct saved URLs because New
+World's current product identity was not exposed through the extension's narrow `h1` selectors; the
+saved search names also joined sizes (`Milk2l`, `Bread600g`). Extension 0.1.5 ranks visible accessible
+headings by meaningful product-token overlap, normalises letter/number boundaries, and ignores size
+tokens only for identity comparison. It still rejects a different product before clicking Add; the
+browser smoke check covers both outcomes. The review UI now has **Remove from this trolley** on each
+line and **Clear trolley** for the whole prepared batch. These actions intentionally leave the
+underlying family shopping list unchanged. Server-side product-form matching uses the same joined
+letter/number normalisation, so the observed `Tasty Cheese Corn Chips170g` preference is forced back
+to review for a `tastey cheese` list item. Typecheck, lint, all 313 unit tests, the browser smoke
+check, and production build pass. Commit `1cf07b7` deployed the first slice; the matching follow-up
+is recorded separately. Live signed-in confirmation remains.
+
+## 2026-08-30 - Live New World plain Add control repair (Codex)
+
+The first successful 0.1.3 catalogue search exposed the next live boundary: New World's current
+product page presents a visible button labelled simply `Add`, without the trolley/cart attributes
+the extension required. Extension 0.1.4 adds a narrowly matched visible-text fallback for `Add`,
+`Add to trolley`, or `Add to cart`, then still requires a visible resulting quantity before it can
+report success. Quantity inputs named for quantity are also recognised, and selector failures now
+list a bounded set of visible control labels for diagnosis. The installed-Chrome smoke check now
+exercises both product extraction and verified Add behavior; typecheck, lint, all 313 unit tests,
+and the production build pass. Commit `e8da3fc` is deployed and healthy on the homelab. Live
+signed-in confirmation remains.
+
+## 2026-08-30 - Live New World nested-card extraction repair (Codex)
+
+The first post-deployment search reached New World but returned no candidates because extension
+0.1.2 assumed product links lived in one of three card wrappers and required the `www` hostname.
+Extension 0.1.3 keeps the strict `/shop/product/` boundary but supports both retailer hostnames,
+walks generic nested `div` cards, pairs sibling image/name links by product path, and waits up to 30
+seconds for client rendering. Failure messages now report how many genuine product links were seen,
+so a future markup change is diagnosable. The app timeout was extended to 60 seconds. Verified with
+the new installed-Chrome extraction smoke check, extension syntax checks, typecheck, lint, all 313
+unit tests, and a production build. Commit `a60a885` was deployed to the homelab; the container is
+healthy and local/public authentication-boundary checks pass. Live signed-in New World confirmation
+still requires reloading extension 0.1.3.
+
+## 2026-08-30 - Always-on household New World catalogue (Codex)
+
+The deployed Agrocer container plus Supabase are now explicitly the 24/7 household catalogue; a
+redundant second database/container was rejected. Every specific product candidate returned by the
+visible Chrome extension is persisted automatically, rather than only the final selected product,
+so phone/tablet browsing remains useful while the workstation is off. Shopping labels cached data
+as the 24/7 household catalogue and shows its newest update timestamp. An optional authorised feed
+still fits the existing `NEW_WORLD_CATALOGUE_URL` seam, but unattended New World search crawling is
+not implemented: the public search path is disallowed by `robots.txt`, direct product requests hit
+Cloudflare, and the website terms reserve product data/images. Added a teaching-style homelab guide
+at `docs/homelab-catalogue.md`. Verified with 313 unit tests, 13 real-database integration tests,
+typecheck, lint, production build, schema no-op generation, extension syntax checks, and RLS on all
+13 tables. Deployed commit `2078ba1` to the homelab after verifying the ED25519 host fingerprint;
+the rebuilt container reported healthy, local and public sign-in/manifest/service-worker checks
+returned 200, and the protected shopping API correctly returned 401 while signed out.
+
+## 2026-08-30 - New World search-flow and activity UX repair (Codex)
+
+Audited the complete catalogue, replacement-search, cross-device relay and trolley-result flow after
+live use exposed searches with no choices or images and activity that could not be cleared. Extension
+0.1.2 now waits for New World's client-rendered product cards and reads real lazy-loaded HTTP image
+URLs instead of accepting placeholders. The general product search and per-line replacement action
+now share the live Chrome/cross-device fallback, so returned candidates appear in both entry points.
+Searches time out truthfully instead of leaving processing jobs stuck. Search and trolley activity can
+be dismissed without deleting its persisted audit history, and remote image failures show a consistent
+placeholder. Verified with 312 unit tests, 13 real-database integration tests, typecheck, lint,
+production build, extension syntax checks, schema no-op generation and RLS on all 13 tables. A live
+test still requires reloading unpacked extension 0.1.2 in the user's signed-in Chrome profile.
+
+## 2026-08-30 - Cross-device New World product search and mobile feedback (Codex)
+
+Migration `0010` adds household-scoped retailer product-search jobs. When the optional live
+catalogue is absent, a phone/tablet can now queue a replacement search for the normal desktop
+Chrome extension; the desktop explicitly processes it and validated exact candidates are stored,
+cached, and polled back to the originating PWA. Shopping now gives visible feedback for product
+selection, queued search, queued trolley, processing, and partial failure instead of leaving button
+presses apparently unanswered. Remembered products with a conflicting form (such as corn chips for
+cheese) are forced back to review. Verified with 312 unit tests, 13 real-database integration tests,
+RLS on all 13 tables, schema no-op generation, typecheck, lint, and production build. The relay still
+requires a live user test with desktop extension 0.1.1; a 24/7 catalogue remains optional.
+
+## 2026-08-30 - Live trolley product identity and mobile navigation repair (Codex)
+
+The first live batch exposed false product associations (`View all Milk` saved as a product and
+names paired with different product URLs) plus false-negative quantity verification. Extension
+0.1.1 now accepts only New World `/shop/product/` results, verifies the opened product heading
+before any click, reads an existing visible quantity before changing it, and never reduces an
+over-quantity trolley. Generic saved links are forced back to review. Per-item execution failures
+are visible in Agrocer, and the large Shopping summary now scrolls instead of trapping mobile
+navigation. The exact live quantity selector still needs retesting after reloading the extension.
+Verified with extension syntax checks, typecheck, lint, production build and 311 unit tests.
+
+## 2026-08-30 - Mobile New World catalogue and homelab feed seam (Codex)
+
+Shopping now includes a New World product section for phone, tablet and desktop. It browses/searches
+an authenticated server-side catalogue endpoint, displays real product images, sizes, prices and
+special prices, and remembers an exact choice against an existing shopping item. The same catalogue
+is available when resolving uncertain trolley lines without the Chrome extension. Live results are
+Zod-validated and cached per household; a collector outage falls back to clearly labelled previously
+seen products. The homelab collector/API itself is not implemented or live-tested. Verified with
+typecheck, lint, production build, 310 unit tests and 12 real-database integration tests.
+
+## 2026-08-30 - Recipe search plans into the selected meal slot (Codex)
+
+The planner's empty-slot picker now says **Find a recipe** and opens the existing provider-backed
+recipe search directly instead of hiding it behind a paste-first import flow. A searched or pasted
+recipe still goes through the editable review form; saving from this route now creates the meal and
+assigns that exact new meal to the day and slot the person started from. Manual meal creation and
+the saved-meal picker are unchanged. Verified with typecheck, lint and all 308 unit tests.
+
+## 2026-08-30 - Cross-device trolley jobs and controllable preferences (Codex)
+
+Migration `0009` adds household-scoped trolley jobs and an enabled flag for remembered retailer
+choices. Phone/tablet PWAs can queue ready products; a desktop Shopping page with the extension
+polls for pending jobs and requires an explicit Process action. Results persist for the originating
+device. Saved choices can be paused, re-enabled, or replaced through a fresh New World search when
+specials or preferences change. Verified with 308 unit tests, 12 real-database integration tests,
+RLS on all 12 tables, typecheck and lint.
+
+## 2026-08-30 - Normal Chrome trolley extension fallback (Codex)
+
+Live Playwright search repeatedly reached Cloudflare's security challenge even after manual
+verification, so no bypass or stealth behavior was added. A Manifest V3 extension now bridges the
+Agrocer Shopping screen to the user's normal logged-in Chrome profile, processes an explicitly
+submitted batch one visible product page at a time, and returns verified per-item outcomes. The
+bridge protocol is Zod-validated and covered by the 306-test unit suite. Installing the unpacked
+extension and validating New World's live Add/quantity selectors remains manual.
+
+## 2026-08-30 - Stage 5 New World trolley companion foundation (Codex)
+
+Added household-scoped retailer-product cache and product preferences (migration `0008`),
+deterministic matching and confidence rules, remembered selections, prepare/send endpoints, and a
+visible Playwright companion with centralised selectors and truthful partial-failure reporting.
+The Shopping UI now separates ready, review and unavailable lines and requires a second explicit
+action before cart-building. The live database is migrated to 11 RLS-protected tables. Verified:
+303 unit tests, 11 database integration tests, typecheck, lint, production build, RLS probe and
+companion `/health`. Live New World search/cart selectors are not yet validated.
+
+## 2026-08-29 - AI meal catalogue and planner proposal coverage (Codex)
+
+Added `getMeals` and confirmation-gated `planMeal` to the assistant path, with validation and
+execution tests. The model can now prepare a saved meal for a requested day and slot without
+writing inside the assistant loop. Unit suite: 283 tests.
+
+## 2026-08-29 - Pantry reorder suggestions (Codex)
+
+Recent inventory events now feed an authenticated, read-only suggestion endpoint and Pantry UI.
+It flags repeated use and recently empty items; no shopping item is created automatically.
+Typecheck, lint and unit tests pass (279 tests).
+
+## 2026-08-29 - AI voice talk-back (Codex)
+
+Ask AshHome now supports a one-shot browser speech-recognition input and automatically reads the
+answer aloud with local `speechSynthesis`. Speech is cancelled when the card unmounts; no audio
+is uploaded. A future local transcription/voice-to-voice provider can replace this seam.
+Typecheck, lint and unit tests pass (277 tests).
+
+## 2026-08-29 - AI recipe save refresh and short session memory (Codex)
+
+Live qwen3:8b verification confirmed recipe search chaining into gated recipe saving. The
+dashboard refreshes Meals after confirmation. Ask AshHome now carries at most eight validated
+user/assistant messages for the current session only; no chat history is persisted. Typecheck,
+lint and unit tests pass (277 tests).
+
+## 2026-08-29 — Stage 2 COMPLETE: deployed, verified, installed (Claude Code)
+
+**Stage:** Stage 2 — Definition of Done satisfied
+**Status:** Complete
+
+`https://home.ashnetbase.org` is live on `192.168.1.49` behind the existing Cloudflare Tunnel,
+and Ash has installed it as a PWA on a phone. That last step is what the HTTPS question had
+been blocking since Stage 1, so the stage can finally close.
+
+Verified from outside the network rather than from the host: `/` and `/dashboard` redirect to
+`/sign-in`, `/sign-in` returns 200, `/api/shopping` returns
+`401 {"error":"Sign in to continue"}`, and `sw.js` and `manifest.webmanifest` return 200 over
+a real certificate. **The 401 matters as much as the 200** — it proves authentication is
+enforced on the public internet, not merely locally.
+
+**It took three wrong turns, two of them mine**, and they are worth recording because each
+came from writing something up rather than checking it:
+
+1. The tunnel route was `localhost:3000`. `cloudflared` is a container, so that meant
+   localhost *inside it*.
+2. Port 3000 was reported taken by Portainer. It was not — Portainer is on 8000/9443 and the
+   host is merely *named* `portainer`. I put that into the repository without probing.
+3. `cloudflared` was recorded as running on a different machine, inferred from the LAN-IP
+   routes. It runs on the same host; the routes use addresses because *some* services are
+   elsewhere.
+
+All three are corrected, and ADR-019 carries the corrections rather than being quietly
+rewritten.
+
+**Two UX faults found while closing the stage.**
+
+*There was no way into the wall dashboard from the app.* The dashboard had linked back to
+Agrocer since Phase 1, but nothing linked forward — the only route in was typing the URL,
+which is a poor answer for the person setting up a tablet. Settings now has a Wall dashboard
+section. It belongs there rather than in the bottom nav because it is an interface *mode*
+(`CLAUDE.md`), not a peer of Pantry and Shopping.
+
+*The Settings "Data" section was lying.* It still said "Nothing leaves your phone until the
+Agrocer backend arrives" — untrue since the app started reading Postgres, and a false privacy
+claim is worse than no claim. It now describes the household database when server data is on.
+The "Reset to demo data" button beside it called `reset()`, which the server repositories
+refuse by design, so it surfaced an error rather than doing anything; it is now hidden on that
+path. Both were listed in `HANDOFF.md` as known problems and had outlived the excuse.
+
+## 2026-08-29 — Meal feedback capture in meal detail (Codex)
+
+**Stage:** Stage 4 / AshHome Phase 7
+**Status:** Complete and verified.
+
+The meal detail sheet now asks the existing four-step question, “Have it again?”, records a
+whole-family or named-member answer against the planned meal date, and shows the three newest
+answers. Loading happens only when the detail sheet opens, so feedback history does not expand
+the initial household-data request. Corrections append another answer; no update/delete path was
+added, preserving the history contract.
+
+The server-data path uses the existing authenticated `/api/feedback` route and Drizzle repository.
+The localStorage repository still refuses writes: a rating stored on one device and missing from
+the wall would be false household history. The sheet reports that refusal inline rather than
+appearing to save it.
+
+**Verified:** `npm run check` (238 tests across 19 files), `npm run test:db` (10 integration
+tests, including newest-first feedback and cascade cleanup), `npm run db:rls` (all 9 tables
+protected; publishable key reads zero rows), and `npm run build`. No migration was required.
+Visual browser verification was unavailable because no browser connection was present.
+
+## 2026-08-29 — Structured meal cost estimation (Codex)
+
+**Stage:** Stage 4 / AshHome Phase 7
+**Status:** Complete and verified.
+
+Meal editing now captures each ingredient as a name, decimal amount, and unit, with an optional
+stable product-catalogue link selected from name suggestions. Existing free-text recipes remain
+valid and are parsed into editable fields only when opened; saving writes both the readable text
+array and the structured representation. This avoids a destructive rewrite and preserves the
+Stage 1/localStorage path.
+
+`estimateMealCost` prices compatible mass, volume, count, pack, and dozen amounts proportionally
+against current household catalogue package prices. Meal detail and Tonight's meal display the
+estimate only when every ingredient is covered; partial totals remain hidden because they would
+understate the real meal cost.
+
+Migration `drizzle/0007_glorious_pete_wisdom.sql` adds one nullable JSONB column to `meals` and
+was applied to live Supabase. ADR-021 records why the legacy text column remains authoritative for
+display and rollback compatibility.
+
+**Verified:** `npm run check` (234 tests across 18 files), `npm run test:db` (10 tests, including
+structured ingredient persistence), `npm run db:rls` (all 9 tables protected; publishable key
+reads zero rows), `npm run build`, and clean no-op reruns of `db:generate` / `db:migrate`.
+Visual browser verification was unavailable because no browser connection was present.
+
+## 2026-08-29 — Weekly grocery budget target (Codex)
+
+**Stage:** Stage 4 / AshHome Phase 7
+**Status:** Complete and verified.
+
+Households can now set an optional weekly grocery budget in Settings. Blank means no target;
+Agrocer does not invent a default for a family of five. The value is validated as positive NZD,
+stored as integer cents in `households.weekly_budget_cents`, and supported by both localStorage
+and Drizzle repositories. Older local settings remain valid because the new field is optional
+at the schema boundary.
+
+The Shopping screen compares the current whole-list estimate with the target, showing dollars
+left or dollars over plus a capped progress bar. Shopping Mode shows estimated total against
+the target, and the wall Shopping card shows `$estimate / $target`. This is a target against
+the current list, not historical spend tracking and not meal cost estimation.
+
+Migration `drizzle/0006_useful_ser_duncan.sql` was generated, reviewed, and applied to the live
+Supabase project. It adds one nullable integer column and leaves existing households unset.
+
+**Verified:** `npm run check` (228 tests across 18 files), `npm run test:db` (10 tests,
+including set/clear budget round-trip), `npm run db:rls` (all 9 tables protected; publishable
+key reads zero rows), `npm run build`, and clean no-op reruns of `db:generate` / `db:migrate`.
+Visual browser verification remained unavailable because no browser connection was present.
+
+## 2026-08-29 — Multi-item AI proposals preserve the whole request (Codex)
+
+**Stage:** Stage 3 / AshHome Phase 9
+**Status:** Complete and verified.
+
+"Add milk and eggs" no longer stops at the first write call. `askAssistant` collects every
+validated write call from the model's turn into one ordered `AssistantProposal.actions` list,
+without executing any of them. The dashboard shows every server-generated
+`AiWriteTool.describe` sentence behind one Add all / Cancel choice.
+
+`POST /api/ai/confirm` accepts that list, validates every tool name and argument before
+resolving repositories, and refuses the entire request if any action is invalid. Confirmed
+shopping additions use the existing `shopping.addMany` repository path, so the current
+multi-item action is one batch operation rather than a sequence that can silently stop halfway.
+
+The real qwen3:8b provider was exercised directly with "Add milk and eggs to the shopping
+list". It returned Milk and Eggs as two actions, both quantity one, and no write occurred.
+The tool specification no longer invites the model to guess supermarket categories, and it
+explicitly treats "eggs" as one shopping-list unit rather than twelve individual eggs.
+
+**Verified:** `npm run check` (221 tests across 17 files), `npm run test:db` (9 tests),
+`npm run db:rls` (9 tables protected; publishable key reads zero rows), and `npm run build`.
+The browser visual check could not run because no in-app or extension browser was connected.
+
+## 2026-08-29 — Stage 4 begins: pantry-to-recipe matching (Claude Code)
+
+**Stage:** Stage 4
+**Status:** Matching complete and verified. It is the keystone, not the whole stage.
+
+Started here rather than at the top of the scope list, because most of Stage 4 depends on
+knowing whether the household has an ingredient: pantry-to-recipe matching, meal cost
+estimation, waste and use-soon recommendations, and Phase 10's pantry-aware planning all need
+it. Recipe discovery and import, the first two items listed, need an external provider and
+depend on nothing.
+
+**It also closes something deferred twice.** The Tonight's meal card has carried a note since
+Phase 1 that its missing-ingredient warning was absent because it needed ingredient-level
+matching. It now exists, and the card says "Need Tomatoes, Onion".
+
+**No schema change, and no new burden on whoever types a recipe in.** `meal.ingredients` stays
+free text. Matching leans on the convention people already write in — name first, quantity
+after — so "Beef mince 500g" matches the pantry's "Beef mince".
+
+**The rule is stricter than the prefix test `matchProduct` already uses for pricing**, and
+that difference is the interesting part. A plain prefix match says "Rice vinegar 100ml"
+matches Rice, and the family is told they can make a stir-fry they cannot. So a pantry name
+matches only when what follows it is a **quantity or nothing**: `rice → 2 cups` matches,
+`rice → vinegar` does not. A wrong price is a rounding error; a wrong "you have this" sends
+somebody to the stove without an onion. Two tests exist purely to hold that line.
+
+The cost, stated in the code: an ingredient written quantity-first ("2 cups rice") will not
+match. It fails towards "check the cupboard" rather than towards a false promise, which is the
+right direction.
+
+**Quantities are deliberately not checked.** "Beef mince 500g" against 200g in the freezer
+reads as in stock. Doing better needs ingredients stored as structured amounts, which changes
+how a recipe is entered — a real cost, worth paying when meal cost estimation needs it, and
+that item is still open for exactly this reason.
+
+**Other decisions worth keeping.** `out` counts as missing rather than low: it is a row in the
+pantry but nothing in the cupboard, and for cooking tonight those are the same. The card shows
+nothing when nothing is wrong — a card that reports "0 missing" every night trains the family
+to stop reading it, and then it is useless on the night it matters.
+
+**Verified against the real pantry**, not fixtures. Spaghetti Bolognese planned for tonight
+produced "Need Tomatoes, Onion" — correct: Tomatoes are marked `out` and there is no onion.
+16 new tests, most of them about false positives rather than about matching more things.
+212 tests total, up from 194.
+
+One refinement from seeing it on the wall: an unmatched ingredient first rendered as written,
+so it read "Need Tomatoes, Onion 1". Trailing words beginning with a digit are now trimmed,
+using the same name-first convention the matcher relies on — and never the whole name, so
+"Soy sauce" survives.
+
+## 2026-08-29 — Stage 2's build work finished: history tables, CI, deployment (Claude Code)
+
+**Stage:** Stage 2 — everything that does not need Ash's hardware
+**Status:** The build half is complete and verified. The deploy itself is Ash's, and the
+remaining checkboxes say so rather than being marked done optimistically.
+
+**Two history tables (migration `0004`, policies in `0005`).** Both settled now because Stage 2
+is where the data model is settled and history cannot be backfilled — you cannot record last
+month's dinners after the fact.
+
+- `inventory_events` is written **by the pantry repository itself**, not by the route
+  handlers, so the log cannot drift from reality by somebody forgetting to write one. It never
+  throws: an audit trail that can fail a user's pantry update is worse than a gap in it.
+  Two decisions make it outlive what it describes — `pantry_item_id` is `ON DELETE SET NULL`
+  rather than `CASCADE`, and `item_name` is denormalised. Deleting an item is exactly when its
+  history becomes useful.
+- `meal_feedback` is append-and-read only. No update, no delete: a record of what the family
+  thought last Tuesday is history, not state. Four coarse ratings rather than five stars,
+  because a numeric scale invites precision nobody has about a Tuesday dinner. No UI — Stage 4
+  owns that — but the API exists so the path is real rather than a gap discovered later.
+
+**Verified against the live database, not fixtures.** Create → adjust +3 → delete produced
+exactly `created (after 2)`, `adjusted (delta 3, after 5)`, `removed (after 0)`, all three
+still naming "Audit test rice" with the item gone and the foreign key nulled. Feedback
+round-tripped, and a bad rating and a malformed date were both refused with 400. Nine
+integration tests now, up from six.
+
+**CI** (`.github/workflows/ci.yml`): typecheck, lint, test and build on every push and PR, plus
+integration tests and — the one worth having — an RLS job that fails if the publishable key can
+read anything. That is the check that would have caught the exposure closed in ADR-016, and it
+is there so a future migration cannot quietly reopen it. The build job uses obvious placeholder
+`NEXT_PUBLIC_*` values, which also proves the build does not secretly depend on a live project.
+Confirmed by building locally with `.env.local` moved aside.
+
+**Deployment.** The Dockerfile gained build args, because `NEXT_PUBLIC_*` is compiled into the
+client bundle rather than read at runtime — an image built with the wrong values cannot be
+fixed by restarting it. Compose now binds to `127.0.0.1:3000` rather than the LAN: only
+`cloudflared` needs to reach it, and publishing to the LAN would put an app holding family data
+on every device on the network over plain HTTP, where the session cookie travels in clear.
+The healthcheck moved from `/` to `/sign-in`, since `/` now redirects.
+
+**`docs/backup.md`**, with commands actually run against the live project rather than written
+from memory. The finding worth recording: a full `pg_dump` includes `auth.users`, so a backup
+is a credential store and must be treated as one. `backups/`, `*.sql.gz` and `*.dump` are now
+gitignored. A `--schema=public` variant is documented for when you would rather not hold
+password hashes, with the cost spelled out — restoring from it needs every account recreated
+and re-claimed.
+
+**One repair.** Migration `0003`'s snapshot was hand-copied from `0002` when it was registered
+manually, so both claimed the same id and `db:generate` refused to run with a collision. The
+chain is fixed and `db:generate` is a clean no-op again. Worth knowing before hand-registering
+another migration: the journal entry is not enough, the snapshot's `id`/`prevId` chain matters.
+
+## 2026-08-29 — The first write tool, behind a confirmation gate (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 9, slice 9b — the rung the whole AI ladder was building toward
+**Status:** Complete and verified
+
+The assistant can now change something: add one item to the shopping list. It never does so on
+its own — it *proposes*, and a person presses a button. ADR-018 records the shape and what was
+rejected.
+
+**Three properties do the work.**
+
+1. **`WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`, not a member.** ADR-015 made that split
+   structural; this keeps it structural, so the gate cannot be missed by adding a tool to the
+   wrong record. A test asserts the two records never overlap.
+2. **The sentence a person confirms is generated server-side from validated arguments**, never
+   taken from the model's prose. Worth the trouble: during testing the model claimed "I have
+   added seventeen loaves of bread" while proposing one loaf. The confirmation read correctly,
+   and there is now a test pinning exactly that case.
+3. **Arguments are validated twice** — once when proposing, once at `/api/ai/confirm` — because
+   the round trip through the browser means they arrive as user input the second time.
+
+**Verified against the real database.** Asking to add bread returned a proposal and left the
+list empty; confirming it added the row. `/api/ai/confirm` refuses a read tool, an invented
+tool, a repository method spelled as a tool name, an empty item name, an unknown category and
+an absurd quantity — six probes, all 400, list unchanged.
+
+**Two real problems the testing found, both fixed.**
+
+- *The model substituted an action.* "Plan burgers for Friday dinner" made it reach for the
+  only write tool it had and propose adding burgers to the **shopping list**. The gate caught
+  it — the sentence said plainly what it would do — but substituting is bad behaviour, so the
+  prompt now forbids it. Re-tested: it declines and names what it cannot do.
+- *The confirmation was below the fold.* Rendered inside the scrolling answer area, a 60-word
+  answer pushed the buttons out of sight. It now sits pinned above the input, outside the
+  scroll. A confirmation you have to scroll to reach is not a confirmation.
+
+**A known limitation, deliberately not papered over.** Asked for "milk and eggs", the model
+proposes milk and eggs go unmentioned. Ollama returns empty content alongside a tool call, so
+there is no prose in which to say "eggs still needs adding" — prompting for it was tried and
+cannot work. Fixing it properly means proposing a list, which needs a different confirmation
+UI. Recorded in the code at the point it matters.
+
+**And one bug this work surfaced, unrelated but worse.** The wall dashboard's Shopping,
+Tonight's meal and Kids cards did not gate on `hydrated`. `AgrocerProvider` seeds its initial
+state with the Stage 1 demo fixtures, so until the fetch resolved the kitchen wall showed a
+convincing fake shopping list — Milk, Bread, Bananas, $80.87 — and a dinner nobody planned. It
+was mistaken for real data during this session, which is precisely the failure the project
+cares most about avoiding. All three cards now show "Loading…" until the real data arrives.
+`HANDOFF.md` had listed the underlying issue as known, with a note that screens gate on
+`hydrated`; the dashboard cards never did.
+
+**Verified.** `npm run check` — 194 tests across 15 files (was 174/14). Build clean. The full
+flow driven in Chrome at 1280×800: proposal shown, Add it pressed, row written, and the
+Shopping card updating alongside — which needed `refreshShopping` exposed on the provider,
+since `/api/ai/confirm` bypasses the repositories that would normally notify it.
+
+## 2026-08-29 — Sign-in confirmed, and a lapsed session now goes to sign-in (Claude Code)
+
+**Stage:** Stage 2 — finishing what ADR-017 left rough
+**Status:** Complete and verified live
+
+Ash created the account and confirmed sign-in works. `npm run db:claim` linked
+`ashley.schippersas@gmail.com` to the `Ash` member; the other four members stay without
+logins, which is right — the children have profiles, not accounts.
+
+That left one rough edge, and it is now closed. A 401 from any client fetch redirects to
+`/sign-in?next=…` instead of surfacing "Request failed". The middleware refreshes the session
+on every *navigation*, which covers ordinary use but not the wall tablet: a screen open for
+weeks never navigates, so its refresh token can expire under it, and the next tap was hitting
+a dead end.
+
+**A 403 deliberately does not redirect.** It means the account is real but is not linked to a
+household — signing in again succeeds and changes nothing, so a redirect would loop. It gets
+`NotInHouseholdError` and a message instead.
+
+`src/data/api/authFailure.ts` is the one place that decision lives, and both `request` and
+`patch` now share a single `fail()` so they cannot drift apart. The assistant's own fetch path
+calls it too.
+
+**Verified live, with a real session**, which is the part worth recording: with `/dashboard`
+open, expiring the auth cookie made `/api/shopping` return 401, and the next interaction
+redirected to `/sign-in?next=%2Fdashboard`. That is exactly the wall-tablet scenario. 174 unit
+tests, up from 169, cover the decision table — including that the sign-in screen does not
+redirect to itself and that server rendering does nothing.
+
+Note for whoever repeats that test: the redirect navigates the page, which discards anything
+stashed in `window`. Save the cookie somewhere that survives navigation, or expect to sign in
+again afterwards.
+
+## 2026-08-29 — Supabase Auth: the household now comes from the signed-in user (Claude Code)
+
+**Stage:** Stage 2 — the last blocker
+**Status:** Complete and verified, with one part Ash must finish (creating the first account)
+
+Ash asked for continued progress without further questions, so the design decisions below were
+made rather than asked. Each is cheap to overrule; ADR-017 has the reasoning.
+
+| Decision | Choice |
+| -------- | ------ |
+| Method | Email + password (magic links need email delivery) |
+| User ↔ household | `user_id` on `household_members` — the profile *is* the person |
+| Joining a household | `npm run db:claim`, a deliberate act. Signing up grants nothing |
+| Default | Auth **on** unless `AGROCER_AUTH="off"` — fails closed |
+
+**The seam held.** `src/server/repositories.ts` was built in Stage 2 as the single place a
+household id is resolved, with handlers asking for repositories and never for an id. Auth
+replaced the body of that one function; no handler needed to learn about sessions. The only
+mechanical change was that `serverRepositories()` became async, so its fifteen call sites now
+await it.
+
+**Verified — the security half, thoroughly.** With no session, every route refuses:
+
+```
+/api/shopping /api/pantry /api/meals /api/products /api/household  → 401
+POST /api/shopping (a write)                                       → 401
+POST /api/ai/ask  (the assistant, and its tools)                   → 401
+```
+
+`/` and `/dashboard` redirect to `/sign-in?next=…` so the tablet returns where it was.
+`/sign-in`, `/sw.js` and `/manifest.webmanifest` stay reachable signed out — the last two
+matter, because a service worker that cannot register takes the PWA install with it (ADR-011).
+The sign-in screen renders in the Magic Patterns language and a wrong password gives
+"That email and password do not match." with the password cleared. 169 unit tests (up from
+165), the 6 integration tests still pass, and the build is clean.
+
+**Verified — the escape hatch.** With `AGROCER_AUTH=off` the API answers 200 again, pages stop
+redirecting, and every request logs a warning. That path exists so the integration tests and
+local work against a database do not need a session.
+
+**What Ash must do**, and why it is not done here: creating an account means creating an
+account, which this agent does not do. So:
+
+1. Supabase dashboard → Authentication → Users → add a user with your email and password.
+2. `npm run db:claim -- you@example.com "Ash"` — it lists the five members if you run it bare.
+3. Sign in at `/sign-in`.
+
+Until step 2, that account gets 403 from every route, which is the design working.
+
+**Known rough edge.** If a session expires while a screen is open, the client repositories get
+a 401 and the screen shows a generic failure rather than sending you to sign in. The middleware
+refreshes on navigation, so this needs a stale tab and an expired refresh token — but a wall
+tablet is exactly the device that sits still for weeks. Worth a client-side 401 handler.
+
+## 2026-08-29 — Read-only AI tools: the assistant can see the household data (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 9, slice 9a
+**Status:** Complete and verified; slice 9b (the first write tool) not started, and gated
+
+Third rung of the ladder. The assistant that had to refuse every question about the family's
+own data can now answer three of them from Postgres.
+
+**Shape, and why.** `CLAUDE.md` requires that the LLM never get unrestricted access and act
+only through explicitly defined application functions. So:
+
+- `src/ai/tools/registry.ts` is the boundary. Lookup is by exact name against a fixed record —
+  no dynamic dispatch, nothing that maps a model-supplied string onto a repository method. A
+  name that is not in the record is refused.
+- `src/ai/tools/readOnly.ts` holds the three tools and the `READ_ONLY_TOOLS` allow-list.
+- `src/ai/assistant.ts` is the loop: one orchestrator with tools, which is the architecture
+  principle this stage already committed to, not a swarm of agents.
+- `app/api/ai/ask` is the only route that reaches household data with a model attached.
+  `/api/ai/chat` stays what it was: a transport with no prompt, no tools and no data.
+
+**Three decisions that carry most of the safety.**
+
+1. **Every tool takes no arguments.** Nothing the model emits can widen what a tool reads, so
+   there is nothing to validate beyond the name. When a tool eventually needs arguments it
+   validates them with Zod in the registry before the implementation sees them.
+2. **Tools return prose, not JSON.** Fewer tokens, and a small local model reads it more
+   reliably — it does not have to infer that `checked: true` means already in the trolley.
+   Ids, per-item prices and notes are withheld: the model is answering a question, not
+   reconstructing the database, and every field handed over is a field it can garble.
+3. **A refusal goes back to the model as an ordinary tool result, not an exception.** The
+   model then explains the limit to the family in its own words instead of the whole question
+   failing with an error card. It is still logged.
+
+The loop caps at three tool rounds and withholds the tools on the final round, which is what
+forces an answer — a model still offered tools it cannot use will keep asking for them.
+Temperature is 0.2: these are household facts, not creative writing.
+
+**Verified against the real database**, not fixtures. Asked "what is in our pantry?", the
+assistant called `getPantry` and returned all sixteen rows correctly grouped — the eight
+`good` items, the six `low`/`soon` items and the two `out` items matched the table exactly,
+with nothing invented. "What can I cook tonight?" called `getPantry` and `getMealPlan` and
+suggested only things actually in stock. The empty cases are honest too: an empty shopping
+list is reported as empty rather than filled in. Asked to add bread and milk, it declined and
+pointed at the app. Asked about the kids' plans tomorrow, it said it cannot see the calendar.
+Answers took 0.2–1.3s.
+
+**The card changed with it.** The example chips are now the master-plan questions that 9a
+makes true, and the footnote says what is true today: it can read the list, pantry and meal
+plan; it cannot change anything, and cannot see the calendar, chores or school. An answer that
+came from a tool is labelled — "Checked your pantry" — so a family can tell their own data
+from the model's general knowledge at a glance. That label was first placed under the answer
+and moved to sit beside the question: under a 60-word answer on a short card it fell below the
+fold, and a provenance line you have to scroll to find is not one.
+
+**Where the honesty rules moved.** Slice 8b kept the system prompt on the client. It now names
+tools that only exist server-side, so it moved to `src/ai/assistant.ts` — a prompt that
+describes tools has to live where the tools do, or the two drift apart.
+
+**Verified.** `npm run check` — 165 tests across 12 files (was 136/10). The new ones cover the
+allow-list refusing an unknown tool, a failing tool not leaking its connection string, each
+tool's output including its empty case, a planned meal that no longer exists being dropped
+rather than named, and the loop's round cap. `npm run build` clean.
+
+## 2026-08-28 — "Ask AshHome" becomes a real input on the wall dashboard (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 8, slice 8b
+**Status:** Complete and verified; slice 9a (read-only tools) not started
+
+Second slice of the ladder recorded in the 8a entry below. The dashboard card that described
+an AI area now is one: a question goes to `/api/ai/chat`, and the answer comes back from the
+local qwen3:8b on the RTX 5070.
+
+**The honesty problem this slice had to solve.** The model still has no tools, so it cannot see
+the shopping list, the pantry, the meal plan or the calendar, and it cannot change anything. A
+kitchen-wall assistant that *appears* to know what is in the freezer, and is guessing, is worse
+than no assistant at all — and `CLAUDE.md` already forbids the AI inventing school dates for
+exactly this reason. So the limit is stated three times over, in three places that each catch a
+different reader:
+
+1. **The system prompt** (`ASK_SYSTEM_PROMPT`) tells the model it has no access to the family's
+   data, that it must say so plainly rather than guess, and that it cannot add or change
+   anything. Verified live: "What is on our shopping list right now, and add bread to it?" was
+   answered "I cannot see your shopping list yet. Please open the Agrocer app to view or
+   update your list." — no invented items, no pretended write.
+2. **A footnote on the card**, so a family member reads the same limit without asking.
+3. **The example chips** are only questions this slice can honestly answer (cooking and
+   household). The master plan's "Add milk to shopping" and "What are the kids doing tomorrow?"
+   examples were deliberately removed until Phase 9 makes them true — inviting a question the
+   assistant must refuse is a poor introduction to it.
+
+**Other decisions worth keeping.**
+
+- **The system prompt lives with the feature, not the route.** `/api/ai/chat` injects nothing
+  on purpose, so each caller owns its own framing. The prompt is not a secret and not a
+  security boundary — it ships in the client bundle and the route accepts arbitrary messages
+  anyway. The security boundary is that there are no tools.
+- **No conversation history.** Each question stands alone. A shared tablet in a family room
+  should not accumulate a transcript nobody chose to keep, and the application owns anything
+  worth remembering — not the model.
+- **Failures are sentences, not status codes.** `describeAskFailure` maps the route's `kind` to
+  something a person can act on: `unreachable` becomes "The assistant is offline. It runs on
+  the home PC — check that is on", with a Try again button. A non-retryable failure gets no
+  button. No status code, hostname or stack trace can reach the wall.
+- `DashboardCard` gained a `note` prop. "Placeholder" would now be a lie on this card, and
+  saying nothing would overstate it; a real-but-limited card needed its own footnote.
+- The card was moved out of `PlaceholderCards.tsx` into its own `AskCard.tsx`, which is the
+  file that stopped being a placeholder.
+
+**Verified.** `npm run check` — 136 tests across 10 files (was 124/9); the 12 new ones cover the
+prompt's guarantees, that no history is sent, and that every failure arrives as a readable
+sentence with nothing leaked. `npm run build` clean; `/dashboard` grew 3.05 kB → 5.04 kB. In
+Chrome at a real 1280×800 kiosk viewport: an example chip returned a mince-and-rice answer, a
+typed question about the shopping list was refused correctly, the answer area scrolls inside
+its own card while the input stays pinned and the page itself still does not scroll, and no
+console errors or hydration warnings appeared. With `OLLAMA_BASE_URL` pointed at a dead port,
+the card showed the offline sentence and its Try again button.
+
+**One trap, twice.** A dev server started after `npm run build` serves a stale `.next`, *and*
+the Stage 1 service worker (ADR-011) serves a cached bundle — so the dashboard rendered the old
+card twice over while the new one was already on disk. Delete `.next`, and unregister the
+service worker in DevTools, before believing a dashboard change did not work.
+
+**Not re-verified:** the Ask card at a phone-width viewport. The browser tooling would not
+resize below the desktop width this session. The layout is a wrapping example list above a
+flex row, so the risk is low, but it is unchecked.
+
+## 2026-08-28 — AI provider abstraction and the `/api/ai/chat` service (Claude Code)
+
+**Stage:** Stage 3 / AshHome Phase 8, slice 8a only
+**Status:** Complete and verified; slice 8b not started
+
+Ash asked to bring the AI in "in stages". This is the first slice, chosen to be the largest
+step that changes nothing a family member can see and touches no household data.
+
+**The ladder that was agreed**, smallest first, so a later session knows where this sits:
+
+| Slice | Scope | Gate |
+| ----- | ----- | ---- |
+| 8a | provider abstraction + `/api/ai/chat`, no tools, no writes | none — landed |
+| 8b | "Ask AshHome" dashboard card becomes a real input, text answers only | none |
+| 9a | read-only tools: `getShoppingList`, `getPantry`, `getMealPlan` | none |
+| 9b | first write tool `addShoppingItem`, behind a confirmation gate | **wants Auth + RLS first** |
+| 10 | pantry-aware meal planning | after 9b |
+
+**What landed.**
+
+- `src/ai/types.ts` — `AiProvider`, `AiMessage`, `AiChatRequest`, `AiChatResult`, `AiHealth`,
+  and `AiError` with a `kind` of `unreachable | modelMissing | timeout | upstream | config`.
+  Every error carries both a detailed `message` for the server log and a `publicMessage` safe
+  to show a user, the same split the data routes already make.
+- `src/ai/ollamaProvider.ts` — the only Ollama-shaped code in the repository. Keeps
+  `stream: false` and `think: false` from the spike, for the same reasons, and discards the
+  `thinking` scratchpad rather than letting it reach a caller.
+- `src/ai/provider.ts` — `getAiProvider()`, the single place a provider is chosen. Reads
+  `AI_PROVIDER` (defaults `ollama`) and caches across hot reloads exactly as `src/db/client.ts`
+  does. A cloud fallback is added here and nowhere else.
+- `app/api/ai/chat/route.ts` — `GET` for health, `POST` for one answer. Accepts either
+  `{ prompt }` or `{ messages }`, bounded at 20 messages of 4,000 characters so one request
+  cannot pin the GPU. `AiErrorKind` maps to 503/504/502 so a caller can tell a misconfigured
+  server from a slow one without being told the address.
+- `scripts/ai-chat.ts` + `npm run ai:chat` — the end-to-end check, over the route rather than
+  straight to Ollama, which is what distinguishes it from `npm run ai:check`.
+
+**What it deliberately does not do**, and must not grow by accident:
+
+- **No tools.** The model cannot read or write one row of household data. That is Phase 9, and
+  it arrives as an explicit allow-list of application functions, per `CLAUDE.md`.
+- **No system prompt injection.** The route is a transport; the assistant's framing belongs to
+  the feature that calls it. This keeps 8b free to own the personality.
+- **No persistence.** The application owns permanent state, not the model.
+- **No streaming.** A whole answer is fine for a wall tablet, and a streaming reader is more
+  to misread. Revisit when a long answer actually feels slow.
+
+**Ollama still binds to localhost**, unchanged. So `/api/ai/chat` only works when the app runs
+on this workstation; from the staging VM it will return 503 `unreachable` until the tunnel
+question is answered. That is the correct failure, not a bug.
+
+**Verified.** `npm run check` — 124 tests, up from 112; the 12 new ones mock `fetch` and pin
+the classification of every failure path plus the discarding of the scratchpad. `npm run build`
+clean, `/api/ai/chat` dynamic, every screen still statically prerendered, so no server-only
+module leaked into a client bundle. Against real Ollama: health reported 0.33.1 with
+`qwen3:8b` ready, a prompt answered in 3.9s, the `{ messages }` form honoured a system message,
+and the three validation failures (empty body, blank prompt, non-JSON) each returned 400.
+Pointing `OLLAMA_BASE_URL` at a dead port returned 503 `unreachable` with the address absent
+from the response body and present in the server log.
+
+One incidental fix: a dev server started immediately after `npm run build` serves a stale
+`.next` and answers HTML. The script now says so instead of failing on a JSON syntax error.
+
+## 2026-08-27 — Local Ollama connectivity proven (Claude Code)
+
+**Stage:** a spike ahead of the AI phases, explicitly scoped by Ash to connectivity only
+**Status:** Complete; no follow-on work started
+
+Added `scripts/ollama-check.ts` and `npm run ai:check`. It reads `OLLAMA_BASE_URL` and
+`OLLAMA_MODEL` (documented in `.env.example`, defaults `http://127.0.0.1:11434` and
+`qwen3:8b`), checks `/api/version`, confirms the model is installed via `/api/tags`, sends one
+prompt to `/api/chat`, and prints the answer.
+
+Result: Ollama 0.33.1 reachable, `qwen3:8b` present alongside `qwen3:4b`, and an 849-token
+answer to "three budget-friendly dinner ideas for a family of five using common New Zealand
+supermarket ingredients" returned in 9.8 seconds on the RTX 5070.
+
+Choices worth recording:
+
+- `stream: false` — this proves reachability, and a streaming reader is more moving parts to
+  misread. Streaming belongs with the real service.
+- `think: false` — qwen3 is a reasoning model and its scratchpad tripled the wait for nothing
+  here. Ollama returns it in a separate `thinking` field, which the schema tolerates.
+- Errors name their likely cause. `fetch` reports every network failure as an identical opaque
+  "fetch failed", so the script spells out the possibilities rather than leaving the reader to
+  guess. Both failure paths were exercised: a wrong port, and an uninstalled model.
+- It follows the `seed.ts` pattern of reading `.env.local` directly rather than adding dotenv,
+  and validates responses with Zod like the rest of the codebase.
+
+**Ollama stays bound to localhost.** That was Ash's explicit instruction and it is the right
+default. It does mean the check only works from this workstation, and that reaching Ollama from
+the staging VM is a separate decision later — a tunnel or an authenticated proxy, never
+`OLLAMA_HOST=0.0.0.0`.
+
+Nothing in the application imports this script. No provider abstraction, tool calling, cloud
+provider, vector store or agent framework was added, per the scope restriction.
+
+## 2026-08-27 — Kids/school roadmap recorded and the Phase 1 wall dashboard built (Claude Code)
+
+**Stage:** Stage 2 for the data; the dashboard is AshHome Phase 1
+**Status:** In progress
+
+Ash supplied a large scope addition: a first-class Kids/School module, Hero school integration,
+a school-notification abstraction, a family calendar, detailed wall-dashboard requirements, and
+a replacement roadmap of Phases 0–17. All of it is now recorded in `CLAUDE.md`, including the
+hard rules for Hero — no scraping authenticated pages, no stored credentials, no working around
+its security controls — and the least-data principle for children's information.
+
+Built the Phase 1 dashboard at `/dashboard`:
+
+- Its own full-screen layout rather than the `(app)` shell, which is a phone-width column with a
+  bottom nav — exactly wrong on a wall-mounted tablet.
+- Seven cards in the required information hierarchy. Shopping and Tonight's meal use real data;
+  Kids shows the household's actual children; Family schedule, Reminders, Chores and Ask
+  AshHome are labelled placeholders. Every placeholder says so in the UI, because an unlabelled
+  example chore on a kitchen wall is indistinguishable from a real one.
+- Shopping items are checkable directly from the wall, through the same repository the phone
+  uses. Verified: a tap on the dashboard changed the row in Supabase.
+- Quick-add opens the full shopping screen rather than putting a half-working keyboard on the
+  wall. The card's own add control belongs here eventually.
+
+Layout work worth recording, since it is the part that took the iterations: at 1280×800 — a real
+kiosk viewport — the page must not scroll, and cards must not clip. Equal-height rows clipped
+the shopping list; letting rows size to content gave mock chores more of the wall than the real
+list. The answer was proportional rows, with the shopping row roughly twice the height of the
+placeholder rows, cards that scroll inside their own frame, and trimming explanatory prose from
+the placeholder cards. Confirmed: no page scroll, no clipped card.
+
+Deliberately not built: approximate cost and the missing-ingredient warning on Tonight's meal.
+Both need ingredient-level matching against products and pantry, which belongs with the recipe
+work. A wrong number on the kitchen wall is worse than no number.
+
+Verification: typecheck, lint, 112 unit tests, clean production build with `/dashboard`
+prerendered at 3.05 kB. Demo data used for the screenshots was removed afterwards; the database
+is back to its seeded state.
+
+## 2026-08-27 — Products and household converted; all five features now on Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The data migration is complete. Every feature reads and writes Supabase through route handlers.
+
+- `app/api/products` — read-only as a collection, because the contract has no create method.
+  A speculative POST would have hidden a real gap: `npm run db:seed` is still the only way
+  products reach Postgres, and Stage 2 should close that deliberately.
+- `app/api/products/[id]` — favouriting is a toggle rather than `{ favourite: boolean }`, for
+  the same reason the shopping check is: the repository owns the flip, so two taps cannot race.
+- `app/api/household` — settings, with members as a sub-collection. The contract treats them as
+  one aggregate, but they change for different reasons and on different screens.
+- Member initials are derived server-side from the name rather than accepted from the client,
+  so they cannot drift.
+- `src/data/api/repositories.ts` now exports `apiRepositories` — deliberately not
+  `serverRepositories`, which already names the Drizzle-backed set in `src/server/`.
+
+**A regression the conversion exposed**, found during browser verification and fixed: the
+shopping badge in the bottom nav was counting Stage 1 demo items. `AgrocerProvider` seeds
+`initialState` with the demo fixtures, and the screens gate on `hydrated` while the badge did
+not. Against localStorage that window was imperceptible; over the network it is long enough to
+show a badge for groceries the family does not have. The badge now waits for `hydrated`. The
+underlying seeding of `initialState` is untouched and recorded in `HANDOFF.md` — every screen
+still shows demo data for that first frame, which is worth revisiting.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, clean production build with
+all twelve API routes dynamic and every screen still prerendered. Both APIs were exercised
+directly — favourite toggled and restored, a 404 on an unknown product, settings patched and
+restored, a member created with derived initials, replaced, and deleted, plus 400s on an empty
+patch and an invalid colour. Then in Chrome: products rendered from Postgres with the "in
+pantry" cross-reference working across two server-backed features, starring a product
+persisted, and the household screen rendered its five members.
+
+The database was left exactly as seeded: shopping 0, pantry 16, meals 8, products 16 with 8
+favourites, 5 members, empty plan.
+
+## 2026-08-27 — Meals and the weekly plan converted to Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Third of five features. Meals was the awkward one: a single repository covers both the meal
+catalogue and the weekly plan, which are different resources.
+
+- `app/api/meals` — the catalogue. `PUT` rather than `PATCH` on `[id]`, because the contract
+  replaces a whole draft: the meal form edits every field at once, so a partial update would
+  be a shape the UI never sends.
+- `app/api/meals/plan` and `app/api/meals/plan/[day]/[slot]` — the plan, with each slot
+  addressable. A slot is a real place: Wednesday dinner exists whether or not anything is
+  planned for it. Both verbs return the whole plan, which is what the contract promises and
+  what the planner re-renders. `/api/meals/plan` cannot be shadowed by a meal id, because
+  Next.js matches static segments before dynamic ones.
+- `day` and `slot` arrive in the URL and are validated as strictly as any body, so an unknown
+  day is a 400 rather than a query that quietly matches nothing.
+- `clear` returns the updated plan rather than a 204: the caller needs it, and a second round
+  trip to fetch what the server just computed would be waste.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, clean production build with
+all four meals routes dynamic. The API was exercised directly — create, replace, a 400 on an
+invalid meal, a 404 on an unknown id, assign, clear, and 400s on an unknown day and an unknown
+slot. The cascade was confirmed the same way: a meal assigned to Thursday dinner and then
+deleted left the plan empty, with no orphaned slot. Then in Chrome: the planner rendered the
+week with today marked, the picker listed the eight seeded meals, and choosing one for
+Wednesday persisted to Supabase.
+
+Test residue was cleaned up afterwards; the household is back to its seeded state. One row was
+found on the shopping list that had not been created deliberately — the Home and Products
+screens both have one-tap "add to shopping" actions, so a stray click during an earlier browser
+check is the likely cause. It was deleted. Worth remembering that browser verification against
+the real database can write through those shortcuts.
+
+## 2026-08-27 — Pantry converted to Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The pantry now follows the shopping list onto the database. Second of five features.
+
+- `app/api/pantry` and `app/api/pantry/[id]` — list/create, edit/adjust/remove. No batch add:
+  the pantry has no equivalent of adding a meal's ingredients at once, so a route taking an
+  array would have been speculative.
+- Quantity steps are **relative** — `PATCH { adjust: n }`, not an absolute quantity — so the
+  server floors at zero in one statement and two people looking at the same shelf cannot
+  clobber each other with read-modify-write. A zero adjustment is a 400.
+- `src/data/api/client.ts` — extracted the fetch plumbing the shopping repository had inline,
+  now shared by both. `patch()` returns `undefined` on a 404 because that is what the contracts
+  mean by "no such id"; only real failures throw.
+- Renamed the flag `NEXT_PUBLIC_AGROCER_SERVER_SHOPPING` to `NEXT_PUBLIC_AGROCER_SERVER_DATA`,
+  since it now governs two features and will govern five. One flag rather than one per feature:
+  per-feature flags would multiply the combinations needing testing without buying anything,
+  as they share a single database.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, clean production build with
+both API route groups dynamic. The pantry API was exercised directly — create, adjust down,
+the floor at zero, an edit, a 400 on a zero adjustment, a 404 on an unknown id, delete — and
+then in Chrome: all 16 seeded items rendered with their stock chips, and stepping Bananas up
+persisted to Supabase. The seeded quantity was restored and the test row deleted afterwards.
+
+## 2026-08-27 — Shopping list vertical slice over Postgres (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The shopping list now reads and writes Supabase through route handlers. One feature, end to
+end, rather than a half-converted app.
+
+Added:
+
+- `scripts/seed.ts` and `npm run db:seed` — seeds one household, its members, products, pantry
+  and meals from the Stage 1 demo data. Idempotent by household name. It exists as a script
+  because `reset()` is refused against a shared database, and because the products contract has
+  no create method. The weekly plan is not seeded: `planSeed` references Stage 1 meal ids that
+  do not survive the insert, and an empty planner is more honest than a broken one.
+- `src/server/repositories.ts` — resolves `householdId` from `AGROCER_HOUSEHOLD_ID`. A
+  deliberate stand-in for authentication, and the single place that changes when auth lands.
+- `src/server/http.ts` — `parseJson` validates bodies with the same Zod schemas the forms use,
+  because a route handler is a public edge. Failures log server-side and return a generic
+  message, so a connection string or household id never reaches a browser.
+- `app/api/shopping/**` — list/add/batch-add, edit/toggle/remove, and clear-checked. Toggle is
+  a `PATCH { toggle: true }` rather than its own route: same resource, and the repository owns
+  what "toggled" means.
+- `src/data/api/shoppingRepository.ts` — the same contract over HTTP. The server is
+  authoritative on every write, which is what keeps the quantity merge honest.
+- `src/data/api/repositories.ts` — composes server-backed shopping with localStorage for
+  everything else. Possible only because both sides satisfy ADR-003, and it makes each
+  feature's switch-over independently reversible.
+
+Changed:
+
+- `AgrocerProvider` takes its default repositories from the environment. No other provider
+  change was needed — it was already async with refresh-after-write, so ADR-003 paid off
+  exactly as intended.
+
+Verification: typecheck, lint, 112 unit tests, 6 integration tests, and a clean production
+build with all three API routes dynamic and every screen still prerendered. The API was
+exercised directly (including the merge, a 400 on an invalid body, a 404 on an unknown id) and
+then in Chrome: items created through the API rendered on the shopping screen, and toggling one
+in the UI persisted to Supabase. Test rows were deleted afterwards.
+
+Two deliberate omissions, recorded before the pattern is repeated five more times: every write
+refetches the whole list, which was free against localStorage and is now a round trip to
+Sydney; and there is no optimistic UI, so a toggle feels slower than Stage 1 did.
+
+New dependency: `tsx` (dev-only), to run TypeScript scripts that use the `@/` path alias.
+`node --experimental-strip-types` cannot resolve that alias, and hand-rolling a resolver hook
+is more fragile than the standard runner. Seeding, backup/restore and later data migrations all
+need it.
+
+## 2026-08-27 — Database connected and repositories proven (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+The Stage 2 repository layer now runs against the real Supabase database.
+
+- `.env.local` written by Ash with the session-pooler connection string; connection verified
+  from this repository (PostgreSQL 17.6, all seven tables visible).
+- Reconciled Drizzle's migration journal. The schema had been applied through the management
+  API, so `drizzle.__drizzle_migrations` did not exist and `db:migrate` would have re-applied
+  `0000`. Seeded it with the same sha256-of-file-contents hash and `when` value drizzle-orm
+  computes, and confirmed `npm run db:migrate` now applies nothing.
+- `drizzle.config.ts` reads `.env.local` directly. drizzle-kit runs outside Next.js, which is
+  what loads that file, and one value did not justify a dotenv dependency.
+- Added `src/data/drizzle/drizzleRepositories.integration.test.ts` and `npm run test:db`:
+  six tests against real Postgres covering the shopping round trip, the duplicate-name merge,
+  the pantry quantity floor, plan assign/clear including the dangling-id case, and the
+  deliberate refusal of `reset()`. They run inside a throwaway household and delete it, so the
+  family's data is never touched; every table was confirmed back at 0 rows afterwards.
+- Integration tests are excluded from `npm test` and skip themselves without `DATABASE_URL`,
+  so CI stays green without credentials.
+- Restored `.env.example`, which had been renamed rather than copied when `.env.local` was
+  created, and updated it to the newer `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY`
+  naming Ash's project uses.
+
+The repositories are no longer unproven code. What remains for persistence is wiring: route
+handlers, where `householdId` comes from before auth, and how the provider holds server state
+that used to be synchronous localStorage.
+
+## 2026-08-27 — Supabase provisioned and Stage 2 schema applied (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Created the Supabase project (ADR-013) and applied the Stage 2 schema.
+
+- Project `agrocer`, ref `ojlzjjvrtnslcxqdmpay`, region `ap-southeast-2` (Sydney),
+  organisation `Ashnetnase's Org git`. $0/month.
+- The first creation attempt was refused: the Supabase free tier caps a single user at two
+  active projects **across every organisation they own or administer** — not per organisation,
+  which is why a second (Vercel-managed) org did not help. `Salon Booking App UI Design` was
+  paused on the user's instruction to make room; its data is retained and restorable.
+- `drizzle/0000_mysterious_black_cat.sql` applied through the Supabase management API. All
+  seven tables confirmed present and empty.
+
+Two consequences recorded rather than fixed:
+
+- **RLS is disabled on all seven tables.** With the anon key, every row is readable and
+  writable. The tables are empty, so nothing is exposed today, but enabling RLS without
+  policies blocks all access — so it must ship together with authentication, before any real
+  family data is entered.
+- **Drizzle's migration journal does not know about this database.** The schema was applied
+  out-of-band, so `__drizzle_migrations` does not exist and `npm run db:migrate` would try to
+  re-apply `0000`. This needs reconciling before migration `0001` is generated.
+
+Still blocked on the user: the database password is only visible in the Supabase dashboard,
+so `.env.local` does not exist and nothing in the repository has connected to the database.
+
+## 2026-08-27 — Phase 0 documentation baseline and AshHome instructions (Claude Code)
+
+**Stage:** Stage 2 (documentation only — no application code changed)
+**Status:** In progress
+
+Established the persistent handoff system the instructions require but the repository lacked.
+
+Added:
+
+- `HANDOFF.md` — recovery checkpoint in the mandated format; records that the Drizzle
+  repositories are written but have never run against a database
+- `TASKS.md` — roadmap with `[ ] [~] [x] [!]` statuses, tracking the master plan's stages
+  and mapping the AshHome phases alongside
+- `docs/ARCHITECTURE.md` — current architecture (layering, repository seam, schema state)
+  kept explicitly separate from planned architecture
+
+Changed:
+
+- `CLAUDE.md` — expanded from Agrocer-only rules to the full AshHome instruction set:
+  long-term vision, three interface modes (mobile / standard app / wall dashboard at
+  `/dashboard`, one application), wall dashboard vision, device architecture, AI architecture
+  and provider abstraction, agent safety and confirmation-required actions, secrets and git
+  rules, the persistent handoff system, and AshHome Phases 0–14
+- this file — corrected the migration filename to `0000_mysterious_black_cat.sql`; two
+  references still cited `0000_bouncy_shockwave.sql`, which does not exist in the repository
+
+Open decision recorded, not resolved: the master plan's Stages 1–8 and the new AshHome
+Phases 0–14 cover overlapping ground with different numbering. `TASKS.md` tracks the stages,
+since `CLAUDE.md` names this file the source of truth, and notes the phase mapping. The user
+will decide whether to nest, replace, or keep them parallel.
+
+Verification: `npm run typecheck`, `npm run lint`, `npm run test` (112 tests, 8 files) all pass.
+
+## 2026-08-23 — Drizzle repository implementation and local verification (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Added the Supabase-backed repository implementation behind the Stage 1 contracts.
+
+Added:
+
+- `src/db/client.ts` — server-only Drizzle client, cached on `globalThis` so hot reload
+  cannot leak connections; `prepare: false` for the Supabase pooler
+- `src/db/mappers.ts` — pure row/domain mapping, isolating the three places storage and
+  the domain disagree: integer cents vs number, NULL vs `undefined`, plan rows vs record
+- `src/data/drizzle/drizzleRepositories.ts` — `createDrizzleRepositories(db, householdId)`
+  satisfying `AgrocerRepositories` in full
+- `src/db/mappers.test.ts` — 23 tests
+
+Behaviour worth recording:
+
+- `adjustQuantity` and `toggle` clamp/flip in SQL rather than read-modify-write, so two
+  phones acting at once cannot lose an update
+- `addMany` runs in a transaction; a failed "add all ingredients" can no longer half-apply
+- `meals.remove()` no longer touches the plan — the `plan_entries` cascade does it
+- `reset()` deliberately throws. Wiping localStorage was safe; truncating the family's
+  real data from a UI action is not. Re-seeding belongs in a deliberate script
+- every statement filters on `household_id`, so RLS will be reinforcement, not the only guard
+- `households.pinned_date` changed to NOT NULL DEFAULT CURRENT_DATE, because
+  `settingsSchema.pinnedDate` is required. Migration regenerated as
+  `0000_mysterious_black_cat.sql` — it had never been applied anywhere
+
+New test: the seven Postgres enums are asserted equal to their Zod counterparts, so the
+two hand-maintained lists cannot drift silently.
+
+Checks: typecheck, lint, 112 tests (was 89) and production build all clean. Ran `npm run dev`
+and confirmed Home, Shopping and Meals render correctly with a clean console and no server
+errors. Client bundle sizes are byte-identical to before, confirming no database code leaked
+into the browser.
+
+**Still on localStorage.** `AgrocerProvider` has not been switched over — that needs a live
+database, which needs the Supabase project, which needs Ash's tier decision.
+
+Observed incidentally: the dev server's LAN address is a Tailscale one (100.119.81.51), so
+Tailscale is already running on this machine. That materially lowers the cost of the
+Tailscale HTTPS option in the Stage 2 staging list.
+
+Next: route handlers, then auth and RLS, then wire the provider.
+
+## 2026-08-23 — Stage 2 started: Drizzle schema and initial migration (Claude Code)
+
+**Stage:** Stage 2
+**Status:** In progress
+
+Ash authorised Stage 2. First task complete: the database schema and its migration.
+
+Added:
+
+- `src/db/schema.ts` — 7 tables mirroring the Zod domain schemas, 7 Postgres enums kept
+  byte-identical to the `z.enum` options
+- `drizzle.config.ts`, `.env.example`, and `db:generate` / `db:migrate` / `db:studio` scripts
+- `drizzle/0000_mysterious_black_cat.sql` — 108 lines, generated offline
+
+Dependencies: `drizzle-orm` ^0.45.2, `postgres` ^3.4.9, `drizzle-kit` ^0.31.10 (dev).
+
+Modelling decisions worth recording:
+
+- `households` is the tenant root; every other table carries an indexed `household_id`, so
+  RLS becomes one predicate per table once auth lands
+- `Settings` folded into `households` — it is 1:1 and would otherwise be a one-row table
+- `plan_entries` replaces the nested day/slot/mealId record, keyed on
+  (household_id, day, slot). `ON DELETE CASCADE` from `meals` now does what the
+  hand-written dangling-slot cleanup in `MealsRepository.remove()` did
+- prices stored as integer cents, anticipated by section 5. `numeric` would arrive from the
+  driver as a string and need mapping regardless, so cents costs nothing and removes rounding
+  ambiguity. The repository divides by 100; `priceSchema` stays a plain number
+- meal `ingredients` and `tags` are array columns, matching the Stage 1 domain. A structured
+  `meal_ingredients` table becomes worthwhile in Stage 4 for pantry-to-recipe matching
+
+Checks: typecheck, lint, 89 tests and production build all clean. No UI files touched.
+
+**Not done, deliberately:** no Supabase project provisioned and no cloud resource created —
+that is spending and needs Ash's tier decision first. The migration has never been applied.
+
+Next: repository implementations against Drizzle, then auth and RLS.
+
+## 2026-08-23 — Stage 2 database decision (Claude Code)
+
+**Stage:** Stage 2 (planning only — no implementation authorised or performed)
+**Status:** Decision recorded
+
+Ash asked whether Stage 2 should use DynamoDB or Supabase, with eventual cloud migration as a
+requirement. Recorded as ADR-013: **Supabase managed PostgreSQL**, DynamoDB rejected.
+
+Plan changes:
+
+- Stage 2 planned scope now names Supabase, Drizzle migrations, and route handlers behind the
+  existing repository interfaces
+- ADR-013 added; ADR-008 narrowed to the application tier
+- Cognito struck from the Stage 6 AWS scope
+
+Verified before deciding: `npm run check` clean — typecheck, lint, 89 tests passing.
+
+No code was written. Stage 2 implementation still needs explicit authorisation.
+
+Open questions for Ash: Supabase free tier (pauses after ~1 week idle) vs Pro; and whether to
+ratify Drizzle.
 
 ## 2026-08-22 — Stage 1 closed (Claude Code)
 
@@ -974,6 +2916,431 @@ serve.
 Nothing is abandoned — the container is built and smoke-tested and `docs/staging.md` is written.
 This changes when that work happens, not whether.
 
+## ADR-013 — Supabase (managed PostgreSQL) is the Stage 2 database
+
+**Status:** Accepted (2026-08-23, Ash)
+
+Stage 2 originally said only "PostgreSQL". The open questions were the engine and the host.
+
+**DynamoDB was considered and rejected.** Agrocer's data is relational — households to members,
+products to pantry items to shopping items, meal plans keyed by (day, slot) to meals, plus Stage 2's
+meal feedback history and inventory events. `MealsRepository.remove()` already has to strip a deleted
+meal from dangling planned slots, which is a foreign key in Postgres and hand-written application code
+in Dynamo. Stage 4 then wants consumption history, low-stock prediction and budget aggregation, all of
+which are ad-hoc analytical queries — precisely what a single-table Dynamo design punishes. At a scale
+of two adults and three children, none of Dynamo's advantages apply.
+
+The decisive argument is the cloud-migration requirement. DynamoDB is not a migration path, it is a
+destination with no exit: choosing it would bind Stage 6 to AWS permanently. Supabase is plain Postgres,
+so moving to RDS or Aurora later is a dump, a restore and a connection string. Choosing Supabase keeps
+the cloud options open; choosing Dynamo would close them.
+
+**Supabase over a self-hosted Postgres container.** Ash already uses Supabase. It supplies Auth and RLS,
+collapsing much of Stage 2's authentication and household-permission work, and its generated types pair
+cleanly with the Zod-first domain layer. The self-hosted Supabase stack (~8 containers) would not sit
+comfortably on the 3 GB `agrocer-stg01` spec anyway.
+
+**Consequences**
+
+- The app tier stays on the homelab; the data tier becomes managed cloud. ADR-008 is narrowed, not revoked.
+- ADR-007 is strengthened: the data outlives the Ryzen desktop *and* the ThinkCentre node.
+- Cognito drops out of the Stage 6 AWS scope while Supabase Auth owns identity.
+- Family grocery data now lives with a third party. Accepted deliberately as the price of the above.
+- **Open risk:** Supabase free-tier projects pause after ~1 week of inactivity, which is a poor fit for an
+  app the family opens a couple of times a week. Either the Pro plan or an accepted cold-start is a
+  decision Stage 2 must make before the family relies on it.
+
+**Not decided here:** Drizzle is the standing recommendation for schema and migrations (`drizzle-zod`
+keeps Zod as the single source of truth per section 5) but is not yet ratified.
+
+## ADR-014 — AI reaches AshHome only through a server-side provider abstraction
+
+**Status:** Accepted (2026-08-28)
+
+`CLAUDE.md` requires that no application logic bind to one model. The shape that satisfies it
+is the one ADR-003 already uses for persistence: features depend on an interface, and the
+implementation is chosen in exactly one place.
+
+- Features and route handlers depend on `AiProvider` (`src/ai/types.ts`) and never on Ollama.
+- `getAiProvider()` (`src/ai/provider.ts`) is the only code that picks an implementation. A
+  cloud fallback, or a swap from qwen3 to gemma, is a change there and nowhere else.
+- All of it is server-side. `OLLAMA_BASE_URL` describes the inside of the home network and
+  must never reach a browser, so nothing under `src/ai/` may be imported by a client component
+  — the same rule as `src/db/client.ts`.
+- The model has no tools until Phase 9, and when it gets them they are an explicit allow-list
+  of application functions, never system access.
+
+The alternative — calling Ollama directly from a feature, or from the browser — was rejected
+on both counts: it would bind AshHome to one model, and it would publish a private network
+address to every device on the wall.
+
+
+## ADR-015 — The AI reaches household data only through a fixed, read-only tool allow-list
+
+**Status:** Accepted (2026-08-29)
+
+`CLAUDE.md` requires that the LLM never receive unrestricted access and act only through
+explicitly defined application tools. This records the shape that satisfies it, because the
+tempting shortcuts are all worse.
+
+**Lookup is by exact name against a fixed record** (`src/ai/tools/registry.ts`). The rejected
+alternative was a generic bridge — letting the model name a repository and a method, or
+passing a query through. That is the same class of mistake as string-concatenated SQL: it
+turns model output into control flow. A name not in the record is refused, and the refusal is
+returned to the model as a tool result so it can explain the limit rather than the request
+failing outright.
+
+**Every 9a tool takes no arguments.** No argument can widen what a tool reads. A tool that
+later needs one validates it with Zod in the registry before the implementation sees it.
+
+**Tools receive the repositories from `serverRepositories()`**, so they inherit household
+scoping — a tool cannot read another family's data any more than a route handler can. This is
+also why the tool layer is server-side and stays there.
+
+**Read tools and write tools are separated by construction, not by convention.**
+`READ_ONLY_TOOLS` contains only tools that call `list()` / `getPlan()`. A write tool is slice
+9b, arrives with a confirmation gate, and does not join that record.
+
+**Tools return prose rather than JSON**, withholding ids, per-item prices and notes. Partly
+tokens, mostly reliability: a small local model reads a sentence more dependably than an
+object graph, and every field handed over is a field it can garble back at the family.
+
+`/api/ai/ask` owns this loop. `/api/ai/chat` stays a transport with no prompt, no tools and no
+data, so there remains one path to household data with a model attached, and it is the one
+with the allow-list on it.
+
+
+## ADR-016 — RLS is enabled with no policies, and the application enforces household scoping
+
+**Status:** Accepted (2026-08-29)
+
+`HANDOFF.md` had long recorded that RLS could not be enabled until authentication landed,
+because "enabling RLS without policies blocks all access". That is true of a typical Supabase
+app and false of this one, and the difference is worth writing down so nobody re-derives the
+wrong conclusion later.
+
+**Why it is false here.** The route handlers reach Postgres through Drizzle over
+`DATABASE_URL`, which connects as `postgres`. That role owns all seven tables and has
+`rolbypassrls`. Enabling RLS therefore has no effect whatsoever on the application's queries —
+measured, not assumed: `npm run db:rls` prints the connecting role and its bypass flag.
+
+**What RLS is actually protecting.** The publishable key. It is public by design — it is meant
+to ship in browser bundles — and Supabase exposes every table through PostgREST to whoever
+holds it. Before this change that key could read the household, the children's names, the
+pantry, the products and the meals, and could insert rows. Both were demonstrated before the
+migration and re-tested after: reads now return empty, and an insert is refused with
+`42501 new row violates row-level security policy`.
+
+**So enforcement lives in two different places, deliberately.**
+
+- *Household scoping* is enforced by the application, in `src/server/repositories.ts`, which is
+  the single place a household id is resolved. This is unchanged, and it is what actually keeps
+  one family's data separate from another's.
+- *RLS* is the wall around the public key: a deny-all that grants nothing to `anon` or
+  `authenticated`.
+
+**Deny-all is the finished state for now, not an unfinished one.** With no code using the
+publishable key — nothing in the repository imports `supabase-js`, and it is not a dependency —
+granting nothing is exactly correct. Policies become meaningful when authentication introduces
+a real `authenticated` role that needs its own household, and they should be written then,
+against a schema that links users to households. Writing speculative policies now would mean
+guessing at that link.
+
+**The risk this leaves.** Because the application bypasses RLS, a bug in household scoping is
+not caught by the database. That is the cost of the arrangement and it is accepted: the
+alternative — running application queries as the authenticated user, with `set local role` and
+JWT claims per transaction — is a real option, and the right time to weigh it is when
+authentication lands, not before.
+
+
+## ADR-017 — Supabase Auth, with the household resolved from the signed-in user
+
+**Status:** Accepted (2026-08-29)
+
+Stage 2's last blocker. ADR-013 chose Supabase partly for Auth, so the question was not
+*whether* but *what shape*.
+
+**Email and password.** Magic links need email delivery configured; this works on the home
+network today. Revisit when the notification work (Phase 11) brings email anyway.
+
+**A request becomes a household through `household_members.user_id`.** The seam was already
+there: `src/server/repositories.ts` has always been the single place a household id is
+resolved, and handlers ask for repositories rather than an id. Auth replaced the body of that
+function and nothing else. The link lives on the member row rather than in a new join table
+because a family member profile *is* the person — it carries their name, colour and
+Adult/Child role, all of which a session wants.
+
+That column is deliberately **not** a foreign key to `auth.users`: that table belongs to
+Supabase's own schema, and pointing Drizzle's migrations at it would couple this schema to
+Supabase's internals for no gain. `npm run db:claim` checks the user exists before writing.
+
+**Signing up grants nothing.** An account with no member row is refused with 403. Joining a
+household is `npm run db:claim`, a deliberate act by someone with database access — the same
+reasoning as `seed.ts`, which exists because re-seeding must be explicit. Self-claim ("the
+first user to sign up takes the household") was rejected: it is a hole the moment the app is
+reachable by anyone else, and it buys convenience exactly once.
+
+**Auth fails closed.** `authEnabled()` is true unless `AGROCER_AUTH` is exactly `"off"`. A
+security control that defaults to off is how the RLS gap happened (ADR-016) — misconfiguration
+should lock you out, which is loud and recoverable, not let the household through to anyone
+who can reach the port. The escape hatch warns on every request so it cannot be left on.
+
+**The middleware is a convenience, not the boundary.** It refreshes the session — necessary,
+because a wall tablet left open for weeks never navigates and would otherwise fall out of its
+session — and redirects signed-out visitors. But the boundary is `currentHouseholdId()`, which
+every route handler passes through, because middleware is trivially bypassed by calling the
+API directly and route handlers are not. API routes answer 401 rather than redirecting, so a
+`fetch` gets a status code instead of an HTML page it cannot parse.
+
+**`getUser()`, never `getSession()`.** `getSession()` returns whatever the cookie claims
+without verifying it, which on a server is worth nothing.
+
+**RLS policies now exist** (`drizzle/0003_household_rls_policies.sql`) granting `authenticated`
+its own household. They remain defence in depth, not the enforcement — the app still connects
+as `postgres` and bypasses them (ADR-016). They matter if a signed-in token ever reaches
+PostgREST directly.
+
+
+## ADR-018 — The AI proposes changes; a person confirms them
+
+**Status:** Accepted (2026-08-29)
+
+`CLAUDE.md` requires confirmation for sensitive actions. This records the shape that gives, now
+that the assistant can change data at all.
+
+**A write tool is never executed by the assistant loop.** The model calls it, `askAssistant`
+intercepts the call, validates the arguments, and returns an `AssistantProposal` instead of
+acting. Execution happens only at `POST /api/ai/confirm`, which involves no model at all. So
+the sequence is: model proposes → person reads a sentence → person presses a button → server
+runs it.
+
+**`WRITE_TOOLS` is a sibling of `READ_ONLY_TOOLS`, not a member.** ADR-015 made the read/write
+split structural, and this keeps it that way: the gate applies to everything in the write
+record by construction, so a future tool cannot slip past it by being added to the wrong list.
+
+**The confirmation sentence is generated server-side from validated arguments**
+(`AiWriteTool.describe`), never taken from the model's prose. What a person agrees to is
+therefore exactly what will run. This is not theoretical — during testing the model said "I
+have added seventeen loaves of bread" while proposing one; the sentence shown was the correct
+one, and there is a test pinning that.
+
+**Write tools carry a Zod schema; read tools take no arguments.** Model output is untrusted
+input. Arguments are validated twice — once when the proposal is made, once at `/api/ai/confirm`
+— because the round trip through the browser means they arrive as user input the second time.
+
+**That round trip grants no new privilege**, since the same signed-in person can already POST
+to `/api/shopping`. The gate is about *intent*, not authority: it stops the assistant acting on
+its own reading of an ambiguous request. On a shared kitchen wall, where anyone passing can
+talk to the tablet, that distinction is the whole point.
+
+**Rejected: letting low-risk writes through automatically.** The master plan allows for it
+eventually, and adding a shopping item is about as low-risk as a write gets. But the first
+write tool sets the pattern every later one inherits, and "the model decided to change
+something" is not a behaviour to establish casually. If a tool should ever bypass the gate,
+that is a decision to record here, not a flag to add quietly.
+
+**Amended 2026-08-29: one confirmation may cover an explicit action list.** Ollama can emit
+several write calls in one turn but normally emits no prose with them. Returning on the first
+call silently dropped the rest of requests such as "add milk and eggs". An
+`AssistantProposal` therefore carries every validated action from that turn. Every displayed
+line still comes from the corresponding tool's `describe` function, never from model prose.
+The confirmation route validates the complete list before any repository is resolved and uses
+the write tool's batch executor where available. One invalid action refuses the whole list;
+partial confirmation is not an acceptable fallback.
+
+
+## ADR-019 — HTTPS via the existing Cloudflare Tunnel; the container binds to localhost
+
+**Status:** Accepted (2026-08-29, Ash's infrastructure)
+
+This closes the standing blocker that `docs/staging.md` had left open since Stage 1: a LAN
+address over plain HTTP is not a secure context, so the service worker will not register and
+the PWA cannot be installed on a phone (ADR-011).
+
+**The deciding fact is that the infrastructure already exists.** Ash runs a Cloudflare Tunnel
+named `homelab` on `ashnetbase.org`, already serving `chat`, `vault`, `status` and `api.chat`.
+Agrocer becomes one more hostname on it. That is a five-minute change to something already
+working, against hours of setup for any alternative.
+
+**What it gives, that the alternatives do not all give:**
+
+- A real, publicly trusted certificate — so a secure context, so the PWA installs.
+- A stable name that works identically on the wall tablet, a phone on the home network, and a
+  phone on mobile data. Tailscale would have required the tablet and every phone to be on the
+  tailnet.
+- **No inbound port on the router.** `cloudflared` dials out; nothing is exposed at home.
+- Free, at this scale.
+
+**Tailscale was the standing recommendation and is now rejected** — only because the tunnel
+already exists. It remains the better answer for anyone without one, and the comparison stays
+in `docs/staging.md` rather than being deleted.
+
+**AWS was considered and rejected.** It costs money for something the homelab already does,
+and the database is already managed elsewhere (ADR-013). The existing SES setup on
+`noreply.ashnetbase.org` stays useful for outbound email in Phase 11 — that is a separate
+concern from hosting.
+
+**Amended 2026-08-29, after the first deploy attempt.** This ADR originally said the container
+would bind to `127.0.0.1:3000` because only `cloudflared` on the same host needed it. That was
+wrong about Ash's setup, and the correction is worth recording rather than quietly editing.
+
+`cloudflared` routes to every service by LAN IP — `vault → 192.168.1.49:8080`,
+`chat → 192.168.1.37:8080`, `status → 192.168.1.49:3001`. So `localhost:3000` in the tunnel
+config meant localhost *inside cloudflared*, and the route returned 502 no matter what Agrocer
+did. The container therefore publishes to the LAN, and the tunnel route is
+`http://192.168.1.49:3000`.
+
+**Corrected again on 2026-08-29, and the correction matters.** This amendment first claimed
+`cloudflared` ran on a *different machine*. It does not: it is a container on `192.168.1.49`
+itself, on the `cloudflare-tunnel_default` network. The LAN-IP routing was real, but the
+inference drawn from it was wrong — the routes use addresses because *some* services live on
+other machines, not because `cloudflared` does.
+
+That changes what is possible. Since they share a host, Agrocer can join
+`cloudflare-tunnel_default`, publish no port at all, and be reached at `http://agrocer:3000`
+by container name — which removes the plaintext LAN hop this ADR accepted as a cost. That is
+the target arrangement, recorded in `docs/deploy.md` and deliberately deferred until the
+first deploy is verified, so that a 502 has only one candidate cause.
+
+**Also corrected: port 3000 was reported as taken by Portainer on that host and is not.**
+Portainer serves 8000/9443; the host is merely *named* `portainer`. The published port is now
+`${AGROCER_HOST_PORT:-3000}` so the next collision is a config line rather than a code change,
+but no override is needed here. The wrong fact reached the repository because a report was
+written up without being checked — verified afterwards by probing the host directly.
+
+**What that costs, since the original reasoning was a security argument.** The app is now
+reachable over plain HTTP by anything on the home network, so the session cookie travels in
+clear on the hop between `cloudflared` and the container. Signing in is still required, so
+this is a transport exposure rather than an access one, and it matches how vault, chat and
+status already work on this network. Accepted for now.
+
+The clean fix, if it ever matters: run the Agrocer container on the same host as
+`cloudflared`, put both on one Docker network, and route to `http://agrocer:3000` by container
+name. That removes the LAN hop entirely. Not done now because it means moving cloudflared's
+deployment around, which is more disruptive than the exposure warrants on a home network.
+
+**Cloudflare Access is deliberately NOT placed in front of it.** The application has its own
+authentication now, and Access would add a second sign-in on a kitchen wall tablet, plus an
+interstitial that interferes with service-worker registration and `fetch` calls to `/api/*`.
+Revisit only if the app is ever exposed to people outside the household.
+
+
+## ADR-020 — The AI reaches the GPU on the workstation over the LAN, firewalled
+
+**Status:** Accepted (2026-08-29)
+
+Earlier notes said "never `OLLAMA_HOST=0.0.0.0`" without qualification, and recorded the
+options as a tunnel or an authenticated proxy. That advice was written before the hardware
+was understood, and this ADR corrects it.
+
+**The topology.** Ollama runs in two places on this network and only one has a GPU:
+
+| Host | GPU | Ollama | Models |
+| ---- | --- | ------ | ------ |
+| Workstation `192.168.1.222` | **RTX 5070 12 GB** | 0.33.1, bound to `127.0.0.1` | `qwen3:8b`, `qwen3:4b` |
+| `ashnetserv1` `192.168.1.14` (Proxmox) | none | 0.7.1, on the LAN | `phi3:mini`, `llama3:8b` — **Ash's test instance, not Agrocer's** |
+
+So "pull `qwen3:8b` onto the always-on server" is not an option, for two reasons rather than
+one: an 8B model on CPU answers in tens of seconds, and — confirmed by Ash on 2026-08-29 —
+that instance is **his own test box, nothing to do with Agrocer**. The production Ollama is
+the workstation's, and there is no second candidate. The GPU is where it is, and the
+assistant has to reach it there.
+
+**The decision: bind the workstation's Ollama to the LAN, and firewall it to the Agrocer host
+alone.** `OLLAMA_HOST=0.0.0.0:11434` plus an inbound rule on TCP 11434 scoped to a single
+source address.
+
+The blanket "never `0.0.0.0`" was right about the danger and wrong about the mechanism. Ollama
+has no authentication whatsoever — anyone who can reach the port can run models, read the
+model list, and pull new ones. What makes that dangerous is *unrestricted reachability*, and a
+source-scoped firewall rule addresses it directly. A tunnel or a proxy would too, with more
+moving parts and a hop through Cloudflare for traffic that never leaves the house.
+
+**The cost, accepted: the assistant is down when the workstation is off.** ADR-007 already
+says that machine is a development/GPU box, not 24/7 infrastructure. This is exactly the
+failure the assistant was built to handle — `/api/ai/ask` returns 503 `unreachable` and the
+card says "The assistant is offline. It runs on the home PC — check that is on." Everything
+else on the wall keeps working, because the AI is not on the critical path for shopping,
+pantry or meals.
+
+**Rejected: routing it through the Cloudflare Tunnel** (a hostname like
+`ollama.ashnetbase.org`). It would publish an unauthenticated GPU endpoint to the internet,
+which Access could mitigate but which solves a problem that does not exist — both machines are
+on the same LAN. `api.chat.ashnetbase.org` already does this for the CPU instance and should
+be put behind Access for the same reason.
+
+**Requires a reserved address** for the workstation in DHCP. A dynamic lease that moves breaks
+`OLLAMA_BASE_URL` silently, and the symptom — the assistant going quiet — looks like the
+workstation being off.
+
+**The trap that makes the scoped rule useless, found on implementing this (2026-08-29).**
+Windows creates its own inbound rules for `ollama.exe` the first time Ollama binds to a
+network interface — the standard "allow this app through the firewall" prompt. They are
+`Allow`, `Any` protocol, `Any` port, `Any` remote address, on the Private *and* Public
+profiles. Windows permits a connection if **any** rule matches, so those two silently override
+the source-scoped rule and leave Ollama open to the whole LAN.
+
+So implementing this ADR is two steps, not one:
+
+```powershell
+New-NetFirewallRule -DisplayName "Ollama from Agrocer" -Direction Inbound -Protocol TCP -LocalPort 11434 -RemoteAddress 192.168.1.49 -Action Allow
+Get-NetFirewallRule -DisplayName "ollama.exe" | Disable-NetFirewallRule
+```
+
+**Re-check after every Ollama upgrade** — a new version re-prompts and recreates them.
+
+Verifying it also needs care: `curl` to the workstation's own LAN address *from the
+workstation* takes a loopback shortcut and skips the firewall entirely, so it proves nothing
+about the scope. The test has to run from another machine — allowed from `192.168.1.49`,
+refused from a phone on the same wifi.
+
+
+## ADR-021 — Structured meal ingredients augment, rather than replace, recipe text
+
+**Status:** Accepted (2026-08-29)
+
+Meal cost estimation needs an ingredient name, decimal amount, unit, and a stable catalogue link
+where one is known. Stage 1 stored only name-first strings such as `Beef mince 500g`; replacing
+that field in place would break existing localStorage, seed data, API consumers, recipe matching,
+and rollback to an older application build.
+
+**The decision:** keep `meals.ingredients text[]` as the readable compatibility representation and
+add nullable `ingredient_details jsonb`. The domain exposes the structured array optionally. New
+meal edits write both; old rows and localStorage values remain valid and are parsed into structured
+fields only when a person edits them. No bulk migration guesses at the family's recipes.
+
+Costs are computed, never persisted: current product-catalogue prices are applied proportionally
+when ingredient and package units are compatible. A total is shown only with complete coverage.
+Unknown products, teaspoons, or incompatible units suppress the total instead of silently becoming
+zero or a made-up fallback price.
+
+**Rejected:** a separate `meal_ingredients` table for this first slice. It gives stronger relational
+links but requires transactional child-row replacement and expands every meal read into a join.
+JSONB retains Zod validation at the API boundary and keeps the additive migration reviewable. Move
+to rows only when ingredient-level querying or foreign-key enforcement provides a demonstrated need.
+
+
+## ADR-022 — The 24/7 catalogue is the existing Agrocer database, fed by visible searches
+
+**Status:** Accepted (2026-08-30)
+
+Agrocer already has an always-on application container and household-scoped `retailer_products` in
+managed PostgreSQL. Adding a second catalogue container and database would duplicate persistence,
+backups, authentication and health monitoring without creating a data source. The built-in API and
+Supabase rows are therefore the household catalogue.
+
+Every validated specific product candidate returned by the normal-Chrome extension is persisted,
+not only the product the person selects. This gradually builds the useful household subset and makes
+it available to every device while the workstation is off. `lastSeenAt` is shown as freshness; cache
+availability must never be described as a live price guarantee.
+
+Unattended store-wide New World acquisition is rejected. New World's `robots.txt` disallows its
+shop search path, its terms reserve product data and images, direct server product requests receive
+a Cloudflare challenge, and earlier Playwright attempts were repeatedly blocked. Agrocer will not
+bypass those controls. The existing authenticated `NEW_WORLD_CATALOGUE_URL` seam remains for a
+future authorised retailer feed or licensed provider.
+
+
 ## ADR-009 — App content renders client-side behind a hydration gate
 
 **Status:** Accepted
@@ -1002,9 +3369,13 @@ dependency. Workbox/next-pwa can replace it later without changing app behaviour
 
 ## ADR-008 — Homelab staging first
 
-**Status:** Accepted
+**Status:** Accepted, narrowed by ADR-013 (2026-08-23)
 
 The second Lenovo ThinkCentre Proxmox node is the first staging target. AWS/Azure is introduced later where it creates real value.
+
+ADR-013 narrows this to the *application tier*. From Stage 2 the Next.js container still runs on
+`agrocer-stg01`, but the database is managed Supabase rather than a self-hosted Postgres container.
+The homelab remains the deployment target; it is no longer the system of record.
 
 ---
 

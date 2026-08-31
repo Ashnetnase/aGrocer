@@ -1,27 +1,132 @@
-# Stage 1 deployment for agrocer-stg01.
+# Agrocer deployment (Stage 2).
 #
-# One service and no database: Stage 1 keeps all family data in the browser's
-# localStorage. Postgres joins this file in Stage 2.
+# One service. There is no Postgres here on purpose: the database is Supabase (ADR-013), so
+# this container is stateless and can be destroyed and rebuilt without losing anything.
+#
+# HTTPS comes from the existing Cloudflare Tunnel rather than from this file (ADR-019).
+# `cloudflared` is a container on the SAME host, on `cloudflare-tunnel_default`, and currently
+# reaches this one by host LAN address — so the port is published to the network rather than
+# to loopback. TLS terminates at Cloudflare's edge and no port is opened on the router.
+#
+# Because they share a host, the better arrangement is available and documented in
+# `docs/deploy.md`: join this service to `cloudflare-tunnel_default`, publish no port, and
+# route to `http://agrocer:3000`. That removes the plaintext LAN hop. Deliberately deferred
+# until the app is verified working, so a 502 has only one possible cause.
+#
+# Copy `.env.example` to `.env` beside this file and fill it in. Compose reads `.env`
+# automatically; it is gitignored, like `.env.local`.
 
 services:
   agrocer:
     build:
       context: .
       dockerfile: Dockerfile
-    image: agrocer:stage1
+      # NEXT_PUBLIC_* is inlined at build time, so these are build args rather than
+      # environment. Changing them means rebuilding, not restarting.
+      #
+      # NEXT_PUBLIC_AGROCER_SERVER_DATA lived under `environment:` below for at least one real
+      # deploy, which has no effect on a NEXT_PUBLIC_* value — the compiled client bundle already
+      # has whatever was true at `next build`, and setting a container's runtime environment
+      # afterward changes nothing. The deployed app silently ran on localStorage as a result.
+      # Hardcoded here rather than reading a host .env value: production should always be "1".
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set it in .env}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?set it in .env}
+        NEXT_PUBLIC_AGROCER_SERVER_DATA: '1'
+    image: agrocer:stage2
     container_name: agrocer
     restart: unless-stopped
+
     ports:
-      # Bound to the VM's LAN address so phones on the home network can reach it.
-      - '3000:3000'
+      # Published to the LAN because the tunnel route addresses this host by IP. Loopback
+      # would be safer and would not work, because `cloudflared` is itself a container —
+      # `localhost` there means inside it, not on the host.
+      #
+      # The HOST port is configurable; the container port is not. `PORT=3000`, `EXPOSE 3000`
+      # and the healthcheck are all fixed at 3000 inside. Nothing in the app derives a URL
+      # from the port, so moving the published one is a line here plus a field in the tunnel
+      # route, with no rebuild. 3000 is free on `192.168.1.49` (Portainer is on 8000/9443,
+      # despite the host being named `portainer`), so the default stands there.
+      #
+      # What this costs, stated plainly: the app is reachable over plain HTTP by anything on
+      # the home network, so the session cookie travels in clear on the LAN hop between
+      # cloudflared and here. Signing in is still required — this is a transport exposure,
+      # not an access one. Co-locating the container with cloudflared and using the Docker
+      # network would remove it; see ADR-019.
+      - '${AGROCER_HOST_PORT:-3000}:3000'
+
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: '1'
-    # Modest ceilings suited to the 2 vCPU / 3 GB staging VM.
+
+      # The only secret the running container needs. `:?` fails the run loudly rather than
+      # starting something that will 500 on its first request.
+      #
+      # If the password contains a `$`, double it in `.env` — compose interpolates `$` inside
+      # values, so `p$ss` becomes `p` + an undefined variable. The symptom is a Postgres auth
+      # failure with a password you can prove is correct.
+      DATABASE_URL: ${DATABASE_URL:?set it in .env}
+
+      # SUPABASE_URL and SUPABASE_SECRET_KEY are deliberately NOT here. Nothing in the running
+      # app reads them — only `scripts/claim.ts` and `scripts/rls-check.ts` do, and those run
+      # from a checkout against `.env.local`, never inside this container, which has no npm.
+      # They were required here briefly and aborted otherwise-valid deploys.
+
+      # Auth is enforced unless this is exactly "off" (ADR-017). It is not set here at all,
+      # so it cannot be switched off by editing a value someone skim-reads as harmless.
+
+      # NEXT_PUBLIC_AGROCER_SERVER_DATA is a build arg above, not a runtime variable — a
+      # NEXT_PUBLIC_* value here has no effect at all. Do not re-add it to this block.
+
+      # Local AI. Ollama binds to localhost on the workstation, so from this container it is
+      # unreachable and the assistant returns 503 `unreachable` — the correct failure, not a
+      # crash. Reaching it from here is a separate decision; see docs/deploy.md.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      # Background/summarization model — unused until Phase 13 has a caller for it.
+      OLLAMA_SUMMARY_MODEL: ${OLLAMA_SUMMARY_MODEL:-qwen2.5:14b-instruct}
+
+      # Stage 5. The companion normally runs visibly on the workstation, so the deployed
+      # container needs that workstation's LAN URL rather than 127.0.0.1. Keep `manual` until
+      # the companion is configured; the Shopping screen then remains usable and reports it offline.
+      SHOPPING_PROVIDER: ${SHOPPING_PROVIDER:-manual}
+      NEW_WORLD_COMPANION_URL: ${NEW_WORLD_COMPANION_URL:-http://127.0.0.1:4317}
+      NEW_WORLD_STORE_ID: ${NEW_WORLD_STORE_ID:-}
+      NEW_WORLD_COMPANION_TOKEN: ${NEW_WORLD_COMPANION_TOKEN:-}
+      # Optional authorised external feed. The built-in 24/7 household catalogue lives in
+      # Supabase and needs no extra container or URL; visible extension searches refresh it.
+      NEW_WORLD_CATALOGUE_URL: ${NEW_WORLD_CATALOGUE_URL:-}
+      NEW_WORLD_CATALOGUE_TOKEN: ${NEW_WORLD_CATALOGUE_TOKEN:-}
+
+      # Optional. Weekly meal-plan/shopping-list email (Settings), manual and self-addressed
+      # only. Left unset, the button correctly reports "Email is not configured yet." rather
+      # than crashing — see src/email/provider.ts.
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-ses}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-2}
+
+      # Phase 13. Hero email ingestion, triggered by a host cron job hitting
+      # /api/school/hero/poll — there is no user session for that call, so this route resolves
+      # its household from AGROCER_HOUSEHOLD_ID directly rather than Supabase Auth, same as the
+      # dev-only escape hatch above but for a legitimate service-to-service call.
+      AGROCER_HOUSEHOLD_ID: ${AGROCER_HOUSEHOLD_ID:-}
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      HERO_SENDER_DOMAIN: ${HERO_SENDER_DOMAIN:-}
+      HERO_POLL_SECRET: ${HERO_POLL_SECRET:-}
+
+      # Family calendar (Phase 12) — read-only iCloud "Public Calendar" share link.
+      FAMILY_CALENDAR_ICS_URL: ${FAMILY_CALENDAR_ICS_URL:-}
+
+    # Modest ceilings suited to a small homelab VM.
     deploy:
       resources:
         limits:
           memory: 512M
+
     logging:
       driver: json-file
       options:

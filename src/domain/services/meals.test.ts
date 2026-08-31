@@ -5,10 +5,13 @@ import type { PantryItem } from '../schemas/pantry';
 import {
   countPlannedDinners,
   countPlannedUses,
+  estimateMealCost,
   findMeal,
+  formatMealIngredient,
   ingredientsToShoppingDrafts,
   matchProduct,
   mealFor,
+  parseMealIngredient,
   pantryItemToShoppingDraft,
   removeMealFromPlan,
   UNKNOWN_ITEM_PRICE,
@@ -106,6 +109,52 @@ describe('matchProduct', () => {
   });
 });
 
+describe('structured meal ingredients', () => {
+  it('upgrades a legacy name-first ingredient without losing its display meaning', () => {
+    const ingredient = parseMealIngredient('Beef mince 500g');
+    expect(ingredient).toEqual({ name: 'Beef mince', amount: 500, unit: 'g' });
+    expect(formatMealIngredient(ingredient)).toBe('Beef mince 500 g');
+  });
+
+  it('keeps an unquantified legacy ingredient editable', () => {
+    expect(parseMealIngredient('Taco shells')).toEqual({
+      name: 'Taco shells',
+      amount: 1,
+      unit: 'item',
+    });
+  });
+});
+
+describe('estimateMealCost', () => {
+  it('prices the recipe amount proportionally against a catalogue package', () => {
+    const estimate = estimateMealCost({
+      ...meal,
+      ingredientDetails: [{ name: 'Beef mince', amount: 250, unit: 'g', productId: beefMince.id }],
+    }, [beefMince]);
+    expect(estimate).toEqual({
+      total: 5,
+      pricedIngredients: 1,
+      totalIngredients: 1,
+      complete: true,
+    });
+  });
+
+  it('marks a total incomplete when any ingredient lacks a compatible catalogue price', () => {
+    const estimate = estimateMealCost({
+      ...meal,
+      ingredientDetails: [
+        { name: 'Beef mince', amount: 500, unit: 'g', productId: beefMince.id },
+        { name: 'Cumin', amount: 1, unit: 'tsp' },
+      ],
+    }, [beefMince]);
+    expect(estimate).toMatchObject({ pricedIngredients: 1, totalIngredients: 2, complete: false });
+  });
+
+  it('does not invent a total for a legacy meal that has not been structured yet', () => {
+    expect(estimateMealCost(meal, [beefMince])).toMatchObject({ total: 0, complete: false });
+  });
+});
+
 describe('ingredientsToShoppingDrafts', () => {
   it('prices known products from the catalogue and notes the meal', () => {
     const [known, unknown] = ingredientsToShoppingDrafts(meal, [beefMince]);
@@ -126,6 +175,16 @@ describe('ingredientsToShoppingDrafts', () => {
 
   it('never marks generated items as priority', () => {
     expect(ingredientsToShoppingDrafts(meal, [beefMince]).every((draft) => !draft.priority)).toBe(true);
+  });
+
+  it('rounds a structured recipe amount up to whole catalogue packages', () => {
+    const [draft] = ingredientsToShoppingDrafts({
+      ...meal,
+      ingredientDetails: [
+        { name: 'Beef mince', amount: 750, unit: 'g', productId: beefMince.id },
+      ],
+    }, [beefMince]);
+    expect(draft?.quantity).toBe(2);
   });
 });
 

@@ -196,10 +196,17 @@ describe('meals repository', () => {
       image: undefined,
       description: '',
       ingredients: ['Chicken breast 1kg'],
+      ingredientDetails: [
+        { name: 'Chicken breast', amount: 1, unit: 'kg', productId: 'pr6' },
+      ],
     });
 
     const meals = await localRepositories.meals.list();
-    expect(meals[0]).toMatchObject({ id: created.id, name: 'Butter Chicken' });
+    expect(meals[0]).toMatchObject({
+      id: created.id,
+      name: 'Butter Chicken',
+      ingredientDetails: [{ amount: 1, unit: 'kg', productId: 'pr6' }],
+    });
   });
 
   it('assigning and clearing a slot round-trips through storage', async () => {
@@ -242,6 +249,7 @@ describe('household repository', () => {
       name: 'Mary Jane',
       role: 'Child',
       colour: 'bg-berry-500',
+      school: null,
     });
     expect(member.initials).toBe('MJ');
   });
@@ -251,23 +259,40 @@ describe('household repository', () => {
       name: 'Ash',
       role: 'Adult',
       colour: 'bg-moss-600',
+      school: null,
     });
 
     const updated = await localRepositories.household.updateMember(member.id, {
       name: 'Ashley Rose',
       role: 'Adult',
       colour: 'bg-moss-600',
+      school: null,
     });
     expect(updated?.initials).toBe('AR');
   });
 
   it('merges settings rather than replacing them', async () => {
-    const settings = await localRepositories.household.updateSettings({ householdName: 'The Smiths' });
+    const settings = await localRepositories.household.updateSettings({
+      householdName: 'The Smiths',
+      weeklyBudget: 250,
+    });
 
     expect(settings.householdName).toBe('The Smiths');
     // Untouched fields must survive a partial update.
     expect(settings.shopLabel).toBe('New World Thursday');
     expect(settings.currency).toBe('NZD');
+    expect(settings.weeklyBudget).toBe(250);
+  });
+});
+
+describe('feedback repository', () => {
+  it('refuses to pretend device-local feedback is shared household history', async () => {
+    await expect(localRepositories.feedback.list('m1')).resolves.toEqual([]);
+    await expect(localRepositories.feedback.add({
+      mealId: 'm1',
+      rating: 'liked',
+      ateOn: '2026-08-29',
+    })).rejects.toThrow(/needs the database/);
   });
 });
 

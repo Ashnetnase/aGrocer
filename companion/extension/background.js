@@ -1,0 +1,139 @@
+const JOB_KEY = 'agrocerActiveTrolleyJob';
+
+function isNewWorldUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && (url.hostname === 'newworld.co.nz' || url.hostname.endsWith('.newworld.co.nz'));
+  } catch { return false; }
+}
+
+function validItem(item) {
+  return item && typeof item.shoppingItemId === 'string' && typeof item.expectedName === 'string' &&
+    Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 99 && isNewWorldUrl(item.productUrl);
+}
+
+async function loadJob() { return (await chrome.storage.session.get(JOB_KEY))[JOB_KEY]; }
+async function saveJob(job) { await chrome.storage.session.set({ [JOB_KEY]: job }); }
+async function clearJob() { await chrome.storage.session.remove(JOB_KEY); }
+
+function navigateAndWait(tabId, url, reload) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve(false); }, 20_000);
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve(true);
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    const navigation = reload ? chrome.tabs.reload(tabId) : chrome.tabs.update(tabId, { url, active: true });
+    navigation.catch(() => {
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve(false);
+    });
+  });
+}
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function extractProductsWhenReady(tabId, query) {
+  let lastResult;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      lastResult = await chrome.tabs.sendMessage(tabId, { type: 'extract-products', query });
+      if (lastResult?.status === 'ok' || lastResult?.status === 'blocked') return lastResult;
+    } catch {
+      lastResult = { status: 'selector-failed', products: [], message: 'New World search page bridge was unavailable.' };
+    }
+    await wait(1_000);
+  }
+  return lastResult ?? { status: 'selector-failed', products: [], message: 'No New World products appeared after the page loaded.' };
+}
+
+async function finish(job) {
+  await clearJob();
+  if (job.sourceTabId) chrome.tabs.sendMessage(job.sourceTabId, { type: 'job-results', results: job.results }).catch(() => undefined);
+}
+
+const ITEM_TIMEOUT_MS = 25_000;
+
+function clearItemTimeout(job) {
+  if (job.timeoutHandle) { clearTimeout(job.timeoutHandle); job.timeoutHandle = null; }
+}
+
+async function recordResult(job, result) {
+  if (!job || job.processingIndex !== job.index) return;
+  clearItemTimeout(job);
+  job.results.push(result);
+  job.index += 1;
+  await saveJob(job);
+  await openCurrent(job);
+}
+
+async function openCurrent(job) {
+  if (job.index >= job.items.length) return finish(job);
+  const item = job.items[job.index];
+  job.processingIndex = null;
+  let tab;
+  if (job.newWorldTabId) {
+    try { tab = await chrome.tabs.update(job.newWorldTabId, { url: item.productUrl, active: true }); } catch { tab = undefined; }
+  }
+  if (!tab) tab = await chrome.tabs.create({ url: item.productUrl, active: true });
+  job.newWorldTabId = tab.id;
+  await saveJob(job);
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'search-products') {
+    const query = typeof message.query === 'string' ? message.query.trim().slice(0, 100) : '';
+    if (!query || typeof message.shoppingItemId !== 'string') { sendResponse({ accepted: false, message: 'Invalid product search.' }); return; }
+    const url = `https://www.newworld.co.nz/shop/search?pg=1&q=${encodeURIComponent(query)}&sf=products`;
+    chrome.tabs.query({ url: 'https://www.newworld.co.nz/*' }).then(async (tabs) => {
+      const existing = tabs.find((tab) => tab.id);
+      const tab = existing ?? await chrome.tabs.create({ url: 'about:blank', active: true });
+      const loaded = await navigateAndWait(tab.id, url, tab.url === url);
+      if (!loaded) { sendResponse({ accepted: false, message: 'New World search did not finish loading.' }); return; }
+      const result = await extractProductsWhenReady(tab.id, query);
+      sendResponse({ accepted: true, result });
+    }).catch((error) => sendResponse({ accepted: false, message: error.message }));
+    return true;
+  }
+  if (message?.type === 'queue-batch') {
+    const items = Array.isArray(message.items) ? message.items.filter(validItem) : [];
+    if (!items.length || items.length !== message.items.length) { sendResponse({ accepted: false, message: 'Every item needs a valid New World product URL.' }); return; }
+    const job = { items, index: 0, results: [], sourceTabId: sender.tab?.id, newWorldTabId: null, processingIndex: null };
+    saveJob(job).then(() => openCurrent(job)).then(() => sendResponse({ accepted: true })).catch((error) => sendResponse({ accepted: false, message: error.message }));
+    return true;
+  }
+  if (message?.type === 'item-result') {
+    loadJob().then(async (job) => {
+      if (!job || sender.tab?.id !== job.newWorldTabId || job.processingIndex !== job.index) return;
+      await recordResult(job, message.result);
+    });
+  }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== 'complete') return;
+  loadJob().then(async (job) => {
+    if (!job || job.newWorldTabId !== tabId || job.processingIndex === job.index) return;
+    const item = job.items[job.index];
+    if (!item) return finish(job);
+    job.processingIndex = job.index;
+    await saveJob(job);
+    const watchedIndex = job.index;
+    const timeout = new Promise((resolve) => { job.timeoutHandle = setTimeout(() => resolve('timeout'), ITEM_TIMEOUT_MS); });
+    try {
+      const outcome = await Promise.race([chrome.tabs.sendMessage(tabId, { type: 'add-current', item }), timeout]);
+      if (outcome === 'timeout') {
+        const current = await loadJob();
+        if (current && current.processingIndex === watchedIndex && current.index === watchedIndex) {
+          await recordResult(current, { shoppingItemId: item.shoppingItemId, status: 'unknown-error', requestedQuantity: item.quantity, message: 'New World did not respond in time; the page may still be loading or stuck.' });
+        }
+      }
+    } catch {
+      await recordResult(job, { shoppingItemId: item.shoppingItemId, status: 'unknown-error', requestedQuantity: item.quantity, message: 'New World page bridge was unavailable.' });
+    }
+  });
+});

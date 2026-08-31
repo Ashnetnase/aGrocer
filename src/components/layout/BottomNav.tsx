@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CarrotIcon, CookingPotIcon, HouseIcon, ShoppingCartIcon, StarIcon } from 'lucide-react';
+import { CarrotIcon, CookingPotIcon, HouseIcon, ShoppingCartIcon, StarIcon, TagIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 
@@ -12,12 +12,16 @@ const tabs = [
   { href: '/shopping', label: 'Shopping', icon: ShoppingCartIcon, exact: false },
   { href: '/meals', label: 'Meals', icon: CookingPotIcon, exact: false },
   { href: '/products', label: 'Products', icon: StarIcon, exact: false },
+  { href: '/specials', label: 'Specials', icon: TagIcon, exact: false },
 ] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { shopping } = useAgrocer();
-  const remaining = shopping.filter((item) => !item.checked).length;
+  const { shopping, hydrated } = useAgrocer();
+  // Until the load resolves, `shopping` still holds the demo seed. Against localStorage that
+  // window was imperceptible; over the network it is long enough to show a badge counting
+  // items the family does not have. No badge is better than a wrong one.
+  const remaining = hydrated ? shopping.filter((item) => !item.checked).length : 0;
 
   // Shopping Mode is full-screen by design: in the aisle the family only needs
   // the list, and its own Exit button is the way back.

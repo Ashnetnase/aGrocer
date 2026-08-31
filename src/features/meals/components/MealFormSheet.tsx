@@ -1,16 +1,19 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useId } from 'react';
+import { useController, useForm, type Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2Icon } from 'lucide-react';
+import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { MEAL_TAGS, mealDraftSchema, type Meal, type MealDraft } from '@/domain/schemas/meal';
+import type { Product } from '@/domain/schemas/product';
+import { formatMealIngredient, parseMealIngredient } from '@/domain/services/meals';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import {
   FormChipMultiSelect,
   FormNumberField,
-  FormStringListField,
   FormTextField,
+  FormTextareaField,
 } from '@/components/agrocer/form/FormFields';
 
 const emptyValues: MealDraft = {
@@ -20,14 +23,26 @@ const emptyValues: MealDraft = {
   tags: [],
   image: undefined,
   description: '',
-  ingredients: [''],
+  instructions: undefined,
+  ingredients: [],
+  ingredientDetails: [],
 };
 
 interface MealFormSheetProps {
   open: boolean;
   onClose: () => void;
   meal: Meal | null;
+  /**
+   * Pre-filled values for a meal that does not exist yet — today, a pasted recipe import.
+   * Ignored when `meal` is set, since editing an existing meal must never be overwritten by
+   * a leftover draft. The form is still fully editable: an import is a head start that the
+   * person reviews, never something saved on their behalf.
+   */
+  initialDraft?: MealDraft | null;
+  products: Product[];
   onSave: (draft: MealDraft) => void;
+  /** Optional action copy for flows that save and immediately plan a new recipe. */
+  createLabel?: string;
   onDelete?: () => void;
   /** How many planned slots use this meal, so deleting can warn honestly. */
   plannedUses?: number;
@@ -37,7 +52,10 @@ export function MealFormSheet({
   open,
   onClose,
   meal,
+  initialDraft = null,
+  products,
   onSave,
+  createLabel = 'Add meal',
   onDelete,
   plannedUses = 0,
 }: MealFormSheetProps) {
@@ -48,6 +66,10 @@ export function MealFormSheet({
 
   useEffect(() => {
     if (!open) return;
+    if (!meal && initialDraft) {
+      form.reset(initialDraft);
+      return;
+    }
     form.reset(
       meal
         ? {
@@ -57,17 +79,20 @@ export function MealFormSheet({
             tags: meal.tags,
             image: meal.image,
             description: meal.description,
-            ingredients: meal.ingredients.length > 0 ? meal.ingredients : [''],
+            instructions: meal.instructions,
+            ingredients: meal.ingredients,
+            ingredientDetails:
+              meal.ingredientDetails ?? meal.ingredients.map(parseMealIngredient),
           }
         : emptyValues,
     );
-  }, [open, meal, form]);
+  }, [open, meal, initialDraft, form]);
 
   const submit = form.handleSubmit((values) => {
     onSave({
       ...values,
-      // Blank rows are how an empty ingredient list looks in the UI; drop them.
-      ingredients: values.ingredients.map((item) => item.trim()).filter(Boolean),
+      instructions: values.instructions?.trim() ? values.instructions.trim() : undefined,
+      ingredients: (values.ingredientDetails ?? []).map(formatMealIngredient),
     });
     onClose();
   });
@@ -100,7 +125,7 @@ export function MealFormSheet({
             form="meal-form"
             className="h-12 flex-1 rounded-2xl bg-moss-600 text-[15px] font-bold text-white transition-colors duration-150 ease-out hover:bg-moss-700"
           >
-            {meal ? 'Save changes' : 'Add meal'}
+            {meal ? 'Save changes' : createLabel}
           </button>
         </div>
       }
@@ -128,12 +153,13 @@ export function MealFormSheet({
 
         <FormChipMultiSelect control={form.control} name="tags" label="Tags" options={MEAL_TAGS} />
 
-        <FormStringListField
+        <IngredientFields control={form.control} products={products} />
+
+        <FormTextareaField
           control={form.control}
-          name="ingredients"
-          label="Ingredients"
-          placeholder="e.g. Chicken breast 1kg"
-          addLabel="Add ingredient"
+          name="instructions"
+          label="How to cook it (optional)"
+          placeholder={'1. Brown the mince.\n2. Add the sauce and simmer 15 minutes.\n…'}
         />
 
         {meal && plannedUses > 0 ? (
@@ -144,5 +170,80 @@ export function MealFormSheet({
         ) : null}
       </form>
     </BottomSheet>
+  );
+}
+
+function IngredientFields({ control, products }: { control: Control<MealDraft>; products: Product[] }) {
+  const listId = useId();
+  const { field, fieldState } = useController({ control, name: 'ingredientDetails' });
+  const values = field.value ?? [];
+  const update = (index: number, patch: Partial<(typeof values)[number]>) =>
+    field.onChange(values.map((value, position) => (position === index ? { ...value, ...patch } : value)));
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-semibold text-ink">Ingredients</span>
+      <datalist id={listId}>
+        {products.map((product) => <option key={product.id} value={product.name} />)}
+      </datalist>
+      <div className="space-y-2">
+        {values.map((ingredient, index) => (
+          <div key={index} className="rounded-2xl border border-line bg-canvas p-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                list={listId}
+                value={ingredient.name}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  const product = products.find((candidate) => candidate.name.toLowerCase() === name.trim().toLowerCase());
+                  update(index, { name, productId: product?.id });
+                }}
+                aria-label={`Ingredient ${index + 1}`}
+                placeholder="e.g. Chicken breast"
+                className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+              />
+              <button
+                type="button"
+                onClick={() => field.onChange(values.filter((_, position) => position !== index))}
+                aria-label={`Remove ingredient ${index + 1}`}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-muted hover:bg-berry-50 hover:text-berry-500"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0.01"
+                step="0.01"
+                value={ingredient.amount}
+                onChange={(event) => update(index, { amount: Number(event.target.value) })}
+                aria-label={`Ingredient ${index + 1} amount`}
+                className="h-11 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+              />
+              <input
+                type="text"
+                value={ingredient.unit}
+                onChange={(event) => update(index, { unit: event.target.value })}
+                aria-label={`Ingredient ${index + 1} unit`}
+                placeholder="g, kg, ml, pack…"
+                className="h-11 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-100"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => field.onChange([...values, { name: '', amount: 1, unit: 'item' }])}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-line text-sm font-semibold text-moss-700 hover:bg-moss-50"
+      >
+        <PlusIcon className="h-4 w-4" /> Add ingredient
+      </button>
+      {fieldState.error ? <p role="alert" className="mt-1.5 text-[13px] font-medium text-berry-600">Check each ingredient has a name, amount and unit.</p> : null}
+      <p className="mt-1.5 text-xs text-muted">Choose a catalogue product by name when possible so the meal cost can be estimated.</p>
+    </div>
   );
 }

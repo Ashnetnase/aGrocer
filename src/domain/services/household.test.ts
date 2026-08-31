@@ -27,6 +27,7 @@ describe('describeHousehold', () => {
     initials: 'X',
     role,
     colour: 'bg-moss-600',
+    school: null,
   });
 
   it('describes adults and children', () => {

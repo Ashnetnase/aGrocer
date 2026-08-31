@@ -1,0 +1,1 @@
+ALTER TABLE "households" ADD COLUMN "new_world_enabled" boolean DEFAULT false NOT NULL;

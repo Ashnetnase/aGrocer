@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ShoppingItem } from '../schemas/shopping';
-import { findUncheckedByName, groupByCategory, isOnList, lineTotal, summariseShopping } from './shopping';
+import {
+  findUncheckedByName,
+  groupByCategory,
+  isOnList,
+  lineTotal,
+  summariseShopping,
+  summariseShoppingBudget,
+} from './shopping';
 
 const item = (overrides: Partial<ShoppingItem> = {}): ShoppingItem => ({
   id: 's1',
@@ -39,6 +46,33 @@ describe('summariseShopping', () => {
 
   it('reaches 100 when everything is in the trolley', () => {
     expect(summariseShopping([item({ checked: true })]).progress).toBe(100);
+  });
+});
+
+describe('summariseShoppingBudget', () => {
+  it('reports what remains under the weekly target', () => {
+    expect(summariseShoppingBudget(180, 250)).toEqual({
+      target: 250,
+      total: 180,
+      remaining: 70,
+      progress: 72,
+      over: false,
+    });
+  });
+
+  it('reports an overrun and caps visual progress at 100 percent', () => {
+    expect(summariseShoppingBudget(275, 250)).toEqual({
+      target: 250,
+      total: 275,
+      remaining: -25,
+      progress: 100,
+      over: true,
+    });
+  });
+
+  it('returns no summary when the household has not set a target', () => {
+    expect(summariseShoppingBudget(180, null)).toBeUndefined();
+    expect(summariseShoppingBudget(180, undefined)).toBeUndefined();
   });
 });
 

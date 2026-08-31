@@ -4,18 +4,130 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronRightIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
-import { settingsSchema, type Settings } from '@/domain/schemas/household';
+import { CheckIcon, ChevronRightIcon, HistoryIcon, LayoutDashboardIcon, LinkIcon, MailIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
+import { settingsSchema, shoppingAddModeSchema, type Settings } from '@/domain/schemas/household';
 import { describeHousehold } from '@/domain/services/household';
+import { summariseCommonOrder, type CommonOrderEntry } from '@/domain/services/orderHistory';
+import { guessCategory } from '@/domain/services/categoryGuess';
+import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import { useAgrocer } from '@/providers/AgrocerProvider';
+import { usesServerData } from '@/data/api/repositories';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { FormTextField, FormToggleCard } from '@/components/agrocer/form/FormFields';
+import {
+  FormChipSelect,
+  FormNumberField,
+  FormTextField,
+  FormToggleCard,
+} from '@/components/agrocer/form/FormFields';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
+import { SignOutButton } from '@/features/auth/SignOutButton';
+import { OrderImportSheet } from './components/OrderImportSheet';
 
 export function SettingsScreen() {
-  const { household, updateSettings, resetDemoData } = useAgrocer();
+  const {
+    household, products, shopping, updateSettings, resetDemoData,
+    listOrderHistory, importOrderHistory, matchOrderHistory,
+    addShoppingItem, addShoppingItems,
+  } = useAgrocer();
   const [confirmReset, setConfirmReset] = useState(false);
+  // Read once: it is a build-time constant, not something that changes while the app runs.
+  const serverData = usesServerData();
   const [saved, setSaved] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [orderHistory, setOrderHistory] = useState<OrderLineItem[]>([]);
+  const [matching, setMatching] = useState(false);
+  const [matchMessage, setMatchMessage] = useState<string>();
+  const [emailing, setEmailing] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<string>();
+
+  const sendWeeklyEmail = async () => {
+    setEmailing(true);
+    setEmailMessage(undefined);
+    try {
+      const response = await fetch('/api/email/weekly', { method: 'POST' });
+      const body = (await response.json().catch(() => null)) as { sentTo?: string; error?: string } | null;
+      if (!response.ok) throw new Error(body?.error ?? 'Could not send that email.');
+      setEmailMessage(`Sent to ${body?.sentTo}.`);
+    } catch (error) {
+      setEmailMessage(error instanceof Error ? error.message : 'Could not send that email.');
+    } finally {
+      setEmailing(false);
+    }
+  };
+
+  const refreshOrderHistory = () => {
+    if (!serverData) return;
+    void listOrderHistory().then(setOrderHistory).catch(() => setOrderHistory([]));
+  };
+
+  useEffect(() => {
+    refreshOrderHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverData]);
+
+  const commonOrder = summariseCommonOrder(orderHistory, { limit: 10 });
+  const matchedCount = orderHistory.filter((line) => line.matchedProductId).length;
+  const [addingAll, setAddingAll] = useState(false);
+  const [addMessage, setAddMessage] = useState<string>();
+
+  // The real shopping list, not just what this panel has added this session.
+  const onListNames = new Set(shopping.filter((item) => !item.checked).map((item) => item.name.trim().toLowerCase()));
+  const isOnList = (name: string) => onListNames.has(name.trim().toLowerCase());
+
+  const draftFor = (entry: CommonOrderEntry) => ({
+    name: entry.name,
+    category: guessCategory(entry.name, products) ?? ('Pantry' as const),
+    quantity: Math.max(1, Math.round(entry.typicalQuantity)),
+    unit: entry.unit,
+    price: 0,
+    priority: false,
+  });
+
+  const addCommonOrderEntry = async (entry: CommonOrderEntry) => {
+    if (isOnList(entry.name)) {
+      setAddMessage(`${entry.name} is already on your shopping list.`);
+      return;
+    }
+    await addShoppingItem(draftFor(entry));
+    setAddMessage(`${entry.name} added to your shopping list.`);
+  };
+
+  const addAllCommonOrder = async () => {
+    const toAdd = commonOrder.filter((entry) => !isOnList(entry.name));
+    if (toAdd.length === 0) {
+      setAddMessage('Everything in your common order is already on the list.');
+      return;
+    }
+    setAddingAll(true);
+    try {
+      await addShoppingItems(toAdd.map(draftFor));
+      const skipped = commonOrder.length - toAdd.length;
+      setAddMessage(
+        `${toAdd.length} item${toAdd.length === 1 ? '' : 's'} added to your shopping list.` +
+          (skipped > 0 ? ` ${skipped} already on the list.` : ''),
+      );
+    } finally {
+      setAddingAll(false);
+    }
+  };
+
+  const runMatch = async () => {
+    setMatching(true);
+    setMatchMessage(undefined);
+    try {
+      const { matched, total } = await matchOrderHistory();
+      setMatchMessage(
+        total === 0
+          ? 'Everything already had a match.'
+          : `Matched ${matched} of ${total} unmatched product${total === 1 ? '' : 's'} to the New World catalogue.`,
+      );
+      refreshOrderHistory();
+    } catch {
+      setMatchMessage('Could not match to the catalogue. Check the connection and try again.');
+    } finally {
+      setMatching(false);
+    }
+  };
 
   const form = useForm<Settings>({
     resolver: zodResolver(settingsSchema),
@@ -34,6 +146,7 @@ export function SettingsScreen() {
   });
 
   const pinDemoDate = form.watch('pinDemoDate');
+  const newWorldEnabled = form.watch('newWorldEnabled');
 
   return (
     <>
@@ -69,6 +182,40 @@ export function SettingsScreen() {
             label="Usual shop"
             placeholder="e.g. New World Thursday"
           />
+          <FormNumberField
+            control={form.control}
+            name="weeklyBudget"
+            label="Weekly grocery budget (NZD)"
+            placeholder="e.g. 250"
+            emptyValue={null}
+            description="Optional. Agrocer compares the current shopping-list estimate with this target."
+          />
+
+          <FormToggleCard
+            control={form.control}
+            name="newWorldEnabled"
+            label="New World integration"
+            description="Browse/match real products and send your trolley to New World. Off keeps Shopping a plain list."
+            activeClassName="border-moss-300 bg-moss-50"
+          />
+
+          {newWorldEnabled ? (
+            <>
+              <FormChipSelect
+                control={form.control}
+                name="shoppingAddMode"
+                label="Adding shopping items"
+                options={shoppingAddModeSchema.options}
+                columns={2}
+                renderLabel={(option) => (option === 'new-world' ? 'Browse New World' : 'Type it in')}
+              />
+              <p className="-mt-2 text-xs text-muted">
+                What the shopping list&apos;s + button opens by default. Browse New World adds a
+                real product straight to your list, already matched — no separate step to find it in
+                the trolley later. Both stay available either way.
+              </p>
+            </>
+          ) : null}
 
           <FormToggleCard
             control={form.control}
@@ -103,25 +250,210 @@ export function SettingsScreen() {
           </button>
         </form>
 
+        {/*
+          The way in to the wall dashboard.
+
+          It lives in Settings rather than the bottom nav because it is an interface *mode*
+          (`CLAUDE.md`: mobile, standard app, wall dashboard), not a peer of Pantry and
+          Shopping — and because the person who needs it is setting up a tablet, which is
+          when you open Settings. Until this existed the only route in was typing the URL,
+          while the dashboard had linked back to the app all along.
+        */}
+        <section aria-labelledby="modes" className="mt-8">
+          <h2
+            id="modes"
+            className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted"
+          >
+            Wall dashboard
+          </h2>
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <p className="text-sm leading-relaxed text-muted">
+              A full-screen view built for a tablet on the kitchen wall: today&rsquo;s shopping,
+              tonight&rsquo;s meal and the family assistant, readable from across the room.
+              Same data as here.
+            </p>
+            <Link
+              href="/dashboard"
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line"
+            >
+              <LayoutDashboardIcon className="h-4 w-4" /> Open the wall dashboard
+            </Link>
+          </div>
+        </section>
+
+        {/*
+          Order history feeds a "common order" and, later, reorder prediction and AI meal
+          suggestions — but it needs the shared database, exactly like meal feedback, so it is
+          hidden rather than shown failing when the app is running on device-only storage.
+        */}
+        {serverData ? (
+          <section aria-labelledby="order-history" className="mt-8">
+            <h2
+              id="order-history"
+              className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted"
+            >
+              Order history
+            </h2>
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <p className="text-sm leading-relaxed text-muted">
+                Paste past New World order confirmations so Agrocer can learn what your household
+                usually buys. Only product lines are read — never your name, address or phone
+                number.
+              </p>
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line"
+              >
+                <HistoryIcon className="h-4 w-4" /> Import a past order
+              </button>
+
+              {orderHistory.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void runMatch()}
+                  disabled={matching}
+                  className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line disabled:opacity-50"
+                >
+                  <LinkIcon className="h-4 w-4" /> {matching ? 'Matching…' : 'Match to New World catalogue'}
+                </button>
+              ) : null}
+              {matchMessage ? <p className="mt-2 text-xs text-muted" role="status">{matchMessage}</p> : null}
+
+              {commonOrder.length > 0 ? (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                      Your common order, from {orderHistory.length} imported item{orderHistory.length === 1 ? '' : 's'}
+                      {matchedCount > 0 ? ` · ${matchedCount} matched to a product` : ''}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void addAllCommonOrder()}
+                      disabled={addingAll}
+                      className="shrink-0 text-xs font-bold text-moss-700 disabled:opacity-50"
+                    >
+                      {addingAll ? 'Adding…' : 'Add all'}
+                    </button>
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {commonOrder.map((entry) => {
+                      const onList = isOnList(entry.name);
+                      return (
+                        <li
+                          key={entry.name}
+                          className="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-ink">
+                            {entry.name}
+                            {entry.matchedProductId ? <CheckIcon className="ml-1.5 inline h-3.5 w-3.5 text-moss-600" aria-label="Matched to a New World product" /> : null}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted">
+                            {entry.timesOrdered}× · last {entry.lastOrderedOn}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void addCommonOrderEntry(entry)}
+                            disabled={onList}
+                            className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-moss-700 shadow-sm disabled:opacity-50"
+                          >
+                            {onList ? 'On list' : 'Add'}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {addMessage ? <p className="mt-2 text-xs font-semibold text-moss-700" role="status">{addMessage}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {/*
+          Manual, self-addressed only, on purpose. Pressing this button is the confirmation
+          this project's rules require before anything leaves the household — no recipient
+          field, no schedule. The email content is assembled from real data in code
+          (`buildWeeklyDigest`), never written freehand by a model.
+        */}
+        {serverData ? (
+          <section aria-labelledby="email" className="mt-8">
+            <h2 id="email" className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
+              Email
+            </h2>
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <p className="text-sm leading-relaxed text-muted">
+                Send this week&rsquo;s meal plan and shopping list to your own email address.
+              </p>
+              <button
+                type="button"
+                onClick={() => void sendWeeklyEmail()}
+                disabled={emailing}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line disabled:opacity-50"
+              >
+                <MailIcon className="h-4 w-4" /> {emailing ? 'Sending…' : "Email me this week's plan"}
+              </button>
+              {emailMessage ? <p className="mt-2 text-xs text-muted" role="status">{emailMessage}</p> : null}
+            </div>
+          </section>
+        ) : null}
+
         <section aria-labelledby="data" className="mt-8">
           <h2 id="data" className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
             Data
           </h2>
+          {/*
+            Both halves of this section were wrong once the backend landed.
+
+            The text said nothing left the phone, which stopped being true the day the app
+            started reading Postgres — a false privacy claim is worse than none. And the reset
+            button called `reset()`, which the server repositories refuse by design, so it
+            surfaced an error rather than doing anything. Re-seeding a shared database is
+            `npm run db:seed`, deliberately not something a screen can trigger.
+          */}
           <div className="rounded-2xl border border-line bg-surface p-4">
             <p className="text-sm leading-relaxed text-muted">
-              Agrocer stores your pantry, list, planner and household on this device. Nothing leaves your
-              phone until the Agrocer backend arrives.
+              {serverData
+                ? 'Your pantry, list, planner and household are stored in the household database, so every device in the family sees the same thing. Only signed-in members of this household can read it.'
+                : 'Agrocer is storing your pantry, list, planner and household on this device only. Nothing is shared with other devices until the household database is switched on.'}
             </p>
-            <button
-              type="button"
-              onClick={() => setConfirmReset(true)}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-berry-600 transition-colors duration-150 ease-out hover:bg-berry-50"
-            >
-              <RotateCcwIcon className="h-4 w-4" /> Reset to demo data
-            </button>
+            {serverData ? null : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-berry-600 transition-colors duration-150 ease-out hover:bg-berry-50"
+              >
+                <RotateCcwIcon className="h-4 w-4" /> Reset to demo data
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="account" className="mt-8">
+          <h2
+            id="account"
+            className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted"
+          >
+            Account
+          </h2>
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <p className="text-sm leading-relaxed text-muted">
+              Signing out returns this device to the sign-in screen. On the kitchen wall tablet
+              you will normally want to stay signed in.
+            </p>
+            <SignOutButton />
           </div>
         </section>
       </main>
+
+      <OrderImportSheet
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={async (drafts) => {
+          await importOrderHistory(drafts);
+          refreshOrderHistory();
+        }}
+      />
 
       <BottomSheet
         open={confirmReset}

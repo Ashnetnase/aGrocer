@@ -16,7 +16,7 @@ import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { FormChipSelect, FormTextField } from '@/components/agrocer/form/FormFields';
 import { cn } from '@/lib/utils';
 
-const emptyValues: HouseholdMemberDraft = { name: '', role: 'Child', colour: 'bg-moss-600' };
+const emptyValues: HouseholdMemberDraft = { name: '', role: 'Child', colour: 'bg-moss-600', school: null };
 
 const COLOUR_NAMES: Record<(typeof MEMBER_COLOURS)[number], string> = {
   'bg-moss-600': 'Moss',
@@ -42,11 +42,16 @@ export function MemberSheet({ open, onClose, member, onSave, onDelete }: MemberS
 
   useEffect(() => {
     if (!open) return;
-    form.reset(member ? { name: member.name, role: member.role, colour: member.colour } : emptyValues);
+    form.reset(
+      member
+        ? { name: member.name, role: member.role, colour: member.colour, school: member.school }
+        : emptyValues,
+    );
   }, [open, member, form]);
 
   const name = form.watch('name');
   const colour = form.watch('colour');
+  const role = form.watch('role');
 
   const submit = form.handleSubmit((values) => {
     onSave(values);
@@ -99,6 +104,9 @@ export function MemberSheet({ open, onClose, member, onSave, onDelete }: MemberS
 
         <FormTextField control={form.control} name="name" label="Name" placeholder="e.g. Milla" />
         <FormChipSelect control={form.control} name="role" label="Role" options={MEMBER_ROLES} columns={2} />
+        {role === 'Child' ? (
+          <FormTextField control={form.control} name="school" label="School" placeholder="e.g. Riverside Primary" />
+        ) : null}
         <FormChipSelect
           control={form.control}
           name="colour"

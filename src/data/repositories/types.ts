@@ -4,6 +4,10 @@ import type {
   HouseholdMemberDraft,
   Settings,
 } from '@/domain/schemas/household';
+import type { Chore, ChoreDraft, ChorePatch } from '@/domain/schemas/chores';
+import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
+import type { OrderLineItem, OrderLineItemDraft } from '@/domain/schemas/orderHistory';
+import type { SchoolNotification, SchoolNotificationDraft } from '@/domain/schemas/school';
 import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
 import type { Product, ProductPatch } from '@/domain/schemas/product';
@@ -25,6 +29,10 @@ export interface PantryRepository {
   update(id: string, patch: PantryItemPatch): Promise<PantryItem | undefined>;
   adjustQuantity(id: string, delta: number): Promise<PantryItem | undefined>;
   remove(id: string): Promise<void>;
+}
+
+export interface InventoryEventRepository {
+  list(limit?: number): Promise<import('@/domain/services/reorderPrediction').InventoryUsageEvent[]>;
 }
 
 export interface ShoppingRepository {
@@ -49,6 +57,63 @@ export interface MealsRepository {
   clear(day: DayKey, slot: Slot): Promise<Plan>;
 }
 
+/**
+ * Meal feedback history (Stage 2).
+ *
+ * Append-and-read only: there is no update or delete, because a record of what the family
+ * thought last Tuesday is history, not state. Correcting it means adding a newer rating.
+ *
+ * Meal detail uses this on demand; it is not part of the application's initial load.
+ */
+export interface FeedbackRepository {
+  /** Most recent first. `mealId` narrows it to one meal's history. */
+  list(mealId?: string): Promise<MealFeedback[]>;
+  add(draft: MealFeedbackDraft): Promise<MealFeedback>;
+}
+
+/**
+ * Imported past-order history (Stage 5).
+ *
+ * Append-and-read only, the same shape as `FeedbackRepository`: a line imported wrong is
+ * deleted and re-imported, never edited in place. Read on demand, not part of initial load.
+ */
+export interface OrderHistoryRepository {
+  /** Most recent first. */
+  list(): Promise<OrderLineItem[]>;
+  /** One reviewed paste is one batch — either every line lands, or none does. */
+  importLines(drafts: OrderLineItemDraft[]): Promise<OrderLineItem[]>;
+  /**
+   * Best-effort links unmatched lines to the household's New World catalogue cache.
+   * Not a violation of "append-and-read only": the historical fact (name/quantity/price/date)
+   * is never touched, only a foreign-key link is backfilled onto it. Safe to re-run any time —
+   * it only fills in gaps and only accepts a high-confidence match (see the Drizzle
+   * implementation for why the bar is a point below the trolley's "ready" threshold).
+   */
+  matchToCatalogue(): Promise<{ matched: number; total: number }>;
+}
+
+/**
+ * Kids/School notifications (Phase 12). Hand-entered today; a Hero-email ingestion pipeline
+ * (Phase 13) will call `add` too, deduped by `externalReference` at the storage layer.
+ */
+export interface SchoolRepository {
+  /** Most recent first. Includes dismissed notifications — the screen filters, not this. */
+  list(): Promise<SchoolNotification[]>;
+  add(draft: SchoolNotificationDraft): Promise<SchoolNotification>;
+  markRead(id: string, read: boolean): Promise<SchoolNotification | undefined>;
+  dismiss(id: string): Promise<SchoolNotification | undefined>;
+}
+
+export interface ChoresRepository {
+  list(): Promise<Chore[]>;
+  create(draft: ChoreDraft): Promise<Chore>;
+  update(id: string, patch: ChorePatch): Promise<Chore | undefined>;
+  toggle(id: string): Promise<Chore | undefined>;
+  remove(id: string): Promise<void>;
+  /** Weekly reset — the same "clear checked" pattern the shopping list already uses. */
+  clearCompleted(): Promise<void>;
+}
+
 export interface ProductsRepository {
   list(): Promise<Product[]>;
   update(id: string, patch: ProductPatch): Promise<Product | undefined>;
@@ -65,10 +130,15 @@ export interface HouseholdRepository {
 
 export interface AgrocerRepositories {
   pantry: PantryRepository;
+  inventoryEvents: InventoryEventRepository;
   shopping: ShoppingRepository;
   meals: MealsRepository;
   products: ProductsRepository;
   household: HouseholdRepository;
+  feedback: FeedbackRepository;
+  orderHistory: OrderHistoryRepository;
+  school: SchoolRepository;
+  chores: ChoresRepository;
   /** Wipes Stage 1 persistence and restores the demo data. */
   reset(): Promise<void>;
 }

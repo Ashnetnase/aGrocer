@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ClockIcon, PlusIcon, UsersIcon } from 'lucide-react';
 import type { DayKey, Slot } from '@/domain/schemas/common';
-import type { Meal } from '@/domain/schemas/meal';
+import type { Meal, MealDraft } from '@/domain/schemas/meal';
 import {
   countPlannedDinners,
   countPlannedUses,
@@ -19,6 +19,7 @@ import { MealImage } from '@/components/agrocer/MealImage';
 import { MealPickerSheet } from './components/MealPickerSheet';
 import { MealDetailSheet } from './components/MealDetailSheet';
 import { MealFormSheet } from './components/MealFormSheet';
+import { RecipeImportSheet } from './components/RecipeImportSheet';
 import { cn } from '@/lib/utils';
 
 const SLOT_LABELS: Record<Slot, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
@@ -36,6 +37,8 @@ export function MealsScreen() {
     addMeal,
     updateMeal,
     removeMeal,
+    listMealFeedback,
+    addMealFeedback,
   } = useAgrocer();
   const week = usePlannerWeek();
 
@@ -45,6 +48,9 @@ export function MealsScreen() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  /** A pasted recipe waiting to be reviewed in the form. Cleared once the form closes. */
+  const [importedDraft, setImportedDraft] = useState<MealDraft | null>(null);
   const [addedFor, setAddedFor] = useState<string[]>([]);
 
   const plannedCount = countPlannedDinners(plan, week.days.map((day) => day.key));
@@ -196,20 +202,46 @@ export function MealsScreen() {
           setEditingMeal(null);
           setFormOpen(true);
         }}
+        onImport={() => setImportOpen(true)}
         onEdit={(meal) => {
           setEditingMeal(meal);
           setFormOpen(true);
         }}
       />
 
+      <RecipeImportSheet
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        initialMode="search"
+        destination="planner"
+        onImport={(draft) => {
+          // Straight into the normal form: an import is reviewed and saved like anything
+          // else, so there is only ever one path into the meal store.
+          setEditingMeal(null);
+          setImportedDraft(draft);
+          setFormOpen(true);
+        }}
+      />
+
       <MealFormSheet
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormOpen(false);
+          setImportedDraft(null);
+        }}
         meal={editingMeal}
+        initialDraft={importedDraft}
+        products={products}
+        createLabel={importedDraft ? 'Save and plan' : 'Add meal'}
         plannedUses={editingMeal ? countPlannedUses(plan, editingMeal.id) : 0}
         onSave={(draft) => {
           if (editingMeal) void updateMeal(editingMeal.id, draft);
-          else void addMeal(draft);
+          else if (importedDraft) {
+            void (async () => {
+              const meal = await addMeal(draft);
+              await assignMeal(target.day, target.slot, meal.id);
+            })();
+          } else void addMeal(draft);
         }}
         onDelete={editingMeal ? () => void removeMeal(editingMeal.id) : undefined}
       />
@@ -218,12 +250,17 @@ export function MealsScreen() {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         meal={targetMeal ?? null}
+        products={products}
+        members={household.members}
+        ateOn={targetDay?.iso ?? week.days[0]!.iso}
         dayLabel={targetDay?.label ?? ''}
         slotLabel={SLOT_LABELS[target.slot]}
         onChange={() => setPickerOpen(true)}
         onRemove={() => void clearMeal(target.day, target.slot)}
         onAddIngredients={addIngredients}
         ingredientsAdded={Boolean(targetMeal && addedFor.includes(targetMeal.id))}
+        onLoadFeedback={listMealFeedback}
+        onAddFeedback={addMealFeedback}
       />
     </>
   );

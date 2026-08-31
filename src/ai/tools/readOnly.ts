@@ -1,0 +1,299 @@
+import { z } from 'zod';
+import { buildPlannerWeek } from '@/domain/services/dates';
+import { summariseShopping } from '@/domain/services/shopping';
+import { childName, visibleNotifications } from '@/domain/services/school';
+import { nzd } from '@/lib/format';
+import { getRecipeProvider } from '@/recipes/provider';
+import { NO_ARGUMENTS, type AiTool } from './registry';
+import { mergeReorderSuggestions, predictReorders } from '@/domain/services/reorderPrediction';
+import { predictReordersFromHistory, summariseCommonOrder } from '@/domain/services/orderHistory';
+
+/**
+ * The read-only tools (AshHome Phase 9, slice 9a).
+ *
+ * Each one answers a question a family actually asks at the kitchen wall, and each returns
+ * compact prose rather than JSON. Prose costs fewer tokens than a dump of objects, and a
+ * small local model reads it more reliably — it does not have to be told that `checked:true`
+ * means somebody already put it in the trolley.
+ *
+ * What they deliberately leave out is as important as what they include: no ids, no prices
+ * per item beyond the total, no notes. The model is answering "what is on the list", not
+ * reconstructing the database, and every field handed over is a field it can garble.
+ *
+ * All three are read-only. A tool that writes is slice 9b and needs a confirmation gate.
+ */
+
+const shoppingList: AiTool = {
+  spec: {
+    name: 'getShoppingList',
+    description:
+      "Read the household's current shopping list: which items are still needed, which " +
+      'are already in the trolley, and the estimated total. Use this whenever asked what ' +
+      'is on the list, what is left to buy, or how much the shop will cost.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const items = await repos.shopping.list();
+    if (items.length === 0) return 'The shopping list is empty.';
+
+    const summary = summariseShopping(items);
+    const remaining = summary.remaining.map(describeItem);
+    const checked = summary.checked.map((item) => item.name);
+
+    return [
+      remaining.length > 0
+        ? `Still needed (${remaining.length}): ${remaining.join(', ')}.`
+        : 'Nothing still needed — everything on the list is in the trolley.',
+      checked.length > 0 ? `Already in the trolley: ${checked.join(', ')}.` : null,
+      `Estimated total ${nzd(summary.total)}.`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  },
+};
+
+const pantry: AiTool = {
+  spec: {
+    name: 'getPantry',
+    description:
+      'Read what the household has in the pantry and freezer, including which items are ' +
+      'running low or have run out. Use this when asked what food is in the house, what ' +
+      'can be cooked with what is available, or what needs restocking.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const items = await repos.pantry.list();
+    if (items.length === 0) return 'The pantry is empty.';
+
+    // Grouped by stock state rather than listed flat: "what can I cook" and "what do we
+    // need" are the two real questions, and they want opposite ends of the same list.
+    const inStock = items.filter((item) => item.state === 'good').map(describeStock);
+    const low = items.filter((item) => item.state === 'low' || item.state === 'soon');
+    const out = items.filter((item) => item.state === 'out');
+
+    return [
+      inStock.length > 0 ? `In stock: ${inStock.join(', ')}.` : 'Nothing is well stocked.',
+      low.length > 0 ? `Running low: ${low.map(describeStock).join(', ')}.` : null,
+      out.length > 0 ? `Out of: ${out.map((item) => item.name).join(', ')}.` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  },
+};
+
+const mealPlan: AiTool = {
+  spec: {
+    name: 'getMealPlan',
+    description:
+      "Read this week's meal plan, including what is planned for tonight. Use this when " +
+      'asked what is for dinner, what is planned tomorrow, or what the week looks like.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const [plan, meals] = await Promise.all([repos.meals.getPlan(), repos.meals.list()]);
+    const byId = new Map(meals.map((meal) => [meal.id, meal]));
+    // The week is derived server-side from the real date, so the model never has to be
+    // told what day it is and cannot get it wrong.
+    const week = buildPlannerWeek(new Date());
+
+    const lines = week.days.flatMap((day) => {
+      const slots = plan[day.key] ?? {};
+      const planned = (['breakfast', 'lunch', 'dinner'] as const)
+        .map((slot) => {
+          const meal = slots[slot] ? byId.get(slots[slot]) : undefined;
+          return meal ? `${slot} ${meal.name} (${meal.minutes} min)` : null;
+        })
+        .filter(Boolean);
+
+      if (planned.length === 0) return [];
+      const when = day.isToday ? `${day.label} (today)` : day.label;
+      return [`${when}: ${planned.join('; ')}.`];
+    });
+
+    if (lines.length === 0) return `Nothing is planned this week. Today is ${week.todayLabel}.`;
+    return `Today is ${week.todayLabel}. ${lines.join(' ')}`;
+  },
+};
+
+const mealCatalogue: AiTool = {
+  spec: { name: 'getMeals', description: 'Read the household meal catalogue and ids. Use before proposing to plan one of their saved meals.', parameters: NO_ARGUMENTS },
+  async execute(repos) {
+    const meals = await repos.meals.list();
+    return meals.length === 0 ? 'The meal catalogue is empty.' : `Saved meals: ${meals.map((meal) => meal.name).join('; ')}.`;
+  },
+};
+
+const reorderSuggestions: AiTool = {
+  spec: {
+    name: 'getReorderSuggestions',
+    description:
+      'Read conservative reorder suggestions: items overdue by the household\'s real order-history ' +
+      'cadence, or items pantry activity shows running low or recently emptied. This is advisory only.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const [events, orderHistory] = await Promise.all([repos.inventoryEvents.list(), repos.orderHistory.list()]);
+    const suggestions = mergeReorderSuggestions(predictReordersFromHistory(orderHistory), predictReorders(events));
+    if (suggestions.length === 0) return 'There are no reorder suggestions yet.';
+    return `Keep an eye on: ${suggestions
+      .slice(0, 6)
+      .map((item) =>
+        item.reason === 'due-for-reorder'
+          ? `${item.itemName} usually reordered every ${item.everyDays} days, ${item.daysSinceLast} since last order`
+          : item.reason === 'recently-empty'
+            ? `${item.itemName} recently ran out`
+            : `${item.itemName} used ${item.uses} times recently`,
+      )
+      .join('; ')}.`;
+  },
+};
+
+const commonOrder: AiTool = {
+  spec: {
+    name: 'getCommonOrder',
+    description:
+      "Read what the household usually buys, learned from imported New World order history: " +
+      'the most frequently bought products, how often, and when each was last bought. Use this ' +
+      'when asked what the family normally buys, or to ground a weekly meal or shopping ' +
+      'suggestion in real buying habits rather than guessing. Empty until orders have been ' +
+      'imported in Settings.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const entries = summariseCommonOrder(await repos.orderHistory.list(), { limit: 15 });
+    if (entries.length === 0) return 'No order history has been imported yet.';
+    return `Most commonly bought (from imported order history): ${entries
+      .map((entry) => `${entry.name} (${entry.timesOrdered}×, last ${entry.lastOrderedOn})`)
+      .join('; ')}.`;
+  },
+};
+
+const useSoon: AiTool = {
+  spec: { name: 'getUseSoon', description: 'Read pantry items marked use soon or ageing. Use this for waste-reduction meal suggestions.', parameters: NO_ARGUMENTS },
+  async execute(repos) {
+    const items = (await repos.pantry.list()).filter((item) => item.state === 'soon');
+    return items.length === 0 ? 'Nothing in the pantry is marked use soon.' : `Use soon: ${items.map((item) => `${item.name} (${item.quantity} ${item.unit})`).join(', ')}.`;
+  },
+};
+
+const chores: AiTool = {
+  spec: {
+    name: 'getChores',
+    description:
+      "Read the household's chores: what's outstanding, who each is assigned to, and what's " +
+      'already done. Use this when asked what jobs need doing, or what a specific person is ' +
+      'meant to be doing.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const [items, household] = await Promise.all([repos.chores.list(), repos.household.get()]);
+    if (items.length === 0) return 'No chores have been added.';
+
+    const memberName = (id: string | null) =>
+      id ? (household.members.find((member) => member.id === id)?.name ?? 'someone') : 'unassigned';
+    const outstanding = items.filter((chore) => !chore.done);
+    const done = items.filter((chore) => chore.done);
+
+    return [
+      outstanding.length > 0
+        ? `Outstanding (${outstanding.length}): ${outstanding.map((chore) => `${chore.title} (${memberName(chore.assignedMemberId)})`).join(', ')}.`
+        : 'Nothing outstanding — every chore is done.',
+      done.length > 0 ? `Already done: ${done.map((chore) => chore.title).join(', ')}.` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  },
+};
+
+const schoolNotifications: AiTool = {
+  spec: {
+    name: 'getSchoolNotifications',
+    description:
+      "Read the household's school notices — permission slips, term dates, events, anything " +
+      'from Kids/School that still needs attention or is coming up. Use this when asked about ' +
+      'school notices, permission slips, or what a child has coming up.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const [items, household] = await Promise.all([repos.school.list(), repos.household.get()]);
+    const visible = visibleNotifications(items);
+    if (visible.length === 0) return 'No school notices right now.';
+
+    return `School notices (${visible.length}): ${visible
+      .map((notice) => {
+        const child = childName(household.members, notice.childId);
+        const parts = [notice.title, child ? `for ${child}` : null, notice.actionRequired ? 'needs a response' : null, notice.dueDate ? `due ${notice.dueDate}` : null];
+        return parts.filter(Boolean).join(', ');
+      })
+      .join('; ')}.`;
+  },
+};
+
+function describeItem(item: { name: string; quantity: number; unit: string }): string {
+  return item.quantity > 1 ? `${item.name} ×${item.quantity} ${item.unit}` : item.name;
+}
+
+function describeStock(item: { name: string; quantity: number; unit: string }): string {
+  return `${item.name} (${item.quantity} ${item.unit})`;
+}
+
+/**
+ * Recipe search — the one read tool that takes an argument, and the one that reads something
+ * other than the household.
+ *
+ * It reaches the configured recipe provider rather than a repository, so it exposes no family
+ * data at all. It is in this record because the invariant that matters is *read-only*, and it
+ * is: searching cannot change anything. Saving what it finds is a write tool with a
+ * confirmation gate.
+ *
+ * Ids are returned because `addRecipeToMeals` needs one, and because an id is the only thing
+ * the model can hand back that the server can verify. A title it made up would not resolve.
+ */
+const searchRecipes: AiTool<{ query: string }> = {
+  spec: {
+    name: 'searchRecipes',
+    description:
+      'Search a public recipe database by name for recipes the household does not have yet. ' +
+      'Use this when asked to find or suggest a new recipe. Returns ids you can pass to ' +
+      'addRecipeToMeals. Do not use it to answer what the family already has — that is ' +
+      'getMealPlan.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'A dish or main ingredient, e.g. "chicken curry".' },
+      },
+      required: ['query'],
+    },
+  },
+  schema: z.object({ query: z.string().trim().min(2).max(60) }),
+  async execute(_repos, args) {
+    const results = await getRecipeProvider().search(args.query);
+    if (results.length === 0) return `No recipes found for "${args.query}".`;
+
+    // Capped: the whole list is spent as context on every following turn, and a family
+    // choosing between twenty options on a wall tablet is not choosing.
+    const shown = results.slice(0, 5);
+    const lines = shown.map(
+      (recipe) =>
+        `${recipe.title} (id ${recipe.id}${recipe.area ? `, ${recipe.area}` : ''})`,
+    );
+    return `Found ${results.length}, showing ${shown.length}: ${lines.join('; ')}.`;
+  },
+};
+
+/**
+ * The allow-list. Adding a tool here grants the model access to it, so the review question
+ * for any addition is "does the model need this, and is it read-only?".
+ */
+export const READ_ONLY_TOOLS: Record<string, AiTool> = {
+  getShoppingList: shoppingList,
+  getPantry: pantry,
+  getMealPlan: mealPlan,
+  getMeals: mealCatalogue,
+  getReorderSuggestions: reorderSuggestions,
+  getCommonOrder: commonOrder,
+  getUseSoon: useSoon,
+  getChores: chores,
+  getSchoolNotifications: schoolNotifications,
+  searchRecipes: searchRecipes as AiTool,
+};

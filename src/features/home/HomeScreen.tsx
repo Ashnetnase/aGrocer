@@ -1,13 +1,18 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRightIcon,
   BellIcon,
+  CalendarDaysIcon,
   CalendarPlusIcon,
+  CheckIcon,
   ChevronRightIcon,
+  ClipboardListIcon,
   ClockIcon,
+  GraduationCapIcon,
   PlusIcon,
   ShoppingCartIcon,
   UsersIcon,
@@ -18,10 +23,206 @@ import { rotateToToday } from '@/domain/services/dates';
 import { findMeal, mealFor, pantryItemToShoppingDraft } from '@/domain/services/meals';
 import { needsAttention, describeStock } from '@/domain/services/pantry';
 import { isOnList, summariseShopping } from '@/domain/services/shopping';
+import { childName, visibleNotifications } from '@/domain/services/school';
+import type { SchoolNotification } from '@/domain/schemas/school';
+import type { Chore } from '@/domain/schemas/chores';
+import { listFamilyCalendarEvents } from '@/calendar/client';
+import { localWallClock, upcomingEvents, type CalendarEvent } from '@/calendar/ics';
 import { StockChip } from '@/components/agrocer/StockChip';
 import { MealImage } from '@/components/agrocer/MealImage';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+/**
+ * Glanceable Kids/School updates on the phone, not just the wall (2026-08-31): the same
+ * `school.list()` and `visibleNotifications()` ordering the dashboard's `KidsCard` uses, so
+ * "check the tablet" was never the only way to see what needs a reply. Fetched on mount, same
+ * reasoning as the dashboard card — shared history, not part of the app's initial load.
+ */
+function KidsAndSchoolGlance() {
+  const { household, listSchoolNotifications } = useAgrocer();
+  const [notifications, setNotifications] = useState<SchoolNotification[]>([]);
+  const children = household.members.filter((member) => member.role === 'Child');
+
+  useEffect(() => {
+    void listSchoolNotifications()
+      .then(setNotifications)
+      .catch(() => setNotifications([]));
+  }, [listSchoolNotifications]);
+
+  if (children.length === 0) return null;
+
+  const visible = visibleNotifications(notifications);
+  const unread = visible.filter((notification) => !notification.read).length;
+  const topThree = visible.slice(0, 3);
+
+  return (
+    <section aria-labelledby="kids-school" className="mt-5">
+      <div className="mb-2.5 flex items-baseline justify-between">
+        <h2 id="kids-school" className="text-base font-bold tracking-tight text-ink">
+          Kids &amp; School
+        </h2>
+        <Link href="/kids" className="text-xs font-semibold text-moss-700">
+          Open Kids
+        </Link>
+      </div>
+      <Link
+        href="/kids"
+        className="block w-full rounded-3xl border border-line bg-surface p-4 text-left shadow-card transition-colors duration-150 ease-out hover:border-moss-200"
+      >
+        {topThree.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <GraduationCapIcon className="h-4 w-4" /> No notices right now.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {topThree.map((notification) => (
+              <li key={notification.id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold text-ink">{notification.title}</p>
+                  <p className="truncate text-xs text-muted">
+                    {childName(household.members, notification.childId) ?? 'Family'}
+                    {notification.dueDate ? ` · Due ${notification.dueDate}` : ''}
+                  </p>
+                </div>
+                {notification.actionRequired ? (
+                  <span className="shrink-0 rounded-full bg-clay-50 px-2 py-0.5 text-[11px] font-bold text-clay-600">
+                    Action
+                  </span>
+                ) : !notification.read ? (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-moss-600" aria-label="Unread" />
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {unread > 0 ? (
+          <p className="mt-3 border-t border-line pt-2 text-xs font-semibold text-moss-700">
+            {unread} unread
+          </p>
+        ) : null}
+      </Link>
+    </section>
+  );
+}
+
+const eventDayFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+const eventTimeFormatter = new Intl.DateTimeFormat('en-NZ', { hour: 'numeric', minute: '2-digit' });
+
+function parseLocalEventStart(value: string): Date {
+  const [datePart, timePart] = value.split('T');
+  const [year, month, day] = (datePart ?? '').split('-').map(Number);
+  if (!timePart) return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
+  const [hour, minute] = timePart.split(':').map(Number);
+  return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0);
+}
+
+/**
+ * The family calendar (2026-08-31), read-only from one iPhone's iCloud "Public Calendar" share
+ * link (`src/calendar/`) — whoever creates events, everyone signed in sees them here, no
+ * per-device calendar subscription needed. Same on-demand fetch shape as the other glances.
+ */
+function FamilyScheduleGlance() {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    void listFamilyCalendarEvents()
+      .then(setEvents)
+      .catch(() => setEvents([]))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  if (!loaded) return null;
+
+  const upcoming = upcomingEvents(events, localWallClock(new Date()), 3);
+
+  return (
+    <section aria-labelledby="family-schedule" className="mt-5">
+      <h2 id="family-schedule" className="mb-2.5 text-base font-bold tracking-tight text-ink">
+        Family schedule
+      </h2>
+      <div className="rounded-3xl border border-line bg-surface p-4 shadow-card">
+        {upcoming.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <CalendarDaysIcon className="h-4 w-4" /> Nothing coming up.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {upcoming.map((event) => {
+              const day = eventDayFormatter.format(parseLocalEventStart(event.start));
+              return (
+                <li key={event.uid} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{event.title}</span>
+                  <span className="shrink-0 text-xs font-semibold text-muted">
+                    {event.allDay ? day : `${day}, ${eventTimeFormatter.format(parseLocalEventStart(event.start))}`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Same reasoning as `KidsAndSchoolGlance`: touch a chore off from the phone, not just the wall. */
+function ChoresGlance() {
+  const { household, listChores, toggleChore } = useAgrocer();
+  const [chores, setChores] = useState<Chore[]>([]);
+
+  useEffect(() => {
+    void listChores()
+      .then(setChores)
+      .catch(() => setChores([]));
+  }, [listChores]);
+
+  const outstanding = chores.filter((chore) => !chore.done);
+  const memberName = (id: string | null) => (id ? household.members.find((m) => m.id === id)?.name : null);
+
+  const handleToggle = async (chore: Chore) => {
+    await toggleChore(chore.id);
+    setChores((current) => current.map((c) => (c.id === chore.id ? { ...c, done: true } : c)));
+  };
+
+  return (
+    <section aria-labelledby="chores" className="mt-6">
+      <div className="mb-2.5 flex items-baseline justify-between">
+        <h2 id="chores" className="text-base font-bold tracking-tight text-ink">
+          Chores
+        </h2>
+        <Link href="/chores" className="text-xs font-semibold text-moss-700">
+          Open Chores
+        </Link>
+      </div>
+      {outstanding.length === 0 ? (
+        <p className="flex items-center gap-2 rounded-2xl border border-line bg-surface p-4 text-sm text-muted">
+          <ClipboardListIcon className="h-4 w-4" /> Nothing outstanding.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+          {outstanding.slice(0, 4).map((chore) => (
+            <li key={chore.id} className="flex items-center gap-3 bg-surface px-4 py-3">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={false}
+                aria-label={`Mark ${chore.title} as done`}
+                onClick={() => void handleToggle(chore)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border-2 border-line bg-canvas text-transparent transition-colors duration-150 ease-out hover:border-moss-300"
+              >
+                <CheckIcon className="h-4 w-4" strokeWidth={3} />
+              </button>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{chore.title}</span>
+              <span className="shrink-0 text-xs text-muted">{memberName(chore.assignedMemberId) ?? 'Unassigned'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 const QUICK_ACTIONS = [
   { label: 'Add pantry', icon: PlusIcon, href: '/pantry?add=1' },
@@ -57,10 +258,11 @@ export function HomeScreen() {
           <button
             type="button"
             aria-label="Notifications"
+            onClick={() => router.push('/notifications')}
             className="relative flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors duration-150 ease-out hover:bg-moss-50"
           >
             <BellIcon className="h-[18px] w-[18px]" />
-            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-clay-500" />
+            {alerts.length > 0 ? <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-clay-500" /> : null}
           </button>
         </div>
       </header>
@@ -93,6 +295,9 @@ export function HomeScreen() {
             Manage
           </Link>
         </div>
+
+        <KidsAndSchoolGlance />
+        <FamilyScheduleGlance />
 
         <section aria-labelledby="tonight" className="mt-5">
           <div className="mb-2.5 flex items-baseline justify-between">
@@ -284,6 +489,8 @@ export function HomeScreen() {
             })}
           </div>
         </section>
+
+        <ChoresGlance />
       </main>
     </>
   );

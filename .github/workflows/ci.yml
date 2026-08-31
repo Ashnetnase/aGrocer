@@ -1,0 +1,107 @@
+name: CI
+
+# Every push and every pull request. A check that only runs on one branch is a check
+# somebody will route around by accident.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# A second push to the same branch cancels the first: the earlier result is about to be
+# stale anyway, and this is a family project on free runners.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Dockerfile's node:22-alpine. Drift between CI and the image is
+          # how "works in CI" stops meaning anything.
+          node-version: '22'
+          cache: npm
+
+      # `ci` rather than `install`: it honours the lockfile exactly and fails if
+      # package.json and package-lock.json disagree.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm run test
+
+      - name: Build
+        run: npm run build
+        env:
+          # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so the
+          # build needs *something* here. These are deliberately obvious placeholders: the
+          # real publishable key is public too (ADR-016), but CI has no reason to carry it,
+          # and a fake one proves the build does not secretly depend on a live project.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-not-a-real-key
+          NEXT_TELEMETRY_DISABLED: '1'
+
+  database:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Separate from `check` so a database problem is distinguishable at a glance from a
+    # code problem, and so the main job stays green and fast on a fork with no secrets.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run test:db` skips itself when DATABASE_URL is absent, so this passes on a fork
+      # or before the secret is configured. It is a real run only where the secret exists.
+      - name: Integration tests against Postgres
+        run: npm run test:db
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  security:
+    name: Row-level security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only where the secrets exist. A fork cannot run this, and should not be failed for it.
+    if: github.event_name == 'push' && github.repository_owner != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Fails if RLS is off on any table, or if the publishable key can read anything.
+      # This is the check that would have caught the exposure closed in ADR-016, and it is
+      # here so a future migration cannot quietly reopen it.
+      - name: Verify RLS holds
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL not configured — skipping. Add it as a repository secret."
+            exit 0
+          fi
+          npm run db:rls
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}

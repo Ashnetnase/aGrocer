@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PackageOpenIcon } from 'lucide-react';
 import { CATEGORIES, type Category } from '@/domain/schemas/common';
@@ -11,8 +11,10 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { FilterChips, SearchField } from '@/components/agrocer/Field';
 import { EmptyState } from '@/components/agrocer/EmptyState';
 import { FloatingAddButton } from '@/components/agrocer/FloatingAddButton';
+import { fuzzyMatch } from '@/lib/search';
 import { PantryRow } from './components/PantryRow';
 import { PantryItemSheet } from './components/PantryItemSheet';
+import type { ReorderSuggestion } from '@/domain/services/reorderPrediction';
 
 /** Filters are a union rather than `string`, so a typo cannot silently match nothing. */
 const FILTERS = ['All', 'Needs attention', ...CATEGORIES] as const;
@@ -26,7 +28,7 @@ function matchesFilter(item: PantryItem, filter: Filter): boolean {
 
 export function PantryScreen() {
   const searchParams = useSearchParams();
-  const { pantry, addPantryItem, updatePantryItem, adjustPantryQuantity, removePantryItem } = useAgrocer();
+  const { pantry, addPantryItem, updatePantryItem, adjustPantryQuantity, removePantryItem, addShoppingItem } = useAgrocer();
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>(
@@ -34,13 +36,19 @@ export function PantryScreen() {
   );
   const [sheetOpen, setSheetOpen] = useState(searchParams.get('add') === '1');
   const [editing, setEditing] = useState<PantryItem | null>(null);
+  const [suggestions, setSuggestions] = useState<ReorderSuggestion[]>([]);
+
+  useEffect(() => {
+    fetch('/api/pantry/suggestions').then((response) => response.ok ? response.json() : null)
+      .then((body: { suggestions?: ReorderSuggestion[] } | null) => setSuggestions(body?.suggestions ?? []))
+      .catch(() => setSuggestions([]));
+  }, [pantry]);
 
   const counts = useMemo(() => countPantry(pantry), [pantry]);
 
   const grouped = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     const visible = pantry.filter(
-      (item) => item.name.toLowerCase().includes(needle) && matchesFilter(item, filter),
+      (item) => fuzzyMatch(item.name, query) && matchesFilter(item, filter),
     );
     return CATEGORIES.map((category) => ({
       category,
@@ -91,6 +99,28 @@ export function PantryScreen() {
             </div>
           ))}
         </div>
+
+        {suggestions.length > 0 ? (
+          <section aria-label="Reorder suggestions" className="mt-4 rounded-2xl border border-honey-200 bg-honey-50 p-4">
+            <h2 className="text-sm font-bold text-ink">Keep an eye on</h2>
+            <ul className="mt-2 space-y-1 text-sm text-ink">
+              {suggestions.slice(0, 4).map((suggestion) => (
+                <li key={suggestion.itemName} className="flex items-center justify-between gap-2">
+                  <span>
+                    {suggestion.itemName} —{' '}
+                    {suggestion.reason === 'due-for-reorder'
+                      ? `usually every ${suggestion.everyDays} days, ${suggestion.daysSinceLast} since last order`
+                      : suggestion.reason === 'recently-empty'
+                        ? 'recently ran out'
+                        : `used ${suggestion.uses} times recently`}
+                  </span>
+                  <button type="button" onClick={() => void addShoppingItem({ name: suggestion.itemName, category: 'Pantry', quantity: 1, unit: 'each', price: 0, priority: false })} className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-moss-700 shadow-sm">Add</button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted">Suggestions only. Add items to shopping yourself.</p>
+          </section>
+        ) : null}
 
         {grouped.length === 0 ? (
           <div className="mt-6">
