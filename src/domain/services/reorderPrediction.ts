@@ -9,8 +9,13 @@ export interface InventoryUsageEvent {
 
 export interface ReorderSuggestion {
   itemName: string;
-  reason: 'repeated-use' | 'recently-empty';
-  uses: number;
+  /** `due-for-reorder` comes from real order-history cadence — see `predictReordersFromHistory`. */
+  reason: 'repeated-use' | 'recently-empty' | 'due-for-reorder';
+  uses?: number;
+  everyDays?: number;
+  daysSinceLast?: number;
+  matchedProductId?: string;
+  matchedProductName?: string;
 }
 
 /**
@@ -42,4 +47,19 @@ export function predictReorders(
       uses: value.uses,
     }))
     .sort((a, b) => Number(b.reason === 'recently-empty') - Number(a.reason === 'recently-empty') || b.uses - a.uses);
+}
+
+/**
+ * Combines the pantry-activity signal with the order-history cadence signal
+ * (`predictReordersFromHistory` in `orderHistory.ts`), used identically by `/api/pantry/
+ * suggestions` and the `getReorderSuggestions` assistant tool so the two never drift apart.
+ * Where both flag the same item, the cadence one wins — it is backed by real order dates
+ * rather than an inventory-adjustment heuristic.
+ */
+export function mergeReorderSuggestions(
+  fromHistory: ReorderSuggestion[],
+  fromPantry: ReorderSuggestion[],
+): ReorderSuggestion[] {
+  const flaggedByHistory = new Set(fromHistory.map((suggestion) => suggestion.itemName.toLowerCase()));
+  return [...fromHistory, ...fromPantry.filter((suggestion) => !flaggedByHistory.has(suggestion.itemName.toLowerCase()))];
 }

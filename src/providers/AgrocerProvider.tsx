@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { DayKey, Slot } from '@/domain/schemas/common';
 import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
+import type { OrderLineItem, OrderLineItemDraft } from '@/domain/schemas/orderHistory';
 import type { Household, HouseholdMemberDraft, Settings } from '@/domain/schemas/household';
 import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
@@ -56,6 +57,10 @@ interface AgrocerActions {
   removeMeal: (id: string) => Promise<void>;
   listMealFeedback: (mealId: string) => Promise<MealFeedback[]>;
   addMealFeedback: (draft: MealFeedbackDraft) => Promise<MealFeedback>;
+
+  listOrderHistory: () => Promise<OrderLineItem[]>;
+  importOrderHistory: (drafts: OrderLineItemDraft[]) => Promise<OrderLineItem[]>;
+  matchOrderHistory: () => Promise<{ matched: number; total: number }>;
 
   toggleFavourite: (id: string) => Promise<void>;
 
@@ -269,6 +274,15 @@ export function AgrocerProvider({
       },
       async addMealFeedback(draft) {
         return repositories.feedback.add(draft);
+      },
+      async listOrderHistory() {
+        return repositories.orderHistory.list();
+      },
+      async importOrderHistory(drafts) {
+        return repositories.orderHistory.importLines(drafts);
+      },
+      async matchOrderHistory() {
+        return repositories.orderHistory.matchToCatalogue();
       },
 
       async toggleFavourite(id) {

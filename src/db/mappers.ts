@@ -4,12 +4,14 @@ import type { PantryItem } from '@/domain/schemas/pantry';
 import type { Product } from '@/domain/schemas/product';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import type { MealFeedback } from '@/domain/schemas/feedback';
+import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import type {
   households,
   householdMembers,
   meals,
   pantryItems,
   mealFeedback,
+  orderLineItems,
   planEntries,
   products,
   shoppingItems,
@@ -36,6 +38,7 @@ type ShoppingItemRow = typeof shoppingItems.$inferSelect;
 type MealRow = typeof meals.$inferSelect;
 type PlanEntryRow = typeof planEntries.$inferSelect;
 type MealFeedbackRow = typeof mealFeedback.$inferSelect;
+type OrderLineItemRow = typeof orderLineItems.$inferSelect;
 
 /* -------------------------------------------------------------------------- */
 /* Money                                                                       */
@@ -113,6 +116,7 @@ export function toMeal(row: MealRow): Meal {
     tags: row.tags,
     image: optionalText(row.image),
     description: row.description,
+    instructions: optionalText(row.instructions),
     ingredients: row.ingredients,
     ingredientDetails: row.ingredientDetails ?? undefined,
   };
@@ -176,5 +180,21 @@ export function toMealFeedback(row: MealFeedbackRow): MealFeedback {
     note: optionalText(row.note),
     ateOn: row.ateOn,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** `ordered_on` is a Postgres `date`; the driver hands it back as `yyyy-mm-dd` already. */
+export function toOrderLineItem(row: OrderLineItemRow): OrderLineItem {
+  return {
+    id: row.id,
+    retailer: row.retailer as OrderLineItem['retailer'],
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit,
+    unitPrice: row.unitPriceCents === null ? undefined : centsToPrice(row.unitPriceCents),
+    totalPrice: centsToPrice(row.totalPriceCents),
+    orderedOn: row.orderedOn,
+    matchedProductId: row.matchedProductId ?? undefined,
+    matchedProductName: optionalText(row.matchedProductName),
   };
 }

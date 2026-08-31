@@ -89,6 +89,15 @@ services:
       NEW_WORLD_CATALOGUE_URL: ${NEW_WORLD_CATALOGUE_URL:-}
       NEW_WORLD_CATALOGUE_TOKEN: ${NEW_WORLD_CATALOGUE_TOKEN:-}
 
+      # Optional. Weekly meal-plan/shopping-list email (Settings), manual and self-addressed
+      # only. Left unset, the button correctly reports "Email is not configured yet." rather
+      # than crashing — see src/email/provider.ts.
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-ses}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-2}
+
     # Modest ceilings suited to a small homelab VM.
     deploy:
       resources:

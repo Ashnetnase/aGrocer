@@ -16,7 +16,7 @@ export interface ShoppingProductRepository {
 const cents = (value: number | undefined) => value === undefined ? null : Math.round(value * 100);
 const money = (value: number | null) => value === null ? undefined : value / 100;
 
-function toProduct(row: typeof retailerProducts.$inferSelect): RetailerProduct {
+export function toProduct(row: typeof retailerProducts.$inferSelect): RetailerProduct {
   return {
     id: row.id,
     retailer: 'new-world',

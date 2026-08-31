@@ -38,6 +38,8 @@ export const mealSchema = z.object({
    */
   image: z.string().min(1).optional(),
   description: z.string().trim().max(300),
+  /** Optional cooking method/steps. Free text, since recipes are written in every style. */
+  instructions: z.string().trim().max(8_000).optional(),
   ingredients: z.array(z.string().trim().min(1, 'Required')).max(30, 'Too many ingredients'),
   /**
    * Structured amounts used for cost estimation. Optional keeps Stage 1 localStorage and

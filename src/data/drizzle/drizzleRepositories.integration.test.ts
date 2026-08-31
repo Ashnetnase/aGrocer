@@ -327,4 +327,61 @@ describe.skipIf(!url)('drizzleRepositories against real Postgres', () => {
 
     expect(await repos.feedback.list(meal.id)).toEqual([]);
   });
+
+  it('imports order history lines and lists them newest-first', async () => {
+    await repos.orderHistory.importLines([
+      { retailer: 'new-world', name: 'Anchor Blue Milk 2L', quantity: 1, unit: 'ea', totalPrice: 4.5, orderedOn: '2026-08-01' },
+      { retailer: 'new-world', name: 'Weet-Bix 750g', quantity: 1, unit: 'ea', unitPrice: 5.79, totalPrice: 5.79, orderedOn: '2026-08-08' },
+    ]);
+    const history = await repos.orderHistory.list();
+    expect(history).toHaveLength(2);
+    expect(history[0]?.name).toBe('Weet-Bix 750g');
+    expect(history[0]?.unitPrice).toBe(5.79);
+    expect(history[1]?.name).toBe('Anchor Blue Milk 2L');
+    expect(history[1]?.unitPrice).toBeUndefined();
+  });
+
+  it('matches an unmatched order line to a cached New World product above the confidence bar, and never twice', async () => {
+    await shoppingProducts.saveProduct({
+      retailer: 'new-world',
+      externalProductId: 'integration-weetbix-750g',
+      name: 'Weet-Bix 750g',
+      productUrl: 'https://www.newworld.co.nz/shop/product/integration-weetbix-750g',
+      availability: 'available',
+    });
+
+    const { matched, total } = await repos.orderHistory.matchToCatalogue();
+    expect(matched).toBeGreaterThanOrEqual(1);
+    expect(total).toBeGreaterThanOrEqual(1);
+
+    const history = await repos.orderHistory.list();
+    const weetbix = history.find((line) => line.name === 'Weet-Bix 750g');
+    expect(weetbix?.matchedProductName).toBe('Weet-Bix 750g');
+    expect(weetbix?.matchedProductId).toBeTruthy();
+
+    // Re-running finds nothing new to match — the line is already linked.
+    const second = await repos.orderHistory.matchToCatalogue();
+    expect(second.matched).toBe(0);
+  });
+
+  it('matches an invoice-printed name with a space against a catalogue name with none', async () => {
+    // The real bug this pins: New World's own product name glues the size on ("Milk3l"), but a
+    // PDF invoice prints it with a space ("Milk 3l"). Same product, different literal string.
+    await shoppingProducts.saveProduct({
+      retailer: 'new-world',
+      externalProductId: 'integration-pams-standard-milk-3l',
+      name: 'Pams Standard Milk3l',
+      productUrl: 'https://www.newworld.co.nz/shop/product/integration-pams-standard-milk-3l',
+      availability: 'available',
+    });
+    await repos.orderHistory.importLines([
+      { retailer: 'new-world', name: 'Pams Standard Milk 3l', quantity: 1, unit: 'ea', totalPrice: 7.65, orderedOn: '2026-08-15' },
+    ]);
+
+    await repos.orderHistory.matchToCatalogue();
+
+    const history = await repos.orderHistory.list();
+    const milk = history.find((line) => line.name === 'Pams Standard Milk 3l');
+    expect(milk?.matchedProductName).toBe('Pams Standard Milk3l');
+  });
 });

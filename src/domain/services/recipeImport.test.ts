@@ -159,6 +159,18 @@ Method
     expect(recipe.ingredients).toHaveLength(5);
   });
 
+  it('captures everything after the method heading as instructions', () => {
+    const recipe = importRecipeText(withHeading);
+    expect(recipe.instructions).toBe(
+      '1. Brown the mince for 5 minutes.\n2. Add everything else and simmer for 20 minutes.',
+    );
+  });
+
+  it('leaves instructions undefined when there is no method heading', () => {
+    const recipe = importRecipeText('Quick omelette\n3 eggs\n20g butter');
+    expect(recipe.instructions).toBeUndefined();
+  });
+
   it('falls back to quantity-led lines when there is no heading', () => {
     const recipe = importRecipeText(`Quick omelette
 3 eggs

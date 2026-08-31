@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { HouseholdMemberDraft, Settings } from '@/domain/schemas/household';
 import type { MealDraft } from '@/domain/schemas/meal';
 import type { PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
@@ -11,6 +11,7 @@ import type {
   FeedbackRepository,
   HouseholdRepository,
   MealsRepository,
+  OrderHistoryRepository,
   PantryRepository,
   ProductsRepository,
   ShoppingRepository,
@@ -22,9 +23,11 @@ import {
   meals,
   inventoryEvents,
   mealFeedback,
+  orderLineItems,
   pantryItems,
   planEntries,
   products,
+  retailerProducts,
   shoppingItems,
 } from '@/db/schema';
 import {
@@ -33,12 +36,15 @@ import {
   toHouseholdMember,
   toMeal,
   toMealFeedback,
+  toOrderLineItem,
   toPantryItem,
   toPlan,
   toProduct,
   toSettings,
   toShoppingItem,
 } from '@/db/mappers';
+import { isSpecificNewWorldProduct, rankProduct } from '@/shopping/matching';
+import { toProduct as toRetailerProduct } from '@/shopping/repository';
 
 /**
  * Stage 2 repository implementation, backed by Supabase Postgres (ADR-013).
@@ -200,6 +206,87 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
     },
   };
 
+  const orderHistory: OrderHistoryRepository = {
+    async list() {
+      const rows = await db
+        .select()
+        .from(orderLineItems)
+        .where(eq(orderLineItems.householdId, householdId))
+        .orderBy(desc(orderLineItems.orderedOn), desc(orderLineItems.createdAt));
+      return rows.map(toOrderLineItem);
+    },
+
+    async importLines(drafts) {
+      if (!drafts.length) return [];
+      const rows = await db
+        .insert(orderLineItems)
+        .values(
+          drafts.map((draft) => ({
+            householdId,
+            retailer: draft.retailer,
+            name: draft.name,
+            quantity: draft.quantity,
+            unit: draft.unit,
+            unitPriceCents: draft.unitPrice === undefined ? null : priceToCents(draft.unitPrice),
+            totalPriceCents: priceToCents(draft.totalPrice),
+            orderedOn: draft.orderedOn,
+            matchedProductId: draft.matchedProductId ?? null,
+            matchedProductName: draft.matchedProductName ?? null,
+          })),
+        )
+        .returning();
+      return rows.map(toOrderLineItem);
+    },
+
+    // 0.85, not `resolveShoppingItem`'s 0.86 "ready" bar. `rankProduct`'s token-overlap branch
+    // tops out at exactly 0.85 for a *perfect* token match (0.35 + 1.0*0.5) — reachable often
+    // here because New World's own product names glue a size onto the name ("Milk3l") while an
+    // invoice prints it with a space ("Milk 3l"); `rankProduct` splits both consistently once it
+    // tokenises, so every token matches, but the exact-string and substring bonuses above that
+    // branch never fire for a same-product one-space difference. 0.86 categorically rejects
+    // every 100%-token-overlap match, not just risky ones. A one-point-lower bar here (never
+    // used for the trolley's auto-add path) is proportionate: this only backfills a metadata
+    // link on already-recorded history, not something being added to a real cart unreviewed.
+    async matchToCatalogue() {
+      const [unmatchedRows, candidateRows] = await Promise.all([
+        db.select().from(orderLineItems).where(
+          and(eq(orderLineItems.householdId, householdId), isNull(orderLineItems.matchedProductId)),
+        ),
+        db.select().from(retailerProducts).where(
+          and(eq(retailerProducts.householdId, householdId), eq(retailerProducts.retailer, 'new-world')),
+        ),
+      ]);
+      const candidates = candidateRows.map(toRetailerProduct).filter(isSpecificNewWorldProduct);
+
+      const bestMatchByName = new Map<string, { id: string; name: string }>();
+      for (const name of new Set(unmatchedRows.map((row) => row.name))) {
+        let best: { id: string; name: string; score: number } | undefined;
+        for (const candidate of candidates) {
+          if (!candidate.id) continue;
+          const score = rankProduct(name, candidate);
+          if (score >= 0.85 && (!best || score > best.score)) best = { id: candidate.id, name: candidate.name, score };
+        }
+        if (best) bestMatchByName.set(name, { id: best.id, name: best.name });
+      }
+
+      let matched = 0;
+      for (const [name, match] of bestMatchByName) {
+        const updated = await db
+          .update(orderLineItems)
+          .set({ matchedProductId: match.id, matchedProductName: match.name })
+          .where(and(
+            eq(orderLineItems.householdId, householdId),
+            eq(orderLineItems.name, name),
+            isNull(orderLineItems.matchedProductId),
+          ))
+          .returning({ id: orderLineItems.id });
+        matched += updated.length;
+      }
+
+      return { matched, total: unmatchedRows.length };
+    },
+  };
+
   const shopping: ShoppingRepository = {
     async list() {
       const rows = await db
@@ -320,7 +407,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
     async create(draft: MealDraft) {
       const [row] = await db
         .insert(meals)
-        .values({ ...draft, householdId, image: draft.image ?? null })
+        .values({ ...draft, householdId, image: draft.image ?? null, instructions: draft.instructions ?? null })
         .returning();
       if (!row) throw new Error('Insert returned no meal row');
       return toMeal(row);
@@ -329,7 +416,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
     async update(id: string, draft: MealDraft) {
       const [row] = await db
         .update(meals)
-        .set({ ...draft, image: draft.image ?? null, updatedAt: new Date() })
+        .set({ ...draft, image: draft.image ?? null, instructions: draft.instructions ?? null, updatedAt: new Date() })
         .where(and(eq(meals.id, id), eq(meals.householdId, householdId)))
         .returning();
       return row ? toMeal(row) : undefined;
@@ -493,6 +580,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
       },
     },
     feedback,
+    orderHistory,
     shopping,
     meals: mealsRepo,
     products: productsRepo,

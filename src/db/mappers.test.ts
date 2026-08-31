@@ -156,6 +156,7 @@ describe('toMeal', () => {
     tags: ['Kids', 'Favourite'] as const,
     image: null,
     description: 'Mild, the children eat it.',
+    instructions: null,
     ingredients: ['chicken thighs', 'butter', 'tomato'],
     ingredientDetails: null,
     createdAt: NOW,

@@ -6,6 +6,7 @@ import type { Meal } from '@/domain/schemas/meal';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { SearchField } from '@/components/agrocer/Field';
 import { MealImage } from '@/components/agrocer/MealImage';
+import { fuzzyMatch } from '@/lib/search';
 
 interface MealPickerSheetProps {
   open: boolean;
@@ -32,7 +33,7 @@ export function MealPickerSheet({
   onEdit,
 }: MealPickerSheetProps) {
   const [query, setQuery] = useState('');
-  const visible = meals.filter((meal) => meal.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = meals.filter((meal) => fuzzyMatch(`${meal.name} ${meal.ingredients.join(' ')}`, query));
 
   return (
     <BottomSheet
@@ -42,7 +43,7 @@ export function MealPickerSheet({
       description={`Choose a meal for ${dayLabel}.`}
     >
       <div className="space-y-3">
-        <SearchField value={query} onChange={setQuery} placeholder="Search meals" />
+        <SearchField value={query} onChange={setQuery} placeholder="Search meals or ingredients" />
 
         <button
           type="button"

@@ -508,6 +508,28 @@ Prepare a supermarket trolley for human review without autonomous payment.
 - [x] cart review UI with ready/review/unavailable summaries
 - [x] separate explicit user action before sending ready products to the companion
 - [x] final checkout remains manual by construction
+- [x] paste-based past-order import (`order_line_items`, migration `0012`) and a "common order"
+      frequency summary in Settings — the foundation for reorder prediction and AI meal
+      suggestions, neither of which reads it yet
+- [x] imported order lines matched to the household's New World catalogue —
+      `OrderHistoryRepository.matchToCatalogue()`, same 0.86 confidence bar as trolley "ready",
+      idempotent, a Settings button. Real catalogue currently only has 67 cached products, so most
+      of Ash's 214 imported lines are not yet matched — improves automatically as the cache grows
+- [x] reorder/running-low prediction upgraded to read order history —
+      `predictReordersFromHistory`, an average-gap-between-orders cadence signal, merged with the
+      existing pantry-event heuristic in `/api/pantry/suggestions`
+- [x] AI meal suggestions built from order history — `getCommonOrder` plus a fixed
+      `directRecipeSearch()` fast-path (`NEEDS_HOUSEHOLD_GROUNDING` guard), live-verified against
+      qwen3:8b: "suggest a recipe using something we buy often" now correctly chains
+      `getCommonOrder` → `searchRecipes` and finds a real recipe from an actual common-order item.
+      Recipe *quality* still depends on TheMealDB's catalogue breadth — not something to fix here.
+      Known remaining gap: "What do we usually buy?" specifically still doesn't reliably call
+      `getCommonOrder` (Phase 10)
+- [x] weekly meal-plan + shopping-list email — `src/email/` (provider abstraction mirroring
+      `src/ai/`, AWS SES the only implementation), `buildWeeklyDigest()` (deterministic, not
+      AI-written — same "never invent a quantity" rule as everywhere else in the app), manual
+      button in Settings sending only to the signed-in person's own address. Not yet sent for
+      real — needs Ash's SES credentials in `.env.local`
 
 ### Safety/product rule
 
@@ -648,6 +670,295 @@ Update this file:
 # 9. Progress log
 
 Agents must append new entries at the top of this section.
+
+## 2026-08-31 - Order import batch cap and review-noise fixes (Claude Code)
+
+Ash pasted the real invoice text directly into the running app — the correct path — and the
+multi-order splitter read all 5 orders correctly (214 items, matching the earlier parser-only
+count), but the save failed. `app/api/orders/route.ts` capped a batch at 200 lines; a five-order
+paste sends every line in one POST, so 214 tripped it with a 400 the UI reported only as "Could
+not save these orders." Cap raised to 2,000, and the sheet's error message now includes the real
+thrown text rather than a fixed string.
+
+Also trimmed review noise Ash flagged: liquor-licence footers, a standalone `Total` line, a bare
+fee amount on its own line, and an out-of-stock item's shorter one-price echo are now recognised
+and skipped silently instead of appearing under "couldn't be read."
+
+Verified: typecheck, lint, 337 tests, build, and a clean dev-server restart (200 on `/sign-in`).
+Noted for future sessions: running `npm run build` while `npm run dev` shares the same `.next`
+directory corrupts the dev server's webpack cache — delete `.next` and restart dev if that
+happens.
+
+**Resolved later the same day.** The retry still failed at first, but not from the app: Ash's
+browser was pointed at port 3000, served by a separate pre-existing process with the old code, not
+the restarted instance on :3002. Once corrected, the real import succeeded — **214 lines across 5
+real, correctly-dated orders**, confirmed directly in the live database. Order-history import is
+now done and working end to end, not just parser-tested. "Common order" in Settings shows real
+data, led by Pams NZ Spring Water 3l, Pams Large & Thick Tissues, Organic Fairtrade Bananas, Pams
+Classic Brie Cheese and Pams Pure Butter, all 5/5 orders.
+
+## 2026-08-31 - Order history matched to the New World catalogue (Claude Code)
+
+`OrderHistoryRepository.matchToCatalogue()` links unmatched `order_line_items` to cached
+`retailer_products`, reusing `rankProduct` and the same 0.86 confidence bar the trolley uses for
+"ready" — automatic matching stays exact/high-confidence only, consistent with how the rest of the
+app treats New World matching. Enrichment, not a violation of the table's append-and-read-only
+design: the historical fact is untouched, only a foreign-key link is backfilled, and it is safe to
+re-run any time. `POST /api/orders/match`, a Settings button, a checkmark per matched item in the
+common-order list.
+
+The household's real catalogue cache only has 67 products right now (mostly milk/bread/cheese from
+earlier testing), so most of Ash's 214 real imported lines are not yet matched — expected, and it
+improves on its own as the cache grows through ordinary Shopping/trolley use.
+
+Verified: typecheck, lint, 337 unit tests, `npm run test:db` (15 integration tests including a
+live match-and-never-twice check against a throwaway household, cleaned up after; the real
+household's 214 rows confirmed untouched), build.
+
+## 2026-08-31 - Reorder prediction reads order-history cadence (Claude Code)
+
+New `predictReordersFromHistory` averages the real gaps between an item's past order dates and
+flags it once that many days have passed since the last order — a materially stronger signal than
+the existing pantry-event heuristic (`predictReorders`, unchanged, still runs). Needs two distinct
+order dates before it says anything about an item; a single purchase teaches it nothing, so
+nothing is guessed at. `/api/pantry/suggestions` merges both signals, the cadence one winning on
+overlap since it is backed by real dates. Pantry's "Keep an eye on" card shows the new reason
+inline; the "Add" button is unchanged — still one manual action, no automation added.
+
+Verified: typecheck, lint, 342 tests (up from 337), build, clean dev-server restart.
+
+## 2026-08-31 - "Matched 0 of 214" traced to a threshold bug, fixed (Claude Code)
+
+Ash ran the New World catalogue match against the real 214-line import and got zero matches,
+despite the catalogue holding several milks that are plainly the same products. Cause: New
+World's own product names glue the size onto the name (`Milk3l`); a PDF invoice prints it with a
+space (`Milk 3l`). `rankProduct`'s token-overlap branch does recognise every token matches once it
+tokenises, but the formula's ceiling for a *perfect* overlap is exactly `0.85` — the `0.86` bar
+copied from the trolley's "ready" threshold rejected every 100%-overlap match categorically. Not
+a conservative choice, a threshold bug. Lowered to `0.85` specifically for order-history matching,
+justified at the call site: this backfills metadata on recorded history, not something entering a
+cart unreviewed. Pinned with a new integration test reproducing the exact glued/spaced scenario.
+
+Verified: `npm run test:db` (16 tests, up from 15), typecheck, lint, 342 unit tests, build, clean
+dev-server restart. Ash needs to press "Match to New World catalogue" again for it to take effect.
+
+## 2026-08-31 - getCommonOrder assistant tool, and reorder suggestions merged (Claude Code)
+
+New read-only tool `getCommonOrder` reads `summariseCommonOrder` so "Ask AshHome" can ground an
+answer in what the household actually buys, not guess. `getReorderSuggestions` now merges the
+pantry-event signal with the order-history cadence signal via a shared `mergeReorderSuggestions()`
+helper used identically by `/api/pantry/suggestions` and this tool, so the two surfaces cannot
+drift apart. System prompt updated accordingly.
+
+Deliberately not attempted: a full "plan 5 dinners from what we usually buy" flow. The tools exist
+now, but whether the assistant's 3-tool-round cap is enough for that sequence in one exchange is
+untested — try it against the real model before assuming it needs a bigger budget or a dedicated
+tool.
+
+Verified: typecheck, lint, 345 tests (up from 342), build, clean dev-server restart.
+
+## 2026-08-31 - Live-tested against qwen3:8b: real findings, not all fixed (Claude Code)
+
+New `scripts/ai-ask-check.ts` (`npm run ai:ask`) calls `askAssistant()` in-process against the
+real household, bypassing the auth `/api/ai/ask` needs. Two honest findings from actually running
+it, not assumed:
+
+`getCommonOrder` works and answers correctly for most phrasings against Ash's real 214-line
+import — but "What do we usually buy?" reliably gets a hollow "I'll check..." with no tool call,
+reproduced twice. A system-prompt line forbidding exactly that did not fix this specific case;
+recorded as a known gap, not solved by one guessed sentence.
+
+The previous entry's worry about the assistant's 3-tool-round budget was the wrong worry. The
+real blocker for "suggest a recipe from what we usually buy" is that `assistant.ts`'s pre-existing
+regex fast-path `directRecipeSearch()` (built before order history existed) intercepts any
+question matching find/suggest + recipe **before the model gets a turn**, and feeds the whole
+question text as a literal search query — reproduced twice with garbage queries and failed
+searches. Pre-existing architecture, not introduced this session, but the real next task: narrow
+the fast-paths to skip when the question also references order history, pantry or the plan.
+
+Verified: typecheck, lint, 345 tests (unchanged — this is a product-behaviour finding, not new
+coverage), clean dev-server restart.
+
+## 2026-08-31 - Fast-path fix: order-history recipe requests now actually chain tools (Claude Code)
+
+Fixed both reproduced failures from the previous entry. `NEEDS_HOUSEHOLD_GROUNDING` regex in
+`assistant.ts` makes `directRecipeSearch()` back off when a recipe request also references order
+history, common order or buying habits, instead of feeding the whole question as a garbage search
+query. Live-reverified against qwen3:8b: both previously-broken questions now correctly chain
+`getCommonOrder → searchRecipes` and answer from real data (one found a real recipe from an actual
+top common-order item; the other used the full 3-round budget productively and answered honestly
+when nothing matched — confirming the round cap was never the real constraint). No regression: a
+plain recipe request still hits the fast path, 1.3s vs 4.5-8.3s for the full loop.
+
+The `getCommonOrder` phrasing gap ("What do we usually buy?" not calling the tool) remains open —
+a separate, still-unsolved issue.
+
+Verified: typecheck, lint, 347 tests (up from 345), build, clean dev-server restart, and live
+re-verification against the real provider for all three cases, not just unit tests.
+
+## 2026-08-31 - Weekly meal-plan/shopping-list email via AWS SES (Claude Code)
+
+Ash confirmed AWS SES is available and answered the two scoping questions: content = weekly meal
+plan + shopping list; trigger/recipient = manual button in Settings, sent only to the signed-in
+person's own address, no scheduling, no recipient field.
+
+Deliberately not AI-written — `buildWeeklyDigest()` assembles the email from the same real data
+the app already shows, in code, matching the project's "never invent a quantity" rule everywhere
+else. New `src/email/` mirrors `src/ai/`'s provider-abstraction shape exactly: `types.ts`
+(`EmailProvider`, `EmailError`), `sesProvider.ts` (new dependency `@aws-sdk/client-sesv2`),
+`provider.ts` (`getEmailProvider()`, cached like the AI provider and DB client). `POST
+/api/email/weekly` resolves the signed-in user's own email and sends — no recipient field exists
+anywhere in the request. The button press is the confirmation this project's rules require before
+external email goes out; no extra dialog for a self-addressed, non-destructive send.
+
+New env vars: `EMAIL_PROVIDER`, `SES_FROM_EMAIL` (must be a verified SES identity),
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`. None are set yet — Ash's step, never
+filled in on their behalf. Until then the button correctly fails with "Email is not configured
+yet." rather than crashing.
+
+Verified: typecheck, lint, 352 tests (up from 347 — `buildWeeklyDigest` covers the dinner list,
+remaining-vs-checked split, honest-empty cases, and budget comparison), build (confirms the AWS
+SDK never reaches the client bundle), clean dev-server restart. Not yet sent a real email — needs
+real SES credentials and a live click-through test.
+
+## 2026-08-31 - Multi-order import, and a silent "Use this product" bug fixed (Claude Code)
+
+`parseNewWorldOrderBatch` splits a paste covering several invoices — Ash's real order history
+turned out to be five separate confirmations concatenated together — on a *changed* "Tax Invoice
+N" number, so a multi-page invoice's repeated header does not split it into several orders.
+`OrderImportSheet` reviews one date-grouped section per order. `scripts/import-orders.ts`
+(`npm run orders:import`) does the same from a file, for bulk backfills.
+
+A live import of the real orders was attempted and rolled back. There is no way to paste a user's
+message verbatim into a file with the available tools — the text has to be regenerated — and
+across roughly 700 lines that drifted: the first order's line-item total came to $324.04 against
+an actual invoice subtotal of $253.50. All 214 rows were deleted and `order_line_items` confirmed
+empty rather than risk leaving wrong numbers in real financial history. The correct path is
+pasting directly into the Settings importer, never through an agent retyping the source text.
+
+Separately, `MatchNewWorldProduct` (the add/edit item sheet's inline matcher) looked broken:
+"Use this product" saved the preference correctly, but the only feedback was the shared banner in
+`ShoppingScreen`, sitting behind the open sheet and invisible. It now collapses to a
+"Matched: <product>" state immediately on success. Also fixed while looking at this: the matcher
+never reset between items, so a match for one item could show stale against the next; the sheet
+now keys it on a counter incremented every time it opens.
+
+Verified: typecheck, lint, 336 tests, build. Migrations `0011`-`0012` are applied to the live
+Supabase project; `npm run db:rls` confirms all 14 tables RLS-protected and `order_line_items`
+empty. Not yet visually re-verified in a browser.
+
+## 2026-08-31 - Order history import and "common order" summary (Claude Code)
+
+The start of a larger plan Ash asked for: paste past New World order confirmations, learn what
+the household usually buys, then (in later, separate tasks) match that against the New World
+catalogue, upgrade reorder prediction to use it, and build AI-suggested meal plans from it. This
+step is the import and storage foundation only — nothing after "common order" is built yet.
+
+**`src/domain/services/orderImport.ts`** parses a pasted invoice into line items: name, quantity
+(the *supplied* quantity, not ordered — an out-of-stock line has nothing bought), unit and price.
+It reads a substitution ("(sub) ...") as the real purchase and drops the out-of-stock original.
+**It never reads a customer name, address, phone number, or order/invoice number** — those don't
+match the product-line shape it looks for, so nothing about them is extracted, which is why it is
+safe to point at a real household invoice. A money-looking line that isn't a recognised product
+or known invoice boilerplate (subtotal, GST, etc.) is surfaced as "unparsed" rather than guessed
+at or silently dropped, the same rule `recipeImport.ts` follows.
+
+**`order_line_items`** (migration `0012`, RLS policy hand-added following the `0010` pattern) is
+append-and-read only, the same shape as `meal_feedback` — a line imported wrong is deleted and
+re-imported, never edited in place. `OrderHistoryRepository` follows `FeedbackRepository` exactly:
+local storage refuses writes (shared cross-device history cannot live in one browser), Drizzle and
+the API route implement it for real.
+
+**`OrderImportSheet`** (Settings → Order history) is paste → review → confirm, matching
+`RecipeImportSheet`'s shape: every parsed line is shown before saving, removable individually, with
+an editable order date (defaulting to whatever date the parser found). **`summariseCommonOrder`**
+(`src/domain/services/orderHistory.ts`) is a pure frequency ranking over imported lines, shown as
+"Your common order" once anything has been imported. It accepts an `excludeNames` option for
+staples bought elsewhere (Ash mentioned bread) — not yet wired to a persisted setting, since that
+belongs with whichever later feature actually reads it.
+
+**Deliberately not done in this pass**, and each is its own next task: matching imported lines to
+`retailer_products` (the schema already has optional `matchedProductId`/`matchedProductName` so
+this doesn't need another migration), upgrading reorder prediction to use order history instead of
+only `inventory_events`, and an AI read-only tool for order-history-based meal suggestions
+(Phase 10). AI-generated emails were explicitly separated out as needing their own scoping —
+SMTP credentials, a trigger design, and human confirmation before sending, per the project's
+sensitive-action rules — and are not planned here at all yet.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (333 tests, up from 321), `npm run
+build`, `npm run db:generate` (migration `0012` reviewed by hand, reruns clean). Migration `0012`
+is not yet applied to the live Supabase project. Not yet visually verified in a browser.
+
+## 2026-08-31 - Recipe instructions/photo wired through, and typo-tolerant search (Claude Code)
+
+Three of the four items Ash picked from the earlier meals/search survey. `mealSchema` gained an
+optional `instructions` field (migration `0011`, additive nullable column) and TheMealDB's
+instructions/thumbnail — already fetched by `/api/recipes/:id` but discarded on import — now flow
+into it; pasted recipes also capture everything after a "Method"/"Instructions"/"Steps" heading.
+`MealFormSheet` gained a "How to cook it" textarea (new `FormTextareaField` primitive) and
+`MealDetailSheet` displays it. `next.config.ts` now allowlists `www.themealdb.com/images/**` for
+`next/image`, since a real external thumbnail can reach `meal.image` for the first time. The meal
+picker's search now matches ingredients as well as name. New `src/lib/search.ts` →
+`fuzzyMatch()` adds typo tolerance (substring first, then per-word edit distance) to Products,
+Pantry and the meal picker — **deliberately not** applied to New World retailer matching
+(`src/shopping/matching.ts`), which stays exact/token-overlap on purpose since it decides what is
+safe to add to a real trolley automatically.
+
+New World specials integration (the fourth item) was surveyed but not started — it is Stage-5-
+sized (same Cloudflare/companion-extension constraints as the catalogue) and needs its own task.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (321 tests, up from 313),
+`npm run build`, `npm run db:generate` (migration `0011` reviewed by hand). Migration `0011` is
+not yet applied to the live Supabase project. Not yet visually verified in a browser.
+
+## 2026-08-31 - Inline New World matching in the add/edit item sheet (Claude Code)
+
+Ash asked for the earlier-deferred fast-follow after all. `ShoppingItemSheet` now offers a
+collapsed-by-default "Match a New World product now" expander (`MatchNewWorldProduct.tsx`) so a
+product can be matched to New World right when a shopping item is added or edited, instead of
+requiring a separate "Prepare New World trolley" pass afterward. It shares the same search paths
+(desktop extension when online, 24/7 catalogue otherwise) and saves through the existing
+`POST /api/trolley/preferences` endpoint keyed by the typed item name text — this works even for a
+brand-new item that has not been saved yet, since preferences are keyed by normalised name, not by
+shopping item id. `ShoppingScreen` threads its existing extension state through using a synthetic
+draft key for new items and the real item id when editing. No schema or API change.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (313 tests), `npm run build`. Not yet
+verified visually in a browser or against the live desktop extension — no browser connection was
+available this session.
+
+## 2026-08-31 - New World product-search feedback and batch-add stall fixed (Claude Code)
+
+Two more issues surfaced from live use of the New World trolley. First, the standalone "New World
+products" browse panel gave no visible confirmation when a product was chosen as the household
+preference — the save worked, but the only feedback was a tiny status line inside the still-open
+panel, silent entirely when no trolley had been prepared yet. `NewWorldCatalogue.onPreferenceSaved`
+now carries the confirmation message up to `ShoppingScreen`'s shared banner and the panel closes
+itself after a successful save. Second, the Chrome batch-add extension could silently stall after
+adding only the first ready item: `background.js` awaited the content script's response with no
+timeout, so an unresponsive page left the whole batch hung with nothing surfaced. A 25-second
+per-item timeout now records a failure and advances to the next item instead.
+
+Also confirmed, not a bug: a saved preference that keeps failing plausibility (like the
+"tastey cheese" → corn chips case) is expected to keep showing "Needs review" every prepare until
+someone explicitly replaces it via "Search for a different product" — the wrong preference is
+never auto-deleted, by design, only forced out of the ready state.
+
+Inline New World product matching from the add/edit-item sheet was proposed as a fast-follow and
+explicitly deferred by Ash — tracked as a future task, not started.
+
+Verified: `npm run typecheck`, `npm run lint`, `npm run test` (313 tests), `npm run extension:check`.
+
+## 2026-08-31 - Stale prepared-trolley card fixed (Claude Code)
+
+Ash reported the New World trolley card on Shopping kept showing items no longer on the shopping
+list. The prepared trolley (`/api/trolley/prepare`) correctly snapshots only currently-unchecked
+shopping items at the moment it is pressed, but `ShoppingScreen` held that snapshot in local state
+with nothing to invalidate it afterward — checking an item off, removing it, or editing the list
+from another device or the AI assistant left ghost lines on the card until "Clear trolley" was
+pressed by hand. A `useEffect` now drops any trolley line whose shopping item is no longer on the
+live unchecked list, and clears the card entirely once nothing valid remains. No API/schema
+change. Verified: typecheck, lint, and all 313 unit tests pass.
 
 ## 2026-08-30 - Trolley clearing and live product-heading verification repair (Codex)
 

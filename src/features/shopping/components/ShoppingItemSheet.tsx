@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FlagIcon, Trash2Icon } from 'lucide-react';
@@ -19,6 +19,8 @@ import {
   FormToggleCard,
 } from '@/components/agrocer/form/FormFields';
 import { cn } from '@/lib/utils';
+import type { RetailerProduct } from '@/shopping/schemas';
+import { MatchNewWorldProduct } from './MatchNewWorldProduct';
 
 const emptyValues: ShoppingItemDraft = {
   name: '',
@@ -36,16 +38,32 @@ interface ShoppingItemSheetProps {
   item: ShoppingItem | null;
   onSave: (draft: ShoppingItemDraft) => void;
   onDelete?: () => void;
+  extensionOnline: boolean;
+  liveProducts: RetailerProduct[];
+  liveMessage?: string;
+  searching: boolean;
+  onLiveSearch: (query: string) => void;
+  onProductMatched: (message: string) => void;
 }
 
-export function ShoppingItemSheet({ open, onClose, item, onSave, onDelete }: ShoppingItemSheetProps) {
+export function ShoppingItemSheet({
+  open, onClose, item, onSave, onDelete,
+  extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onProductMatched,
+}: ShoppingItemSheetProps) {
   const form = useForm<ShoppingItemDraft>({
     resolver: zodResolver(shoppingItemDraftSchema),
     defaultValues: emptyValues,
   });
 
+  // Forces MatchNewWorldProduct to remount each time the sheet opens, so a match made for one
+  // item (or a previous add) can never be shown stale against the next item.
+  const sessionRef = useRef(0);
+  const [session, setSession] = useState(0);
+
   useEffect(() => {
     if (!open) return;
+    sessionRef.current += 1;
+    setSession(sessionRef.current);
     form.reset(
       item
         ? {
@@ -60,6 +78,9 @@ export function ShoppingItemSheet({ open, onClose, item, onSave, onDelete }: Sho
         : emptyValues,
     );
   }, [open, item, form]);
+
+  const watchedName = form.watch('name');
+  const watchedQuantity = form.watch('quantity');
 
   const submit = form.handleSubmit((values) => {
     onSave({ ...values, note: values.note?.trim() ? values.note.trim() : undefined });
@@ -121,6 +142,19 @@ export function ShoppingItemSheet({ open, onClose, item, onSave, onDelete }: Sho
         />
         <FormTextField control={form.control} name="note" label="Note (optional)" placeholder="e.g. Blue top" />
       </form>
+      <div className="mt-4">
+        <MatchNewWorldProduct
+          key={session}
+          itemName={watchedName}
+          quantity={watchedQuantity}
+          extensionOnline={extensionOnline}
+          liveProducts={liveProducts}
+          liveMessage={liveMessage}
+          searching={searching}
+          onLiveSearch={onLiveSearch}
+          onSaved={onProductMatched}
+        />
+      </div>
     </BottomSheet>
   );
 }

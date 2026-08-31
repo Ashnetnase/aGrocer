@@ -33,6 +33,8 @@ interface Reviewable {
   serves?: number;
   ingredients: MealIngredient[];
   unparsed: string[];
+  instructions?: string;
+  image?: string;
 }
 
 interface SearchResult {
@@ -40,6 +42,7 @@ interface SearchResult {
   title: string;
   category?: string;
   area?: string;
+  thumbnail?: string;
 }
 
 interface RecipeImportSheetProps {
@@ -121,12 +124,20 @@ export function RecipeImportSheet({
       }
       const recipe = body.recipe as {
         title: string;
+        thumbnail?: string;
         ingredients: MealIngredient[];
         unparsed: string[];
+        instructions?: string;
       };
       // No minutes or serves: TheMealDB does not publish either, and inventing them would put
       // a made-up cooking time on the wall. The form's defaults apply and can be corrected.
-      setChosen({ name: recipe.title, ingredients: recipe.ingredients, unparsed: recipe.unparsed });
+      setChosen({
+        name: recipe.title,
+        ingredients: recipe.ingredients,
+        unparsed: recipe.unparsed,
+        instructions: recipe.instructions?.trim() || undefined,
+        image: recipe.thumbnail,
+      });
       setResults([]);
     } catch {
       setError('Could not reach recipe search.');
@@ -142,8 +153,9 @@ export function RecipeImportSheet({
       minutes: review.minutes ?? 30,
       serves: review.serves ?? 4,
       tags: [],
-      image: undefined,
+      image: review.image,
       description: '',
+      instructions: review.instructions,
       ingredients: review.ingredients.map(formatMealIngredient),
       ingredientDetails: review.ingredients,
     });
@@ -246,14 +258,22 @@ export function RecipeImportSheet({
               <button
                 type="button"
                 onClick={() => void choose(result.id)}
-                className="w-full rounded-2xl border border-line bg-surface px-3.5 py-3 text-left transition-colors duration-150 ease-out hover:border-moss-200 hover:bg-moss-50"
+                className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-3 text-left transition-colors duration-150 ease-out hover:border-moss-200 hover:bg-moss-50"
               >
-                <span className="block text-[15px] font-semibold text-ink">{result.title}</span>
-                {result.category || result.area ? (
-                  <span className="block text-xs text-muted">
-                    {[result.area, result.category].filter(Boolean).join(' · ')}
-                  </span>
+                {result.thumbnail ? (
+                  // Recipe thumbnails are remote, provider-hosted and only shown at this small
+                  // fixed size, so plain `img` is simpler than registering every provider host.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={result.thumbnail} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
                 ) : null}
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-semibold text-ink">{result.title}</span>
+                  {result.category || result.area ? (
+                    <span className="block text-xs text-muted">
+                      {[result.area, result.category].filter(Boolean).join(' · ')}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             </li>
           ))}
@@ -311,6 +331,13 @@ export function RecipeImportSheet({
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+
+          {review.instructions ? (
+            <div className="mt-3 rounded-xl bg-canvas p-3">
+              <p className="text-[13px] font-bold text-ink">How to cook it</p>
+              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted">{review.instructions}</p>
             </div>
           ) : null}
         </div>

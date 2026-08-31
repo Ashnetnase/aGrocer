@@ -42,10 +42,13 @@ export const ASSISTANT_SYSTEM_PROMPT = [
   'in plain sentences. No markdown, no headings, no bullet points, no emoji.',
   '',
   'You can look up the household’s shopping list, its pantry and freezer, and this week’s',
-  'meal plan, read conservative pantry reorder suggestions, and see items marked use soon. You can also search a public recipe database for dishes they do not have yet.',
+  'meal plan, read conservative reorder suggestions, see items marked use soon, and read what',
+  'the household usually buys from imported order history (empty until they have imported any).',
+  'You can also search a public recipe database for dishes they do not have yet.',
   'Always call the tool rather than guessing, and answer only from what the tool returns.',
   'Never invent an item, a quantity, a meal or a price. If a tool says something is empty,',
-  'say it is empty.',
+  'say it is empty. Never say you will check, look up or read something without calling the',
+  'tool in that same turn — either call it now, or answer only from a tool you already called.',
   'Interpret ordinary spelling mistakes and casual wording generously; ask one short clarification',
   'only when the intended item, meal or day truly cannot be understood.',
   '',
@@ -279,8 +282,19 @@ async function directRecipeSelection(
   return { title: recipe.title, action: { tool: 'addRecipeToMeals', description: await tool.describe(args), args } };
 }
 
+/**
+ * Words that mean the request needs real household grounding first (order history, pantry,
+ * buying habits) rather than a bare keyword search `directRecipeSearch` can already answer.
+ * "Suggest a recipe using something we buy often" fed literally through the strip-and-search
+ * below produces a garbage query and a failed search — that request needs the model to call
+ * `getCommonOrder` (or `getPantry`) and reason about the result, so it is handed to the full
+ * tool loop instead of being shortcut here.
+ */
+export const NEEDS_HOUSEHOLD_GROUNDING = /\b(usual|usually|often|regularly|common order|order history|we\s+(?:buy|bought|have|order|usually)|pantry|have in|reorder|use soon)\b/i;
+
 async function directRecipeSearch(question: string): Promise<string | undefined> {
   if (!/\b(find|search|suggest|show)\b/i.test(question) || !/\brecipe(s)?\b/i.test(question)) return undefined;
+  if (NEEDS_HOUSEHOLD_GROUNDING.test(question)) return undefined;
   const query = question.replace(/\b(find|search|suggest|show|a|some|new|recipe|recipes|for|me|please)\b/gi, ' ').replace(/\s+/g, ' ').trim();
   if (query.length < 2) return undefined;
   const results = (await getRecipeProvider().search(query)).slice(0, 5);

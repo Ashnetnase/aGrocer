@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgrocerRepositories } from '@/data/repositories/types';
 import type { Meal, Plan } from '@/domain/schemas/meal';
+import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import type { PantryItem } from '@/domain/schemas/pantry';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import { READ_ONLY_TOOLS } from './readOnly';
@@ -34,6 +35,17 @@ const pantryItem = (overrides: Partial<PantryItem> = {}): PantryItem => ({
   ...overrides,
 });
 
+const orderLine = (overrides: Partial<OrderLineItem> = {}): OrderLineItem => ({
+  id: 'o1',
+  retailer: 'new-world',
+  name: 'Milk',
+  quantity: 1,
+  unit: 'ea',
+  totalPrice: 4,
+  orderedOn: '2026-08-01',
+  ...overrides,
+});
+
 const meal = (overrides: Partial<Meal> = {}): Meal => ({
   id: 'm1',
   name: 'Sausage pasta',
@@ -54,6 +66,7 @@ function fakeRepositories(data: {
   pantry?: PantryItem[];
   meals?: Meal[];
   plan?: Plan;
+  orderHistory?: OrderLineItem[];
 }): AgrocerRepositories {
   const forbidden = () => {
     throw new Error('A read-only tool attempted a write');
@@ -77,6 +90,11 @@ function fakeRepositories(data: {
       remove: forbidden,
     },
     inventoryEvents: { list: async () => [] },
+    orderHistory: {
+      list: async () => data.orderHistory ?? [],
+      importLines: forbidden,
+      matchToCatalogue: forbidden,
+    },
     meals: {
       list: async () => data.meals ?? [],
       getPlan: async () => data.plan ?? {},
@@ -108,6 +126,7 @@ describe('the allow-list', () => {
       'getMealPlan',
       'getMeals',
       'getReorderSuggestions',
+      'getCommonOrder',
       'getUseSoon',
       'searchRecipes',
     ]);
@@ -290,6 +309,43 @@ describe('getReorderSuggestions', () => {
       { itemName: 'Milk', kind: 'adjusted', quantityDelta: -1, quantityAfter: 0, createdAt: new Date() },
     ];
     expect((await run('getReorderSuggestions', repos)).content).toContain('Milk recently ran out');
+  });
+
+  it('prefers the order-history cadence signal over the pantry-event one for the same item', async () => {
+    const repos = fakeRepositories({
+      orderHistory: [
+        orderLine({ name: 'Milk', orderedOn: '2026-08-01' }),
+        orderLine({ name: 'Milk', orderedOn: '2026-08-08' }),
+      ],
+    });
+    repos.inventoryEvents.list = async () => [
+      { itemName: 'Milk', kind: 'adjusted', quantityDelta: -1, quantityAfter: 0, createdAt: new Date('2026-08-20') },
+    ];
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T00:00:00Z'));
+    const { content } = await run('getReorderSuggestions', repos);
+    vi.useRealTimers();
+    expect(content).toContain('Milk usually reordered every 7 days');
+    expect(content).not.toContain('recently ran out');
+  });
+});
+
+describe('getCommonOrder', () => {
+  it('reports when no order history has been imported', async () => {
+    expect((await run('getCommonOrder', fakeRepositories({}))).content).toBe('No order history has been imported yet.');
+  });
+
+  it('ranks the most frequently bought item first, with counts and last-ordered date', async () => {
+    const repos = fakeRepositories({
+      orderHistory: [
+        orderLine({ name: 'Milk', orderedOn: '2026-08-01' }),
+        orderLine({ name: 'Milk', orderedOn: '2026-08-15' }),
+        orderLine({ name: 'Salmon', orderedOn: '2026-08-08' }),
+      ],
+    });
+    const { content } = await run('getCommonOrder', repos);
+    expect(content).toContain('Milk (2×, last 2026-08-15)');
+    expect(content).toContain('Salmon (1×, last 2026-08-08)');
   });
 });
 

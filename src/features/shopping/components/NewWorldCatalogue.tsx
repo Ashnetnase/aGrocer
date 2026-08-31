@@ -22,7 +22,7 @@ interface NewWorldCatalogueProps {
   liveMessages: Record<string, string>;
   searchingItemId: string | null;
   onLiveSearch: (item: ShoppingItem, query: string) => Promise<void>;
-  onPreferenceSaved: () => void | Promise<void>;
+  onPreferenceSaved: (message: string) => void | Promise<void>;
 }
 
 export function NewWorldCatalogue({ items, extensionOnline, liveProducts, liveMessages, searchingItemId, onLiveSearch, onPreferenceSaved }: NewWorldCatalogueProps) {
@@ -105,8 +105,9 @@ export function NewWorldCatalogue({ items, extensionOnline, liveProducts, liveMe
         }),
       });
       if (!response.ok) throw new Error('save failed');
-      setMessage(`${product.name} will be used for ${selectedItem.name} next time.`);
-      await onPreferenceSaved();
+      const confirmation = `${product.name} will be used for ${selectedItem.name} next time.`;
+      await onPreferenceSaved(confirmation);
+      setOpen(false);
     } catch {
       setMessage('Could not save that New World product preference.');
     } finally {

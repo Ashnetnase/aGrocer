@@ -11,6 +11,7 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { FilterChips, SearchField } from '@/components/agrocer/Field';
 import { EmptyState } from '@/components/agrocer/EmptyState';
 import { FloatingAddButton } from '@/components/agrocer/FloatingAddButton';
+import { fuzzyMatch } from '@/lib/search';
 import { PantryRow } from './components/PantryRow';
 import { PantryItemSheet } from './components/PantryItemSheet';
 import type { ReorderSuggestion } from '@/domain/services/reorderPrediction';
@@ -46,9 +47,8 @@ export function PantryScreen() {
   const counts = useMemo(() => countPantry(pantry), [pantry]);
 
   const grouped = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     const visible = pantry.filter(
-      (item) => item.name.toLowerCase().includes(needle) && matchesFilter(item, filter),
+      (item) => fuzzyMatch(item.name, query) && matchesFilter(item, filter),
     );
     return CATEGORIES.map((category) => ({
       category,
@@ -106,7 +106,14 @@ export function PantryScreen() {
             <ul className="mt-2 space-y-1 text-sm text-ink">
               {suggestions.slice(0, 4).map((suggestion) => (
                 <li key={suggestion.itemName} className="flex items-center justify-between gap-2">
-                  <span>{suggestion.itemName} — {suggestion.reason === 'recently-empty' ? 'recently ran out' : `used ${suggestion.uses} times recently`}</span>
+                  <span>
+                    {suggestion.itemName} —{' '}
+                    {suggestion.reason === 'due-for-reorder'
+                      ? `usually every ${suggestion.everyDays} days, ${suggestion.daysSinceLast} since last order`
+                      : suggestion.reason === 'recently-empty'
+                        ? 'recently ran out'
+                        : `used ${suggestion.uses} times recently`}
+                  </span>
                   <button type="button" onClick={() => void addShoppingItem({ name: suggestion.itemName, category: 'Pantry', quantity: 1, unit: 'each', price: 0, priority: false })} className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-moss-700 shadow-sm">Add</button>
                 </li>
               ))}

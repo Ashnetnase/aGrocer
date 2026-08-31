@@ -56,8 +56,15 @@ async function finish(job) {
   if (job.sourceTabId) chrome.tabs.sendMessage(job.sourceTabId, { type: 'job-results', results: job.results }).catch(() => undefined);
 }
 
+const ITEM_TIMEOUT_MS = 25_000;
+
+function clearItemTimeout(job) {
+  if (job.timeoutHandle) { clearTimeout(job.timeoutHandle); job.timeoutHandle = null; }
+}
+
 async function recordResult(job, result) {
   if (!job || job.processingIndex !== job.index) return;
+  clearItemTimeout(job);
   job.results.push(result);
   job.index += 1;
   await saveJob(job);
@@ -115,8 +122,17 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (!item) return finish(job);
     job.processingIndex = job.index;
     await saveJob(job);
-    try { await chrome.tabs.sendMessage(tabId, { type: 'add-current', item }); }
-    catch {
+    const watchedIndex = job.index;
+    const timeout = new Promise((resolve) => { job.timeoutHandle = setTimeout(() => resolve('timeout'), ITEM_TIMEOUT_MS); });
+    try {
+      const outcome = await Promise.race([chrome.tabs.sendMessage(tabId, { type: 'add-current', item }), timeout]);
+      if (outcome === 'timeout') {
+        const current = await loadJob();
+        if (current && current.processingIndex === watchedIndex && current.index === watchedIndex) {
+          await recordResult(current, { shoppingItemId: item.shoppingItemId, status: 'unknown-error', requestedQuantity: item.quantity, message: 'New World did not respond in time; the page may still be loading or stuck.' });
+        }
+      }
+    } catch {
       await recordResult(job, { shoppingItemId: item.shoppingItemId, status: 'unknown-error', requestedQuantity: item.quantity, message: 'New World page bridge was unavailable.' });
     }
   });

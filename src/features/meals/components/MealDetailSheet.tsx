@@ -191,6 +191,15 @@ export function MealDetailSheet({
             ))}
           </ul>
 
+          {meal.instructions ? (
+            <>
+              <h3 className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wider text-muted">How to cook it</h3>
+              <p className="whitespace-pre-line rounded-2xl border border-line bg-surface px-4 py-3 text-[15px] leading-relaxed text-ink">
+                {meal.instructions}
+              </p>
+            </>
+          ) : null}
+
           <section className="mt-5" aria-labelledby="meal-feedback-heading">
             <h3 id="meal-feedback-heading" className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Have it again?

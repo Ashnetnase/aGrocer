@@ -13,6 +13,7 @@ import {
   FormChipMultiSelect,
   FormNumberField,
   FormTextField,
+  FormTextareaField,
 } from '@/components/agrocer/form/FormFields';
 
 const emptyValues: MealDraft = {
@@ -22,6 +23,7 @@ const emptyValues: MealDraft = {
   tags: [],
   image: undefined,
   description: '',
+  instructions: undefined,
   ingredients: [],
   ingredientDetails: [],
 };
@@ -77,6 +79,7 @@ export function MealFormSheet({
             tags: meal.tags,
             image: meal.image,
             description: meal.description,
+            instructions: meal.instructions,
             ingredients: meal.ingredients,
             ingredientDetails:
               meal.ingredientDetails ?? meal.ingredients.map(parseMealIngredient),
@@ -88,6 +91,7 @@ export function MealFormSheet({
   const submit = form.handleSubmit((values) => {
     onSave({
       ...values,
+      instructions: values.instructions?.trim() ? values.instructions.trim() : undefined,
       ingredients: (values.ingredientDetails ?? []).map(formatMealIngredient),
     });
     onClose();
@@ -150,6 +154,13 @@ export function MealFormSheet({
         <FormChipMultiSelect control={form.control} name="tags" label="Tags" options={MEAL_TAGS} />
 
         <IngredientFields control={form.control} products={products} />
+
+        <FormTextareaField
+          control={form.control}
+          name="instructions"
+          label="How to cook it (optional)"
+          placeholder={'1. Brown the mince.\n2. Add the sauce and simmer 15 minutes.\n…'}
+        />
 
         {meal && plannedUses > 0 ? (
           <p className="text-xs leading-relaxed text-muted">

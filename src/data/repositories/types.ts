@@ -5,6 +5,7 @@ import type {
   Settings,
 } from '@/domain/schemas/household';
 import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
+import type { OrderLineItem, OrderLineItemDraft } from '@/domain/schemas/orderHistory';
 import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
 import type { Product, ProductPatch } from '@/domain/schemas/product';
@@ -68,6 +69,27 @@ export interface FeedbackRepository {
   add(draft: MealFeedbackDraft): Promise<MealFeedback>;
 }
 
+/**
+ * Imported past-order history (Stage 5).
+ *
+ * Append-and-read only, the same shape as `FeedbackRepository`: a line imported wrong is
+ * deleted and re-imported, never edited in place. Read on demand, not part of initial load.
+ */
+export interface OrderHistoryRepository {
+  /** Most recent first. */
+  list(): Promise<OrderLineItem[]>;
+  /** One reviewed paste is one batch — either every line lands, or none does. */
+  importLines(drafts: OrderLineItemDraft[]): Promise<OrderLineItem[]>;
+  /**
+   * Best-effort links unmatched lines to the household's New World catalogue cache.
+   * Not a violation of "append-and-read only": the historical fact (name/quantity/price/date)
+   * is never touched, only a foreign-key link is backfilled onto it. Safe to re-run any time —
+   * it only fills in gaps and only accepts a high-confidence match (see the Drizzle
+   * implementation for why the bar is a point below the trolley's "ready" threshold).
+   */
+  matchToCatalogue(): Promise<{ matched: number; total: number }>;
+}
+
 export interface ProductsRepository {
   list(): Promise<Product[]>;
   update(id: string, patch: ProductPatch): Promise<Product | undefined>;
@@ -90,6 +112,7 @@ export interface AgrocerRepositories {
   products: ProductsRepository;
   household: HouseholdRepository;
   feedback: FeedbackRepository;
+  orderHistory: OrderHistoryRepository;
   /** Wipes Stage 1 persistence and restores the demo data. */
   reset(): Promise<void>;
 }

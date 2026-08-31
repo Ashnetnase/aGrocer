@@ -24,6 +24,7 @@ import type {
   FeedbackRepository,
   HouseholdRepository,
   MealsRepository,
+  OrderHistoryRepository,
   PantryRepository,
   ProductsRepository,
   ShoppingRepository,
@@ -306,6 +307,23 @@ const feedback: FeedbackRepository = {
   },
 };
 
+/** Same reasoning as `feedback`: order history is shared, cross-device history, not one browser's cache. */
+const orderHistory: OrderHistoryRepository = {
+  async list() {
+    return [];
+  },
+  async importLines() {
+    throw new Error(
+      'Order history needs the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+  async matchToCatalogue() {
+    throw new Error(
+      'Order history needs the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+};
+
 export const localRepositories: AgrocerRepositories = {
   pantry,
   inventoryEvents: { async list() { return []; } },
@@ -314,6 +332,7 @@ export const localRepositories: AgrocerRepositories = {
   products,
   household,
   feedback,
+  orderHistory,
   async reset() {
     clearAll();
   },

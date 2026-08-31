@@ -71,6 +71,44 @@ export function FormTextField<TValues extends FieldValues>({
   );
 }
 
+export function FormTextareaField<TValues extends FieldValues>({
+  control,
+  name,
+  label,
+  placeholder,
+  rows = 6,
+}: BaseProps<TValues> & { placeholder?: string; rows?: number }) {
+  const id = useId();
+  const { field, fieldState } = useController({ control, name });
+  const errorId = `${id}-error`;
+
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-ink">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        value={field.value ?? ''}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
+        ref={field.ref}
+        rows={rows}
+        placeholder={placeholder}
+        aria-invalid={fieldState.invalid || undefined}
+        aria-describedby={fieldState.error ? errorId : undefined}
+        className={cn(
+          'w-full resize-y rounded-2xl border bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-muted focus:bg-surface focus:outline-none focus:ring-2',
+          fieldState.error
+            ? 'border-berry-500 focus:border-berry-500 focus:ring-berry-50'
+            : 'border-line focus:border-moss-400 focus:ring-moss-100',
+        )}
+      />
+      <FieldError id={errorId} message={fieldState.error?.message} />
+    </div>
+  );
+}
+
 /**
  * Numeric input that keeps the raw string in the DOM but hands React Hook Form
  * a `number`, so Zod validates the real value rather than a coerced `0`.

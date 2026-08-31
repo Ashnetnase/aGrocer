@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { AgrocerRepositories } from '@/data/repositories/types';
-import { ASSISTANT_SYSTEM_PROMPT, askAssistant } from './assistant';
+import { ASSISTANT_SYSTEM_PROMPT, NEEDS_HOUSEHOLD_GROUNDING, askAssistant } from './assistant';
 import type { AiTool } from './tools/registry';
 import type { AiWriteTool } from './tools/write';
 import { AiError, type AiChatRequest, type AiChatResult, type AiProvider } from './types';
@@ -89,6 +89,22 @@ describe('ASSISTANT_SYSTEM_PROMPT', () => {
   it('still says what the assistant cannot do, now that it can do more', () => {
     expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/cannot change anything/i);
     expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/calendar, chores, reminders or school/i);
+  });
+});
+
+describe('NEEDS_HOUSEHOLD_GROUNDING', () => {
+  // Pins the two live-tested failures from 2026-08-31: `directRecipeSearch`'s strip-and-search
+  // fast path fed these whole, garbage-worded, as a literal recipe query. Both need the full
+  // tool loop (getCommonOrder, then searchRecipes) instead of being shortcut.
+  it('matches a request that needs order-history or pantry grounding first', () => {
+    expect(NEEDS_HOUSEHOLD_GROUNDING.test('Suggest a recipe using something we buy often')).toBe(true);
+    expect(NEEDS_HOUSEHOLD_GROUNDING.test('What is our common order, and can you suggest a recipe with it')).toBe(true);
+    expect(NEEDS_HOUSEHOLD_GROUNDING.test('Suggest a recipe with what is in the pantry')).toBe(true);
+  });
+
+  it('does not match a plain recipe request, which the fast path should still handle', () => {
+    expect(NEEDS_HOUSEHOLD_GROUNDING.test('Suggest a chicken curry recipe')).toBe(false);
+    expect(NEEDS_HOUSEHOLD_GROUNDING.test('Find a recipe for banana bread')).toBe(false);
   });
 });
 

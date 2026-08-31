@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -335,6 +336,39 @@ export const retailerProductSearchJobs = pgTable(
   (table) => ({ householdIdx: index('retailer_product_search_jobs_household_idx').on(table.householdId, table.status, table.createdAt) }),
 ).enableRLS();
 
+/**
+ * Past retailer orders, imported by pasting an invoice/order confirmation (Stage 5).
+ *
+ * Append-and-read only, the same shape as `mealFeedback`: a "common order" or a reorder signal
+ * needs history that cannot be backfilled, not a record that gets corrected in place. A line
+ * imported wrong is deleted and re-imported.
+ *
+ * **Deliberately has no columns for a customer name, address or phone number.** The importer
+ * that produces these rows (`src/domain/services/orderImport.ts`) never reads them out of the
+ * pasted text in the first place — this table has nowhere to put them even if it tried to.
+ */
+export const orderLineItems = pgTable(
+  'order_line_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+    retailer: text('retailer').notNull().default('new-world'),
+    name: text('name').notNull(),
+    quantity: doublePrecision('quantity').notNull(),
+    unit: text('unit').notNull(),
+    unitPriceCents: integer('unit_price_cents'),
+    totalPriceCents: integer('total_price_cents').notNull(),
+    orderedOn: date('ordered_on').notNull(),
+    /** Best-effort link to the household's New World catalogue cache. Denormalised name survives the product disappearing. */
+    matchedProductId: uuid('matched_product_id').references(() => retailerProducts.id, { onDelete: 'set null' }),
+    matchedProductName: text('matched_product_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    householdIdx: index('order_line_items_household_idx').on(table.householdId, table.orderedOn),
+  }),
+).enableRLS();
+
 /* -------------------------------------------------------------------------- */
 /* Meals and the weekly plan                                                   */
 /* -------------------------------------------------------------------------- */
@@ -353,6 +387,8 @@ export const meals = pgTable(
     /** Null for meals the family adds themselves — Stage 1 has no image upload. */
     image: text('image'),
     description: text('description').notNull().default(''),
+    /** Optional cooking method/steps. Null for meals with none recorded. */
+    instructions: text('instructions'),
     /** Stage 1 display/compatibility text; ADR-021 explains why it remains beside JSONB. */
     ingredients: text('ingredients').array().notNull().default([]),
     /** Structured Stage 4 amounts; legacy text stays for display and rollback compatibility. */

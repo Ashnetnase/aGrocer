@@ -10,6 +10,7 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { FilterChips, SearchField } from '@/components/agrocer/Field';
 import { EmptyState } from '@/components/agrocer/EmptyState';
 import { nzd } from '@/lib/format';
+import { fuzzyMatch } from '@/lib/search';
 import { cn } from '@/lib/utils';
 
 const FILTERS = ['Favourites', 'All', ...CATEGORIES] as const;
@@ -21,11 +22,9 @@ export function ProductsScreen() {
   const [filter, setFilter] = useState<Filter>('Favourites');
 
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     return products
       .filter((product) => {
-        const matchesQuery =
-          product.name.toLowerCase().includes(needle) || product.brand.toLowerCase().includes(needle);
+        const matchesQuery = fuzzyMatch(`${product.name} ${product.brand}`, query);
         const matchesFilter =
           filter === 'All'
             ? true

@@ -30,6 +30,8 @@ export interface ImportedRecipe {
   ingredients: MealIngredient[];
   /** Lines that looked like ingredients but could not be read. Never discarded silently. */
   unparsed: string[];
+  /** Everything under a "Method"/"Instructions"/"Steps" heading, kept as written. */
+  instructions?: string;
 }
 
 /** Units worth recognising. Anything else becomes part of the name rather than being forced. */
@@ -230,12 +232,17 @@ export function importRecipeText(text: string): ImportedRecipe {
       ? titleCase(firstLine.replace(/^#+\s*/, ''))
       : undefined;
 
+  const instructions = methodIndex >= 0
+    ? lines.slice(methodIndex + 1).map((line) => line.trim()).join('\n').trim() || undefined
+    : undefined;
+
   return {
     name: name && name.length <= 80 ? name : undefined,
     serves: readServes(text),
     minutes: readMinutes(text),
     ingredients,
     unparsed,
+    instructions,
   };
 }
 

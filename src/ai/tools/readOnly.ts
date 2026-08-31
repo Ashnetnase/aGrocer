@@ -4,7 +4,8 @@ import { summariseShopping } from '@/domain/services/shopping';
 import { nzd } from '@/lib/format';
 import { getRecipeProvider } from '@/recipes/provider';
 import { NO_ARGUMENTS, type AiTool } from './registry';
-import { predictReorders } from '@/domain/services/reorderPrediction';
+import { mergeReorderSuggestions, predictReorders } from '@/domain/services/reorderPrediction';
+import { predictReordersFromHistory, summariseCommonOrder } from '@/domain/services/orderHistory';
 
 /**
  * The read-only tools (AshHome Phase 9, slice 9a).
@@ -122,11 +123,47 @@ const mealCatalogue: AiTool = {
 };
 
 const reorderSuggestions: AiTool = {
-  spec: { name: 'getReorderSuggestions', description: 'Read conservative pantry reorder suggestions based on recent inventory use. This is advisory only.', parameters: NO_ARGUMENTS },
+  spec: {
+    name: 'getReorderSuggestions',
+    description:
+      'Read conservative reorder suggestions: items overdue by the household\'s real order-history ' +
+      'cadence, or items pantry activity shows running low or recently emptied. This is advisory only.',
+    parameters: NO_ARGUMENTS,
+  },
   async execute(repos) {
-    const suggestions = predictReorders(await repos.inventoryEvents.list());
+    const [events, orderHistory] = await Promise.all([repos.inventoryEvents.list(), repos.orderHistory.list()]);
+    const suggestions = mergeReorderSuggestions(predictReordersFromHistory(orderHistory), predictReorders(events));
     if (suggestions.length === 0) return 'There are no reorder suggestions yet.';
-    return `Keep an eye on: ${suggestions.slice(0, 6).map((item) => item.reason === 'recently-empty' ? `${item.itemName} recently ran out` : `${item.itemName} used ${item.uses} times recently`).join('; ')}.`;
+    return `Keep an eye on: ${suggestions
+      .slice(0, 6)
+      .map((item) =>
+        item.reason === 'due-for-reorder'
+          ? `${item.itemName} usually reordered every ${item.everyDays} days, ${item.daysSinceLast} since last order`
+          : item.reason === 'recently-empty'
+            ? `${item.itemName} recently ran out`
+            : `${item.itemName} used ${item.uses} times recently`,
+      )
+      .join('; ')}.`;
+  },
+};
+
+const commonOrder: AiTool = {
+  spec: {
+    name: 'getCommonOrder',
+    description:
+      "Read what the household usually buys, learned from imported New World order history: " +
+      'the most frequently bought products, how often, and when each was last bought. Use this ' +
+      'when asked what the family normally buys, or to ground a weekly meal or shopping ' +
+      'suggestion in real buying habits rather than guessing. Empty until orders have been ' +
+      'imported in Settings.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const entries = summariseCommonOrder(await repos.orderHistory.list(), { limit: 15 });
+    if (entries.length === 0) return 'No order history has been imported yet.';
+    return `Most commonly bought (from imported order history): ${entries
+      .map((entry) => `${entry.name} (${entry.timesOrdered}×, last ${entry.lastOrderedOn})`)
+      .join('; ')}.`;
   },
 };
 
@@ -200,6 +237,7 @@ export const READ_ONLY_TOOLS: Record<string, AiTool> = {
   getMealPlan: mealPlan,
   getMeals: mealCatalogue,
   getReorderSuggestions: reorderSuggestions,
+  getCommonOrder: commonOrder,
   getUseSoon: useSoon,
   searchRecipes: searchRecipes as AiTool,
 };

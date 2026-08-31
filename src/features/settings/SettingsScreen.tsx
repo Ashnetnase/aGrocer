@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronRightIcon, LayoutDashboardIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
+import { CheckIcon, ChevronRightIcon, HistoryIcon, LayoutDashboardIcon, LinkIcon, MailIcon, RotateCcwIcon, UsersIcon } from 'lucide-react';
 import { settingsSchema, type Settings } from '@/domain/schemas/household';
 import { describeHousehold } from '@/domain/services/household';
+import { summariseCommonOrder } from '@/domain/services/orderHistory';
+import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import { useAgrocer } from '@/providers/AgrocerProvider';
 import { usesServerData } from '@/data/api/repositories';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
@@ -17,13 +19,66 @@ import {
 } from '@/components/agrocer/form/FormFields';
 import { BottomSheet } from '@/components/agrocer/BottomSheet';
 import { SignOutButton } from '@/features/auth/SignOutButton';
+import { OrderImportSheet } from './components/OrderImportSheet';
 
 export function SettingsScreen() {
-  const { household, updateSettings, resetDemoData } = useAgrocer();
+  const { household, updateSettings, resetDemoData, listOrderHistory, importOrderHistory, matchOrderHistory } = useAgrocer();
   const [confirmReset, setConfirmReset] = useState(false);
   // Read once: it is a build-time constant, not something that changes while the app runs.
   const serverData = usesServerData();
   const [saved, setSaved] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [orderHistory, setOrderHistory] = useState<OrderLineItem[]>([]);
+  const [matching, setMatching] = useState(false);
+  const [matchMessage, setMatchMessage] = useState<string>();
+  const [emailing, setEmailing] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<string>();
+
+  const sendWeeklyEmail = async () => {
+    setEmailing(true);
+    setEmailMessage(undefined);
+    try {
+      const response = await fetch('/api/email/weekly', { method: 'POST' });
+      const body = (await response.json().catch(() => null)) as { sentTo?: string; error?: string } | null;
+      if (!response.ok) throw new Error(body?.error ?? 'Could not send that email.');
+      setEmailMessage(`Sent to ${body?.sentTo}.`);
+    } catch (error) {
+      setEmailMessage(error instanceof Error ? error.message : 'Could not send that email.');
+    } finally {
+      setEmailing(false);
+    }
+  };
+
+  const refreshOrderHistory = () => {
+    if (!serverData) return;
+    void listOrderHistory().then(setOrderHistory).catch(() => setOrderHistory([]));
+  };
+
+  useEffect(() => {
+    refreshOrderHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverData]);
+
+  const commonOrder = summariseCommonOrder(orderHistory, { limit: 10 });
+  const matchedCount = orderHistory.filter((line) => line.matchedProductId).length;
+
+  const runMatch = async () => {
+    setMatching(true);
+    setMatchMessage(undefined);
+    try {
+      const { matched, total } = await matchOrderHistory();
+      setMatchMessage(
+        total === 0
+          ? 'Everything already had a match.'
+          : `Matched ${matched} of ${total} unmatched product${total === 1 ? '' : 's'} to the New World catalogue.`,
+      );
+      refreshOrderHistory();
+    } catch {
+      setMatchMessage('Could not match to the catalogue. Check the connection and try again.');
+    } finally {
+      setMatching(false);
+    }
+  };
 
   const form = useForm<Settings>({
     resolver: zodResolver(settingsSchema),
@@ -150,6 +205,101 @@ export function SettingsScreen() {
           </div>
         </section>
 
+        {/*
+          Order history feeds a "common order" and, later, reorder prediction and AI meal
+          suggestions — but it needs the shared database, exactly like meal feedback, so it is
+          hidden rather than shown failing when the app is running on device-only storage.
+        */}
+        {serverData ? (
+          <section aria-labelledby="order-history" className="mt-8">
+            <h2
+              id="order-history"
+              className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted"
+            >
+              Order history
+            </h2>
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <p className="text-sm leading-relaxed text-muted">
+                Paste past New World order confirmations so Agrocer can learn what your household
+                usually buys. Only product lines are read — never your name, address or phone
+                number.
+              </p>
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line"
+              >
+                <HistoryIcon className="h-4 w-4" /> Import a past order
+              </button>
+
+              {orderHistory.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void runMatch()}
+                  disabled={matching}
+                  className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line disabled:opacity-50"
+                >
+                  <LinkIcon className="h-4 w-4" /> {matching ? 'Matching…' : 'Match to New World catalogue'}
+                </button>
+              ) : null}
+              {matchMessage ? <p className="mt-2 text-xs text-muted" role="status">{matchMessage}</p> : null}
+
+              {commonOrder.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                    Your common order, from {orderHistory.length} imported item{orderHistory.length === 1 ? '' : 's'}
+                    {matchedCount > 0 ? ` · ${matchedCount} matched to a product` : ''}
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {commonOrder.map((entry) => (
+                      <li
+                        key={entry.name}
+                        className="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3 py-2 text-sm"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-ink">
+                          {entry.name}
+                          {entry.matchedProductId ? <CheckIcon className="ml-1.5 inline h-3.5 w-3.5 text-moss-600" aria-label="Matched to a New World product" /> : null}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted">
+                          {entry.timesOrdered}× · last {entry.lastOrderedOn}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {/*
+          Manual, self-addressed only, on purpose. Pressing this button is the confirmation
+          this project's rules require before anything leaves the household — no recipient
+          field, no schedule. The email content is assembled from real data in code
+          (`buildWeeklyDigest`), never written freehand by a model.
+        */}
+        {serverData ? (
+          <section aria-labelledby="email" className="mt-8">
+            <h2 id="email" className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
+              Email
+            </h2>
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <p className="text-sm leading-relaxed text-muted">
+                Send this week&rsquo;s meal plan and shopping list to your own email address.
+              </p>
+              <button
+                type="button"
+                onClick={() => void sendWeeklyEmail()}
+                disabled={emailing}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-canvas text-[13.5px] font-bold text-ink transition-colors duration-150 ease-out hover:bg-line disabled:opacity-50"
+              >
+                <MailIcon className="h-4 w-4" /> {emailing ? 'Sending…' : "Email me this week's plan"}
+              </button>
+              {emailMessage ? <p className="mt-2 text-xs text-muted" role="status">{emailMessage}</p> : null}
+            </div>
+          </section>
+        ) : null}
+
         <section aria-labelledby="data" className="mt-8">
           <h2 id="data" className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
             Data
@@ -197,6 +347,15 @@ export function SettingsScreen() {
           </div>
         </section>
       </main>
+
+      <OrderImportSheet
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={async (drafts) => {
+          await importOrderHistory(drafts);
+          refreshOrderHistory();
+        }}
+      />
 
       <BottomSheet
         open={confirmReset}
