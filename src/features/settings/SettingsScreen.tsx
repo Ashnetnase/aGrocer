@@ -68,6 +68,7 @@ export function SettingsScreen() {
   const matchedCount = orderHistory.filter((line) => line.matchedProductId).length;
   const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
   const [addingAll, setAddingAll] = useState(false);
+  const [addMessage, setAddMessage] = useState<string>();
 
   const draftFor = (entry: CommonOrderEntry) => ({
     name: entry.name,
@@ -81,6 +82,7 @@ export function SettingsScreen() {
   const addCommonOrderEntry = async (entry: CommonOrderEntry) => {
     await addShoppingItem(draftFor(entry));
     setAddedNames((current) => new Set(current).add(entry.name));
+    setAddMessage(`${entry.name} added to your shopping list.`);
   };
 
   const addAllCommonOrder = async () => {
@@ -88,6 +90,7 @@ export function SettingsScreen() {
     try {
       await addShoppingItems(commonOrder.map(draftFor));
       setAddedNames(new Set(commonOrder.map((entry) => entry.name)));
+      setAddMessage(`${commonOrder.length} item${commonOrder.length === 1 ? '' : 's'} added to your shopping list.`);
     } finally {
       setAddingAll(false);
     }
@@ -318,6 +321,7 @@ export function SettingsScreen() {
                       );
                     })}
                   </ul>
+                  {addMessage ? <p className="mt-2 text-xs font-semibold text-moss-700" role="status">{addMessage}</p> : null}
                 </div>
               ) : null}
             </div>

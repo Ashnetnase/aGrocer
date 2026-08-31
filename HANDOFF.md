@@ -1025,6 +1025,25 @@ text), healthy, confirmed 200 through the public URL.
 items to the real New World trolley rather than reporting false success. This closes out the
 false-"added" bug for real, not just by code review.
 
+**2026-08-31, same day — two more real fixes from Ash's live testing (Claude Code).**
+
+- **Adding a common-order item gave no visible confirmation.** The "Add" button flipped to
+  "Added" (small, easy to miss), and nothing else told the person it had actually landed on their
+  shopping list below. `CommonOrderQuickAdd` (Shopping) now takes an `onAdded` callback wired to
+  the same top-of-page banner every other action already uses ("Milk added to your shopping
+  list."); Settings' matching section gained its own equivalent inline message. The item was
+  always actually being added — `addShoppingItem`/`addShoppingItems` already call
+  `refreshShopping()` — this was purely a missing-feedback problem, not a data problem.
+- **The floating "+" button was visually cut off by the bottom nav on phones with a
+  home-indicator safe area.** `BottomNav` pads itself for `env(safe-area-inset-bottom)` (up to
+  ~34px on notched iPhones); `FloatingAddButton`'s `bottom-24` did not, so on any such device the
+  nav ends up taller than the button's clearance and visually overlaps its lower half. Fixed with
+  the same inset in the button's own offset
+  (`bottom-[calc(6rem+env(safe-area-inset-bottom))]`) — one shared component, so this also fixes
+  Household and Pantry's add buttons, not just Shopping's.
+
+Verified: typecheck, lint, 357 tests (unchanged — UI/feedback wiring, no new pure logic), build.
+
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
 message on the live site, (2) setting up real SES credentials and doing a live send test, (3)

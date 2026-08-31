@@ -15,7 +15,7 @@ import { useAgrocer } from '@/providers/AgrocerProvider';
  * Empty until order history has been imported (Settings → Order history), and says so rather
  * than showing nothing with no explanation.
  */
-export function CommonOrderQuickAdd() {
+export function CommonOrderQuickAdd({ onAdded }: { onAdded: (message: string) => void }) {
   const { products, listOrderHistory, addShoppingItem, addShoppingItems } = useAgrocer();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -37,6 +37,7 @@ export function CommonOrderQuickAdd() {
   const addEntry = async (entry: (typeof commonOrder)[number]) => {
     await addShoppingItem(draftFor(entry));
     setAddedNames((current) => new Set(current).add(entry.name));
+    onAdded(`${entry.name} added to your shopping list.`);
   };
 
   const addAll = async () => {
@@ -44,6 +45,7 @@ export function CommonOrderQuickAdd() {
     try {
       await addShoppingItems(commonOrder.map(draftFor));
       setAddedNames(new Set(commonOrder.map((entry) => entry.name)));
+      onAdded(`${commonOrder.length} item${commonOrder.length === 1 ? '' : 's'} added to your shopping list.`);
     } finally {
       setAddingAll(false);
     }
