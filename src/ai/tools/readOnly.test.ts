@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgrocerRepositories } from '@/data/repositories/types';
+import type { Chore } from '@/domain/schemas/chores';
+import type { Household } from '@/domain/schemas/household';
 import type { Meal, Plan } from '@/domain/schemas/meal';
 import type { OrderLineItem } from '@/domain/schemas/orderHistory';
 import type { PantryItem } from '@/domain/schemas/pantry';
+import type { SchoolNotification } from '@/domain/schemas/school';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import { READ_ONLY_TOOLS } from './readOnly';
 import { runTool } from './registry';
@@ -61,12 +64,29 @@ const meal = (overrides: Partial<Meal> = {}): Meal => ({
  * Only the methods the tools are allowed to touch are implemented. Every write throws, so a
  * tool that reaches for one fails the test rather than quietly mutating the household.
  */
+const emptyHousehold: Household = {
+  members: [],
+  settings: {
+    householdName: 'The Ashfords',
+    shopLabel: '',
+    currency: 'NZD',
+    pinDemoDate: false,
+    pinnedDate: '2026-08-31',
+    showBreakfastAndLunch: false,
+    newWorldEnabled: false,
+    shoppingAddMode: 'new-world',
+  },
+};
+
 function fakeRepositories(data: {
   shopping?: ShoppingItem[];
   pantry?: PantryItem[];
   meals?: Meal[];
   plan?: Plan;
   orderHistory?: OrderLineItem[];
+  chores?: Chore[];
+  schoolNotifications?: SchoolNotification[];
+  household?: Household;
 }): AgrocerRepositories {
   const forbidden = () => {
     throw new Error('A read-only tool attempted a write');
@@ -106,11 +126,25 @@ function fakeRepositories(data: {
     },
     products: { list: async () => [], update: forbidden, toggleFavourite: forbidden },
     household: {
-      get: forbidden,
+      get: async () => data.household ?? emptyHousehold,
       addMember: forbidden,
       updateMember: forbidden,
       removeMember: forbidden,
       updateSettings: forbidden,
+    },
+    chores: {
+      list: async () => data.chores ?? [],
+      create: forbidden,
+      update: forbidden,
+      toggle: forbidden,
+      remove: forbidden,
+      clearCompleted: forbidden,
+    },
+    school: {
+      list: async () => data.schoolNotifications ?? [],
+      add: forbidden,
+      markRead: forbidden,
+      dismiss: forbidden,
     },
     reset: forbidden,
   } as unknown as AgrocerRepositories;
@@ -128,6 +162,8 @@ describe('the allow-list', () => {
       'getReorderSuggestions',
       'getCommonOrder',
       'getUseSoon',
+      'getChores',
+      'getSchoolNotifications',
       'searchRecipes',
     ]);
   });
@@ -353,5 +389,79 @@ describe('getUseSoon', () => {
   it('lists ageing pantry items for waste-reduction advice', async () => {
     const { content } = await run('getUseSoon', fakeRepositories({ pantry: [pantryItem({ name: 'Spinach', state: 'soon', quantity: 1, unit: 'bag' })] }));
     expect(content).toBe('Use soon: Spinach (1 bag).');
+  });
+});
+
+const chore = (overrides: Partial<Chore> = {}): Chore => ({
+  id: 'c1',
+  title: 'Take the rubbish out',
+  assignedMemberId: null,
+  done: false,
+  ...overrides,
+});
+
+describe('getChores', () => {
+  it('says so when no chores have been added', async () => {
+    expect((await run('getChores', fakeRepositories({}))).content).toBe('No chores have been added.');
+  });
+
+  it('separates outstanding from done, and names the assignee', async () => {
+    const household: Household = { ...emptyHousehold, members: [{ id: 'h3', name: 'Milla', initials: 'M', role: 'Child', colour: 'bg-honey-500', school: null }] };
+    const repos = fakeRepositories({
+      household,
+      chores: [
+        chore({ id: 'c1', title: 'Take the rubbish out', assignedMemberId: 'h3' }),
+        chore({ id: 'c2', title: 'Feed the dog', done: true }),
+      ],
+    });
+    const { content } = await run('getChores', repos);
+    expect(content).toBe('Outstanding (1): Take the rubbish out (Milla). Already done: Feed the dog.');
+  });
+
+  it('says everything is done when nothing is outstanding', async () => {
+    const repos = fakeRepositories({ chores: [chore({ done: true })] });
+    expect((await run('getChores', repos)).content).toContain('Nothing outstanding');
+  });
+});
+
+const notification = (overrides: Partial<SchoolNotification> = {}): SchoolNotification => ({
+  id: 'n1',
+  childId: null,
+  provider: 'manual',
+  externalReference: null,
+  title: 'Sports day permission',
+  summary: '',
+  receivedAt: '2026-08-31T00:00:00.000Z',
+  eventDate: null,
+  dueDate: null,
+  actionRequired: false,
+  actionType: null,
+  sourceLink: null,
+  needsReview: false,
+  read: false,
+  dismissed: false,
+  ...overrides,
+});
+
+describe('getSchoolNotifications', () => {
+  it('says so when there are no notices', async () => {
+    expect((await run('getSchoolNotifications', fakeRepositories({}))).content).toBe('No school notices right now.');
+  });
+
+  it('names the child, whether a response is needed, and any due date', async () => {
+    const household: Household = { ...emptyHousehold, members: [{ id: 'h3', name: 'Milla', initials: 'M', role: 'Child', colour: 'bg-honey-500', school: null }] };
+    const repos = fakeRepositories({
+      household,
+      schoolNotifications: [
+        notification({ childId: 'h3', actionRequired: true, dueDate: '2026-09-07' }),
+      ],
+    });
+    const { content } = await run('getSchoolNotifications', repos);
+    expect(content).toBe('School notices (1): Sports day permission, for Milla, needs a response, due 2026-09-07.');
+  });
+
+  it('excludes dismissed notices', async () => {
+    const repos = fakeRepositories({ schoolNotifications: [notification({ dismissed: true })] });
+    expect((await run('getSchoolNotifications', repos)).content).toBe('No school notices right now.');
   });
 });

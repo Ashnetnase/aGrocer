@@ -51,6 +51,13 @@ export const settingsSchema = z.object({
   /** Shown in the shopping screen subtitle, e.g. "New World Thursday". */
   shopLabel: z.string().trim().max(40),
   currency: z.literal('NZD'),
+  /**
+   * Off by default (2026-08-31, Ash: matching/live search/trolley automation was more friction
+   * than it saved). Off means Shopping behaves as a plain list — no New World browsing,
+   * matching or trolley UI at all. On restores everything, including sending the trolley to a
+   * real New World cart. `shoppingAddMode` is only meaningful while this is on.
+   */
+  newWorldEnabled: z.boolean(),
   shoppingAddMode: shoppingAddModeSchema,
   /** Blank/null means the household has not chosen a weekly grocery target yet. */
   weeklyBudget: priceSchema.min(1, 'Enter at least $1').nullable().optional(),

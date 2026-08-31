@@ -219,6 +219,7 @@ describe('toSettings and toHousehold', () => {
     pinDemoDate: false,
     pinnedDate: '2026-08-23',
     showBreakfastAndLunch: false,
+    newWorldEnabled: false,
     shoppingAddMode: 'new-world' as const,
     createdAt: NOW,
     updatedAt: NOW,

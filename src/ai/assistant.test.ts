@@ -88,7 +88,12 @@ describe('ASSISTANT_SYSTEM_PROMPT', () => {
 
   it('still says what the assistant cannot do, now that it can do more', () => {
     expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/cannot change anything/i);
-    expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/calendar, chores, reminders or school/i);
+    expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/no access to the family calendar or reminders/i);
+  });
+
+  it('says it can now read chores and school notices', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/getChores/);
+    expect(ASSISTANT_SYSTEM_PROMPT).toMatch(/getSchoolNotifications/);
   });
 });
 

@@ -671,6 +671,54 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - New World integration made optional; Ask AshHome learns Chores and School (Claude Code)
+
+Two changes, both from the same conversation: Ash found the New World trolley/matching flow
+still too much friction even with today's "Browse New World" improvement — the fundamental
+issue (no New World API, so live search/cart automation genuinely needs a desktop with the
+Chrome extension) doesn't go away just because adding is easier. Ash's own proposed fix was
+right: make it optional, default off, and fall back to a plain list (plus the existing weekly
+email). Also asked, separately, to extend "Ask AshHome" now that Chores and School notices are
+real data — a decision from the Hermes/Obsidian assessment two entries up, followed through on.
+
+Also assessed, per Ash's explicit request, whether to integrate a locally-run "Hermes" agent
+(Nous Research, autonomous, terminal/filesystem access, already looked at once before this
+session for Hero email and set aside for the same reason) and Obsidian as a family knowledge
+base. Recommendation given (not built, "do not implement anything yet" per Ash): Hermes as a
+write-capable orchestrator over Agrocer is the wrong shape — it duplicates the tool-gated,
+confirmation-required "Ask AshHome" that already exists (ADR-014/015/018) with a broader-
+capability, less-audited path. Obsidian is a reasonable *read-only* source for genuinely
+unstructured household reference (manuals, warranties) that Agrocer's structured data
+shouldn't hold — never a second copy of anything the database already owns. Full 7-point
+answer (what stays in the DB vs. Obsidian, what Hermes should read/write, the safe
+communication path, sequencing) given in conversation; nothing implemented.
+
+**Shipped — `settingsSchema.newWorldEnabled`** (migration `0017`, default `false`): off, the
+whole New World integration disappears from Shopping — no "Prepare New World trolley" button,
+no "New World products" panel, no live-search/queued-job banners, no trolley review section,
+no inline matching step in the add/edit sheet, and the "+" button always opens the plain add
+form regardless of `shoppingAddMode`. On, everything works exactly as before (`shoppingAddMode`
+only becomes meaningful once this is on — the Settings UI hides that chip select while off).
+Nothing about the underlying trolley/matching code changed; this is purely a visibility gate,
+reversible any time from Settings.
+
+**Shipped — two new read-only tools**, `getChores` and `getSchoolNotifications`
+(`src/ai/tools/readOnly.ts`), following slice 9a's exact pattern: no arguments, prose not JSON,
+compact enough for a small local model to read reliably. `getChores` separates outstanding
+from done and names the assignee; `getSchoolNotifications` reuses `visibleNotifications()` (so
+dismissed notices stay excluded, same as the Kids screen) and names the child, whether a
+response is needed, and any due date. The system prompt and the dashboard card's own footnote
+were updated to stop claiming the assistant can't see chores/school — both now genuinely can,
+and CLAUDE.md's honesty rule (never let the assistant claim more or less than it can actually
+do) applies to prose describing capabilities as much as to answers.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (40 files, 395 tests — 8 new:
+`getChores`/`getSchoolNotifications` coverage in `readOnly.test.ts`, updated capability
+assertions in `assistant.test.ts`), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`, migration
+`0017` applied and RLS-checked. Live-verified the toggle at mobile width: off correctly hides
+every New World UI element and the "+" button opens the plain form; the Settings chip select
+for the add-mode default correctly hides itself while the toggle is off.
+
 ## 2026-08-31 - "Browse New World" add flow, replacing the add-then-match round trip (Claude Code)
 
 Ash's real complaint, once decoded: adding an item and then separately matching it to a New

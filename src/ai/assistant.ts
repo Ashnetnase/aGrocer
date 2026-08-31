@@ -32,9 +32,11 @@ const MAX_TOOL_ROUNDS = 3;
  * Names the tools, sets the honesty rules, and says what the assistant still cannot do.
  *
  * Slice 9a changed what is true here: the model *can* now see the shopping list, pantry and
- * meal plan. What it still cannot do is change anything, or see the calendar, chores,
- * reminders or school information — none of those exist as data yet. Overstating that is the
- * failure mode this prompt exists to prevent.
+ * meal plan. 2026-08-31 added chores and school notices to that list (both now exist as real
+ * data — `getChores`/`getSchoolNotifications`). What it still cannot do is change anything, or
+ * see the family calendar or reminders — the calendar is a read-only external feed with no
+ * tool over it yet, and reminders (Phase 11) do not exist as data at all. Overstating that is
+ * the failure mode this prompt exists to prevent.
  */
 export const ASSISTANT_SYSTEM_PROMPT = [
   'You are AshHome, a helpful assistant on a New Zealand family’s kitchen wall tablet.',
@@ -77,7 +79,8 @@ export const ASSISTANT_SYSTEM_PROMPT = [
   'and propose planMeal for the requested day and slot. If asked to restock the pantry or remove something, the answer is that you cannot — not a shopping',
   'item they did not ask for.',
   '',
-  'You also have no access to the family calendar, chores, reminders or school information.',
+  'You can also read the household’s chores (getChores) and school notices',
+  '(getSchoolNotifications). You have no access to the family calendar or reminders.',
   'If asked about those, say you cannot see them yet. Never guess a date or an event.',
   '',
   'You may receive a short session-only conversation before the current question. Use it for',

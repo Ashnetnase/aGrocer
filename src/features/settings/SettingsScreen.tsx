@@ -146,6 +146,7 @@ export function SettingsScreen() {
   });
 
   const pinDemoDate = form.watch('pinDemoDate');
+  const newWorldEnabled = form.watch('newWorldEnabled');
 
   return (
     <>
@@ -190,19 +191,31 @@ export function SettingsScreen() {
             description="Optional. Agrocer compares the current shopping-list estimate with this target."
           />
 
-          <FormChipSelect
+          <FormToggleCard
             control={form.control}
-            name="shoppingAddMode"
-            label="Adding shopping items"
-            options={shoppingAddModeSchema.options}
-            columns={2}
-            renderLabel={(option) => (option === 'new-world' ? 'Browse New World' : 'Type it in')}
+            name="newWorldEnabled"
+            label="New World integration"
+            description="Browse/match real products and send your trolley to New World. Off keeps Shopping a plain list."
+            activeClassName="border-moss-300 bg-moss-50"
           />
-          <p className="-mt-2 text-xs text-muted">
-            What the shopping list&apos;s + button opens by default. Browse New World adds a
-            real product straight to your list, already matched — no separate step to find it in
-            the trolley later. Both stay available either way.
-          </p>
+
+          {newWorldEnabled ? (
+            <>
+              <FormChipSelect
+                control={form.control}
+                name="shoppingAddMode"
+                label="Adding shopping items"
+                options={shoppingAddModeSchema.options}
+                columns={2}
+                renderLabel={(option) => (option === 'new-world' ? 'Browse New World' : 'Type it in')}
+              />
+              <p className="-mt-2 text-xs text-muted">
+                What the shopping list&apos;s + button opens by default. Browse New World adds a
+                real product straight to your list, already matched — no separate step to find it in
+                the trolley later. Both stay available either way.
+              </p>
+            </>
+          ) : null}
 
           <FormToggleCard
             control={form.control}

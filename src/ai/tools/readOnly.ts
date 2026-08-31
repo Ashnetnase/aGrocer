@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { buildPlannerWeek } from '@/domain/services/dates';
 import { summariseShopping } from '@/domain/services/shopping';
+import { childName, visibleNotifications } from '@/domain/services/school';
 import { nzd } from '@/lib/format';
 import { getRecipeProvider } from '@/recipes/provider';
 import { NO_ARGUMENTS, type AiTool } from './registry';
@@ -175,6 +176,59 @@ const useSoon: AiTool = {
   },
 };
 
+const chores: AiTool = {
+  spec: {
+    name: 'getChores',
+    description:
+      "Read the household's chores: what's outstanding, who each is assigned to, and what's " +
+      'already done. Use this when asked what jobs need doing, or what a specific person is ' +
+      'meant to be doing.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const [items, household] = await Promise.all([repos.chores.list(), repos.household.get()]);
+    if (items.length === 0) return 'No chores have been added.';
+
+    const memberName = (id: string | null) =>
+      id ? (household.members.find((member) => member.id === id)?.name ?? 'someone') : 'unassigned';
+    const outstanding = items.filter((chore) => !chore.done);
+    const done = items.filter((chore) => chore.done);
+
+    return [
+      outstanding.length > 0
+        ? `Outstanding (${outstanding.length}): ${outstanding.map((chore) => `${chore.title} (${memberName(chore.assignedMemberId)})`).join(', ')}.`
+        : 'Nothing outstanding — every chore is done.',
+      done.length > 0 ? `Already done: ${done.map((chore) => chore.title).join(', ')}.` : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  },
+};
+
+const schoolNotifications: AiTool = {
+  spec: {
+    name: 'getSchoolNotifications',
+    description:
+      "Read the household's school notices — permission slips, term dates, events, anything " +
+      'from Kids/School that still needs attention or is coming up. Use this when asked about ' +
+      'school notices, permission slips, or what a child has coming up.',
+    parameters: NO_ARGUMENTS,
+  },
+  async execute(repos) {
+    const [items, household] = await Promise.all([repos.school.list(), repos.household.get()]);
+    const visible = visibleNotifications(items);
+    if (visible.length === 0) return 'No school notices right now.';
+
+    return `School notices (${visible.length}): ${visible
+      .map((notice) => {
+        const child = childName(household.members, notice.childId);
+        const parts = [notice.title, child ? `for ${child}` : null, notice.actionRequired ? 'needs a response' : null, notice.dueDate ? `due ${notice.dueDate}` : null];
+        return parts.filter(Boolean).join(', ');
+      })
+      .join('; ')}.`;
+  },
+};
+
 function describeItem(item: { name: string; quantity: number; unit: string }): string {
   return item.quantity > 1 ? `${item.name} ×${item.quantity} ${item.unit}` : item.name;
 }
@@ -239,5 +293,7 @@ export const READ_ONLY_TOOLS: Record<string, AiTool> = {
   getReorderSuggestions: reorderSuggestions,
   getCommonOrder: commonOrder,
   getUseSoon: useSoon,
+  getChores: chores,
+  getSchoolNotifications: schoolNotifications,
   searchRecipes: searchRecipes as AiTool,
 };

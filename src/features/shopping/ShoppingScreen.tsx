@@ -39,7 +39,8 @@ export function ShoppingScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { shopping, household, products, toggleShoppingItem, addShoppingItem, updateShoppingItem, removeShoppingItem, clearChecked } = useAgrocer();
-  const wantsBrowse = household.settings.shoppingAddMode === 'new-world';
+  const newWorldEnabled = household.settings.newWorldEnabled;
+  const wantsBrowse = newWorldEnabled && household.settings.shoppingAddMode === 'new-world';
   const [sheetOpen, setSheetOpen] = useState(searchParams.get('add') === '1' && !wantsBrowse);
   const [browseOpen, setBrowseOpen] = useState(searchParams.get('add') === '1' && wantsBrowse);
   const [editing, setEditing] = useState<ShoppingItem | null>(null);
@@ -213,7 +214,7 @@ export function ShoppingScreen() {
   const draftMatchId = editing?.id ?? '__draft__';
   const openAdd = () => {
     setEditing(null);
-    if (household.settings.shoppingAddMode === 'new-world') setBrowseOpen(true);
+    if (wantsBrowse) setBrowseOpen(true);
     else setSheetOpen(true);
   };
   const handleSave = (draft: ShoppingItemDraft) => editing ? void updateShoppingItem(editing.id, draft) : void addShoppingItem(draft);
@@ -449,15 +450,15 @@ export function ShoppingScreen() {
         <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-canvas"><div className="h-full rounded-full bg-moss-500" style={{ width: `${progress}%` }} /></div>
         {budget ? <div className="mt-3 rounded-2xl bg-canvas px-3 py-2.5"><div className="flex justify-between gap-3 text-sm font-semibold"><span className="text-muted">Weekly budget {nzd(budget.target)}</span><span className={budget.over ? 'text-berry-600' : 'text-moss-700'}>{budget.over ? `${nzd(Math.abs(budget.remaining))} over` : `${nzd(budget.remaining)} left`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line"><div className={cn('h-full rounded-full', budget.over ? 'bg-berry-500' : 'bg-moss-500')} style={{ width: `${budget.progress}%` }} /></div></div> : null}
         <button type="button" onClick={() => router.push('/shopping/mode')} disabled={!shopping.length} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-moss-600 text-[15px] font-bold text-white disabled:bg-line disabled:text-muted"><ShoppingBasketIcon className="h-[18px] w-[18px]" /> Start shopping mode</button>
-        <button type="button" onClick={() => void prepareNewWorld()} disabled={!remaining.length || preparing} className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl border border-moss-200 bg-white text-sm font-bold text-moss-700 disabled:opacity-50">{preparing ? 'Preparing…' : 'Prepare New World trolley'}</button>
+        {newWorldEnabled ? <button type="button" onClick={() => void prepareNewWorld()} disabled={!remaining.length || preparing} className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl border border-moss-200 bg-white text-sm font-bold text-moss-700 disabled:opacity-50">{preparing ? 'Preparing…' : 'Prepare New World trolley'}</button> : null}
       </div>
       {trolleyError ? <p className="mb-3 rounded-2xl bg-berry-50 px-4 py-3 text-sm font-semibold text-berry-700">{trolleyError}</p> : null}
       {actionMessage ? <p role="status" className="mb-3 rounded-2xl bg-moss-50 px-4 py-3 text-sm font-semibold text-moss-800">{actionMessage}</p> : null}
       <CommonOrderQuickAdd onAdded={(message) => setActionMessage(message)} />
-      {pendingSearchJob && extensionOnline ? <section className="mb-3 rounded-2xl border border-honey-200 bg-honey-50 px-4 py-3 text-sm"><strong>Product search from another device</strong><p className="mt-0.5 text-xs text-muted">Search New World for “{pendingSearchJob.query}” and return the choices.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => void processPendingSearchJob()} className="rounded-xl bg-moss-600 px-3 py-2 text-xs font-bold text-white">Process product search</button><button type="button" onClick={() => void dismissSearchActivity()} className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-bold text-muted">Dismiss</button></div></section> : null}
-      {queuedSearchJob ? <section className="mb-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"><div className="flex items-start justify-between gap-3"><div><strong>Live product search: {queuedSearchJob.status}</strong><p className="mt-0.5 text-xs text-muted">{queuedSearchJob.status === 'pending' ? 'Open Agrocer Shopping on the desktop with extension 0.1.6.' : queuedSearchJob.status === 'processing' ? 'Desktop Chrome is searching New World. This can take up to a minute.' : queuedSearchJob.products?.length ? `${queuedSearchJob.products.length} choices returned. Select one below.` : queuedSearchJob.message ?? 'No live products were returned.'}</p></div><button type="button" onClick={() => void dismissSearchActivity()} className="shrink-0 text-xs font-bold text-muted">Clear</button></div></section> : null}
-      {remaining.length ? <NewWorldCatalogue items={remaining} extensionOnline={extensionOnline} liveProducts={extensionCandidates} liveMessages={extensionSearchMessages} searchingItemId={searchingItemId} onLiveSearch={searchNewWorldItem} onPreferenceSaved={(message) => { setActionMessage(message); return trolley ? prepareNewWorld() : undefined; }} /> : null}
-      {trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
+      {newWorldEnabled && pendingSearchJob && extensionOnline ? <section className="mb-3 rounded-2xl border border-honey-200 bg-honey-50 px-4 py-3 text-sm"><strong>Product search from another device</strong><p className="mt-0.5 text-xs text-muted">Search New World for “{pendingSearchJob.query}” and return the choices.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => void processPendingSearchJob()} className="rounded-xl bg-moss-600 px-3 py-2 text-xs font-bold text-white">Process product search</button><button type="button" onClick={() => void dismissSearchActivity()} className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-bold text-muted">Dismiss</button></div></section> : null}
+      {newWorldEnabled && queuedSearchJob ? <section className="mb-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"><div className="flex items-start justify-between gap-3"><div><strong>Live product search: {queuedSearchJob.status}</strong><p className="mt-0.5 text-xs text-muted">{queuedSearchJob.status === 'pending' ? 'Open Agrocer Shopping on the desktop with extension 0.1.6.' : queuedSearchJob.status === 'processing' ? 'Desktop Chrome is searching New World. This can take up to a minute.' : queuedSearchJob.products?.length ? `${queuedSearchJob.products.length} choices returned. Select one below.` : queuedSearchJob.message ?? 'No live products were returned.'}</p></div><button type="button" onClick={() => void dismissSearchActivity()} className="shrink-0 text-xs font-bold text-muted">Clear</button></div></section> : null}
+      {newWorldEnabled && remaining.length ? <NewWorldCatalogue items={remaining} extensionOnline={extensionOnline} liveProducts={extensionCandidates} liveMessages={extensionSearchMessages} searchingItemId={searchingItemId} onLiveSearch={searchNewWorldItem} onPreferenceSaved={(message) => { setActionMessage(message); return trolley ? prepareNewWorld() : undefined; }} /> : null}
+      {newWorldEnabled && trolley ? <section className="mb-5 rounded-2xl border border-moss-200 bg-moss-50 p-4" aria-label="New World trolley review">
         <div className="flex items-start justify-between gap-3"><div><h2 className="font-bold text-ink">New World trolley</h2><p className="text-xs text-muted">{trolley.summary.total} items · {trolley.summary.ready} ready · {trolley.summary.needsReview} need review · {trolley.summary.unavailable} unavailable</p></div><button type="button" disabled={sending} className="text-xs font-bold text-muted disabled:opacity-50" onClick={clearPreparedTrolley}>Clear trolley</button></div>
         <div className="mt-3 space-y-2">
           {extensionOnline ? <div className="rounded-xl bg-moss-100 px-3 py-2 text-sm text-moss-800"><strong>Chrome trolley extension ready</strong><p className="text-xs">Products will be added in your normal visible New World tab.</p></div> : !trolley.companion.online ? <div className="rounded-xl bg-honey-50 px-3 py-2 text-sm text-ink"><strong>Desktop connection not active on this device</strong><p className="text-xs text-muted">On a phone, send ready items to the desktop. Open Agrocer there with the Chrome extension to process them.</p></div> : null}
@@ -489,6 +490,7 @@ export function ShoppingScreen() {
       products={products}
       onSave={handleSave}
       onDelete={editing ? () => void removeShoppingItem(editing.id) : undefined}
+      newWorldEnabled={newWorldEnabled}
       extensionOnline={extensionOnline}
       liveProducts={extensionCandidates[draftMatchId] ?? []}
       liveMessage={extensionSearchMessages[draftMatchId]}

@@ -125,6 +125,8 @@ export const households = pgTable('households', {
     .notNull()
     .default(sql`CURRENT_DATE`),
   showBreakfastAndLunch: boolean('show_breakfast_and_lunch').notNull().default(false),
+  /** Off by default — see `settingsSchema.newWorldEnabled`. */
+  newWorldEnabled: boolean('new_world_enabled').notNull().default(false),
   shoppingAddMode: shoppingAddModeEnum('shopping_add_mode').notNull().default('new-world'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -41,6 +41,8 @@ interface ShoppingItemSheetProps {
   products: Product[];
   onSave: (draft: ShoppingItemDraft) => void;
   onDelete?: () => void;
+  /** Off hides the New World matching step entirely — a plain add/edit form. */
+  newWorldEnabled: boolean;
   extensionOnline: boolean;
   liveProducts: RetailerProduct[];
   liveMessage?: string;
@@ -51,7 +53,7 @@ interface ShoppingItemSheetProps {
 }
 
 export function ShoppingItemSheet({
-  open, onClose, item, products, onSave, onDelete,
+  open, onClose, item, products, onSave, onDelete, newWorldEnabled,
   extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onCancelSearch, onProductMatched,
 }: ShoppingItemSheetProps) {
   const form = useForm<ShoppingItemDraft>({
@@ -155,21 +157,23 @@ export function ShoppingItemSheet({
         />
         <FormTextField control={form.control} name="note" label="Note (optional)" placeholder="e.g. Blue top" />
       </form>
-      <div className="mt-4">
-        <MatchNewWorldProduct
-          key={session}
-          itemName={watchedName}
-          quantity={watchedQuantity}
-          extensionOnline={extensionOnline}
-          liveProducts={liveProducts}
-          liveMessage={liveMessage}
-          searching={searching}
-          onLiveSearch={onLiveSearch}
-          onCancelSearch={onCancelSearch}
-          onSaved={onProductMatched}
-          onMatchedName={(name) => form.setValue('name', name, { shouldDirty: true, shouldTouch: true })}
-        />
-      </div>
+      {newWorldEnabled ? (
+        <div className="mt-4">
+          <MatchNewWorldProduct
+            key={session}
+            itemName={watchedName}
+            quantity={watchedQuantity}
+            extensionOnline={extensionOnline}
+            liveProducts={liveProducts}
+            liveMessage={liveMessage}
+            searching={searching}
+            onLiveSearch={onLiveSearch}
+            onCancelSearch={onCancelSearch}
+            onSaved={onProductMatched}
+            onMatchedName={(name) => form.setValue('name', name, { shouldDirty: true, shouldTouch: true })}
+          />
+        </div>
+      ) : null}
     </BottomSheet>
   );
 }

@@ -60,8 +60,11 @@ What actually runs today:
   **It has no tools, injects no system prompt and persists nothing** — the model cannot read
   or write a single row of household data. That is Phase 9.
 - **"Ask AshHome" on the wall dashboard is real, and reads real household data** (slices 8b
-  and 9a). `POST /api/ai/ask` runs the local qwen3:8b with three read-only tools —
-  `getShoppingList`, `getPantry`, `getMealPlan` — behind an explicit allow-list (ADR-015). The
+  and 9a). `POST /api/ai/ask` runs the local qwen3:8b with read-only tools behind an explicit
+  allow-list (ADR-015): `getShoppingList`, `getPantry`, `getMealPlan`, `getMeals`,
+  `getReorderSuggestions`, `getCommonOrder`, `getUseSoon`, `searchRecipes`, and — added
+  2026-08-31 once Chores and School notifications became real — `getChores` and
+  `getSchoolNotifications`. Still no access to the family calendar or reminders (Phase 11). The
   card labels which data an answer came from ("Checked your pantry").
   Since slice 9b it can also **propose shopping-list additions**. Multi-item requests now carry
   every action into one confirmation list; Add all / Cancel appears before anything is written

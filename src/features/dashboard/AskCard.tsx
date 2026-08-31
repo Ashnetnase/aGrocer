@@ -22,9 +22,9 @@ import { DashboardCard } from './DashboardCard';
  * so the examples below are the ones from the master plan that this slice makes true.
  *
  * Still limited, and the footnote still says so: it cannot change anything, and it cannot see
- * the calendar, chores, reminders or school information, because none of that exists as data
- * yet. An assistant on a kitchen wall that appears to know something and is guessing is worse
- * than one that admits it cannot look.
+ * the family calendar or reminders (2026-08-31: chores and school notices moved off this list
+ * — both are real tools now). An assistant on a kitchen wall that appears to know something and
+ * is guessing is worse than one that admits it cannot look.
  *
  * When an answer came from a tool, the card says which — "Checked your pantry". A family
  * should be able to tell at a glance whether they are reading their own data or the model's
@@ -146,7 +146,7 @@ export function AskCard({ className }: { className?: string }) {
       className={className}
       title="Ask AshHome"
       meta={busy ? 'Thinking…' : undefined}
-      note="Can read your list, pantry and meal plan, search for recipes, and — once you confirm — add to the list or save a recipe. It cannot change anything else, or see the calendar, chores or school yet."
+      note="Can read your list, pantry, meal plan, chores and school notices, search for recipes, and — once you confirm — add to the list or save a recipe. It cannot change anything else, or see the family calendar yet."
     >
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div ref={answerRef} className="min-h-0 flex-1 overflow-y-auto">
