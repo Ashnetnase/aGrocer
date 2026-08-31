@@ -1069,7 +1069,12 @@ stale `/api/*` entry from an already-installed PWA, rather than requiring Ash to
 site data (which had been the standing advice, and evidently wasn't reliable — this is why).
 
 Verified: `node --check public/sw.js` (plain browser script, no test harness for it), typecheck,
-lint, 357 tests (unchanged — this file isn't part of the TS build), build.
+lint, 357 tests (unchanged — this file isn't part of the TS build), build. Deployed (commit
+`738ce45`), confirmed the live `/sw.js` now serves `agrocer-shell-v2` with the fix. **Ash's
+browser still needs the new service worker to actually take over** — the old one keeps running
+until it is replaced, which normally happens automatically on the next visit but can be forced
+with a full reload; not yet confirmed live that the shopping list now reflects real data
+immediately after an add.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
