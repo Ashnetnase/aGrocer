@@ -5,6 +5,7 @@ import type { Product } from '@/domain/schemas/product';
 import type { ShoppingItem } from '@/domain/schemas/shopping';
 import type { MealFeedback } from '@/domain/schemas/feedback';
 import type { OrderLineItem } from '@/domain/schemas/orderHistory';
+import type { SchoolNotification } from '@/domain/schemas/school';
 import type {
   households,
   householdMembers,
@@ -14,6 +15,7 @@ import type {
   orderLineItems,
   planEntries,
   products,
+  schoolNotifications,
   shoppingItems,
 } from './schema';
 
@@ -39,6 +41,7 @@ type MealRow = typeof meals.$inferSelect;
 type PlanEntryRow = typeof planEntries.$inferSelect;
 type MealFeedbackRow = typeof mealFeedback.$inferSelect;
 type OrderLineItemRow = typeof orderLineItems.$inferSelect;
+type SchoolNotificationRow = typeof schoolNotifications.$inferSelect;
 
 /* -------------------------------------------------------------------------- */
 /* Money                                                                       */
@@ -144,6 +147,7 @@ export function toHouseholdMember(row: HouseholdMemberRow): HouseholdMember {
     initials: row.initials,
     role: row.role,
     colour: row.colour,
+    school: row.school,
   };
 }
 
@@ -196,5 +200,24 @@ export function toOrderLineItem(row: OrderLineItemRow): OrderLineItem {
     orderedOn: row.orderedOn,
     matchedProductId: row.matchedProductId ?? undefined,
     matchedProductName: optionalText(row.matchedProductName),
+  };
+}
+
+export function toSchoolNotification(row: SchoolNotificationRow): SchoolNotification {
+  return {
+    id: row.id,
+    childId: row.childId,
+    provider: row.provider,
+    externalReference: row.externalReference,
+    title: row.title,
+    summary: row.summary,
+    receivedAt: row.receivedAt.toISOString(),
+    eventDate: row.eventDate,
+    dueDate: row.dueDate,
+    actionRequired: row.actionRequired,
+    actionType: row.actionType,
+    sourceLink: row.sourceLink,
+    read: row.read,
+    dismissed: row.dismissed,
   };
 }

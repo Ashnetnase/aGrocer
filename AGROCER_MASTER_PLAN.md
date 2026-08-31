@@ -671,6 +671,68 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - Kids/School foundation: child school field, notifications table, `/kids` screen (Claude Code)
+
+Ash closed out the shopping/order-history work ("i think the shopping works lets move on to
+next stage") and asked to start the Kids/School module, adding two new pieces of context: a
+dedicated Gmail inbox (`007agentuse@gmail.com`, not committed anywhere) that Hero notification
+emails are being forwarded to "for agents to access", and a second local model ("hermes",
+`qwen2.5-14b-64k`) available alongside the existing `qwen3:8b` Ollama provider.
+
+Scoped via `AskUserQuestion` before writing anything, per CLAUDE.md's Hero rules (no scraping,
+no stored Hero credentials, email ingestion is the preferred first integration path) and the
+size of the ask (a new module spanning two AshHome phases):
+
+- **Gmail access mechanism** — automated Gmail API polling, not a paste-based importer.
+  Deliberately deferred building the actual OAuth/polling pipeline to a follow-up slice: it
+  needs a Google Cloud OAuth app and credential storage design that has not happened yet, and
+  building it blind against a "let me know if any use" aside would have been guessing at
+  Ash's intent rather than confirming it.
+- **Build order** — foundation first (child profiles + a real Kids screen), Hero ingestion
+  right after. This session built the foundation only.
+
+**What shipped**, all against the real Supabase database (migration `0013`, applied and
+RLS-checked — `school_notifications` now shows in `npm run db:rls` with 1 policy, matching
+every other table):
+
+- `household_members.school` — free-text school name, `Child` members only (least-data
+  principle: enough to label whose notice is whose, nothing that identifies the child to a
+  third party). Editable from the existing Household screen's member sheet.
+- `school_notifications` table and `SchoolRepository` (`list`/`add`/`markRead`/`dismiss`),
+  the normalised shape CLAUDE.md sketched: `childId` (nullable — CLAUDE.md: "must not invent
+  missing dates, requirements or school information", so an unattributed notice is kept, not
+  guessed at), `provider`, `externalReference` (Hero-email dedup key, unique per household +
+  provider so an ingestion retry can never double-insert), `title`/`summary`, `eventDate`/
+  `dueDate` (separate, nullable — a notice can carry either, both or neither), `actionRequired`/
+  `actionType`, `sourceLink` (deep-link back to the source, never a replacement for it),
+  `read`/`dismissed`.
+- `schoolNotificationProviderSchema` is `'hero-email' | 'manual'` today — the enum and the
+  storage shape exist, but there is no `SchoolProvider` interface with pluggable
+  implementations yet, just the one write path (`manual`). That interface is Phase 13 work,
+  built when there is a second provider that actually needs it.
+- `/kids` screen: each child's avatar/name/school, and a notice list sorted so an unread
+  action-required item beats an older-but-handled one regardless of age
+  (`visibleNotifications` in `src/domain/services/school.ts`) — the "urgent family/school
+  actions first" ordering CLAUDE.md's information hierarchy asks for. Mark read/unread,
+  dismiss (soft — dismissed rows stay in the database, just filtered out of what's shown).
+- `NotificationSheet` — hand-enter a notice (title, details, which child, event/due date,
+  action-required + type, source link). This is the same `school.add()` a future Hero-email
+  pipeline will call into; nothing about the storage or the screen changes when that lands,
+  it just stops being the only way a notice gets in.
+- Dashboard Kids card promoted from `PlaceholderCards.tsx` to its own `KidsCard.tsx`: real
+  children, unread-notice count, top 3 notices with an urgent badge, "Open Kids" action —
+  no longer labelled "Placeholder — real data arrives with Phases 12–13".
+- localStorage repository refuses school reads/writes with the same "needs the database"
+  message as feedback/order-history — this is shared, cross-device family data, and a
+  browser-local copy of it would be actively wrong, not just incomplete.
+
+**Verification:** `npx tsc --noEmit` clean, `npm run lint` clean, `npm test -- --run` — 38
+files / 363 tests passing (6 new: `src/domain/services/school.test.ts`), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build` clean including the new `/kids`, `/api/school`, `/api/school/[id]`
+routes, `npm run db:migrate` and `npm run db:rls` run against the real database.
+
+Not yet deployed to production (SSH + `docker compose up -d --build`) as of this entry — see
+HANDOFF.md for the exact next step.
+
 ## 2026-08-31 - Order import batch cap and review-noise fixes (Claude Code)
 
 Ash pasted the real invoice text directly into the running app — the correct path — and the

@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { DayKey, Slot } from '@/domain/schemas/common';
 import type { MealFeedback, MealFeedbackDraft } from '@/domain/schemas/feedback';
 import type { OrderLineItem, OrderLineItemDraft } from '@/domain/schemas/orderHistory';
+import type { SchoolNotification, SchoolNotificationDraft } from '@/domain/schemas/school';
 import type { Household, HouseholdMemberDraft, Settings } from '@/domain/schemas/household';
 import type { Meal, MealDraft, Plan } from '@/domain/schemas/meal';
 import type { PantryItem, PantryItemDraft, PantryItemPatch } from '@/domain/schemas/pantry';
@@ -61,6 +62,11 @@ interface AgrocerActions {
   listOrderHistory: () => Promise<OrderLineItem[]>;
   importOrderHistory: (drafts: OrderLineItemDraft[]) => Promise<OrderLineItem[]>;
   matchOrderHistory: () => Promise<{ matched: number; total: number }>;
+
+  listSchoolNotifications: () => Promise<SchoolNotification[]>;
+  addSchoolNotification: (draft: SchoolNotificationDraft) => Promise<SchoolNotification>;
+  markSchoolNotificationRead: (id: string, read: boolean) => Promise<void>;
+  dismissSchoolNotification: (id: string) => Promise<void>;
 
   toggleFavourite: (id: string) => Promise<void>;
 
@@ -283,6 +289,19 @@ export function AgrocerProvider({
       },
       async matchOrderHistory() {
         return repositories.orderHistory.matchToCatalogue();
+      },
+
+      async listSchoolNotifications() {
+        return repositories.school.list();
+      },
+      async addSchoolNotification(draft) {
+        return repositories.school.add(draft);
+      },
+      async markSchoolNotificationRead(id, read) {
+        await repositories.school.markRead(id, read);
+      },
+      async dismissSchoolNotification(id) {
+        await repositories.school.dismiss(id);
       },
 
       async toggleFavourite(id) {

@@ -27,6 +27,7 @@ import type {
   OrderHistoryRepository,
   PantryRepository,
   ProductsRepository,
+  SchoolRepository,
   ShoppingRepository,
 } from '@/data/repositories/types';
 import { createId } from './ids';
@@ -324,6 +325,28 @@ const orderHistory: OrderHistoryRepository = {
   },
 };
 
+/** Same reasoning as `feedback`: notifications must be visible from every family device. */
+const school: SchoolRepository = {
+  async list() {
+    return [];
+  },
+  async add() {
+    throw new Error(
+      'School notifications need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+  async markRead() {
+    throw new Error(
+      'School notifications need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+  async dismiss() {
+    throw new Error(
+      'School notifications need the database. Set NEXT_PUBLIC_AGROCER_SERVER_DATA="1".',
+    );
+  },
+};
+
 export const localRepositories: AgrocerRepositories = {
   pantry,
   inventoryEvents: { async list() { return []; } },
@@ -333,6 +356,7 @@ export const localRepositories: AgrocerRepositories = {
   household,
   feedback,
   orderHistory,
+  school,
   async reset() {
     clearAll();
   },

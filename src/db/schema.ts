@@ -82,6 +82,21 @@ export const inventoryEventKindEnum = pgEnum('inventory_event_kind', [
 /** Deliberately four coarse steps. A five-star scale invites precision nobody has. */
 export const mealRatingEnum = pgEnum('meal_rating', ['loved', 'liked', 'ok', 'disliked']);
 
+/** Where a school notification came from. `manual` covers hand-entered/pasted items. */
+export const schoolNotificationProviderEnum = pgEnum('school_notification_provider', [
+  'hero-email',
+  'manual',
+]);
+
+/** What kind of response a notification is asking the family for, if any. */
+export const schoolNotificationActionTypeEnum = pgEnum('school_notification_action_type', [
+  'permission',
+  'payment',
+  'rsvp',
+  'reminder',
+  'info',
+]);
+
 /* -------------------------------------------------------------------------- */
 /* Households                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -136,6 +151,12 @@ export const householdMembers = pgTable(
      * user exists before writing.
      */
     userId: uuid('user_id').unique(),
+    /**
+     * Free-text school name, `Child` members only. Least-data principle (CLAUDE.md): this is
+     * the one piece of school context the dashboard actually needs — enough to label whose
+     * notifications are whose, nothing that identifies the child to a third party.
+     */
+    school: text('school'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -503,5 +524,56 @@ export const mealFeedback = pgTable(
   (table) => ({
     mealIdx: index('meal_feedback_meal_idx').on(table.mealId),
     householdIdx: index('meal_feedback_household_idx').on(table.householdId, table.ateOn),
+  }),
+).enableRLS();
+
+/* -------------------------------------------------------------------------- */
+/* Kids / School (Phase 12)                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A normalised notification surfaced on the Kids/School card — from a Hero email, or entered
+ * by hand. Append-and-review, not append-only: `read`/`dismissed` are the only fields a family
+ * member ever changes, everything else is what the source said.
+ *
+ * `child_id` is nullable and `ON DELETE SET NULL` — a notification that couldn't be matched to
+ * a specific child (or whose child later leaves the household) is still worth keeping, just
+ * unattributed rather than gone.
+ *
+ * `external_reference` exists for the Hero email provider's idempotency: the same forwarded
+ * email must never become two rows if ingestion runs twice.
+ */
+export const schoolNotifications = pgTable(
+  'school_notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    childId: uuid('child_id').references(() => householdMembers.id, { onDelete: 'set null' }),
+    provider: schoolNotificationProviderEnum('provider').notNull(),
+    /** e.g. the source Gmail message id. Null for hand-entered notifications. */
+    externalReference: text('external_reference'),
+    title: text('title').notNull(),
+    summary: text('summary').notNull().default(''),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    eventDate: date('event_date'),
+    dueDate: date('due_date'),
+    actionRequired: boolean('action_required').notNull().default(false),
+    actionType: schoolNotificationActionTypeEnum('action_type'),
+    /** Deep-link back to Hero/the original source — CLAUDE.md's "link back, don't replace it". */
+    sourceLink: text('source_link'),
+    read: boolean('read').notNull().default(false),
+    dismissed: boolean('dismissed').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    householdIdx: index('school_notifications_household_idx').on(table.householdId, table.receivedAt),
+    /** One row per source email, even if ingestion is retried. Null reference never collides. */
+    externalRefIdx: uniqueIndex('school_notifications_external_ref_idx').on(
+      table.householdId,
+      table.provider,
+      table.externalReference,
+    ),
   }),
 ).enableRLS();

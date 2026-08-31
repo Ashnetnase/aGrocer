@@ -27,6 +27,8 @@ export const householdMemberSchema = z.object({
   initials: z.string().trim().min(1).max(2),
   role: memberRoleSchema,
   colour: memberColourSchema,
+  /** Free-text school name. Only meaningful for `Child` members; null otherwise. */
+  school: z.string().trim().max(120).nullable(),
 });
 
 export type HouseholdMember = z.infer<typeof householdMemberSchema>;

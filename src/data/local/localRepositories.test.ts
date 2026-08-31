@@ -249,6 +249,7 @@ describe('household repository', () => {
       name: 'Mary Jane',
       role: 'Child',
       colour: 'bg-berry-500',
+      school: null,
     });
     expect(member.initials).toBe('MJ');
   });
@@ -258,12 +259,14 @@ describe('household repository', () => {
       name: 'Ash',
       role: 'Adult',
       colour: 'bg-moss-600',
+      school: null,
     });
 
     const updated = await localRepositories.household.updateMember(member.id, {
       name: 'Ashley Rose',
       role: 'Adult',
       colour: 'bg-moss-600',
+      school: null,
     });
     expect(updated?.initials).toBe('AR');
   });

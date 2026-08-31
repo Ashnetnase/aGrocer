@@ -230,6 +230,7 @@ describe('toSettings and toHousehold', () => {
     initials: 'A',
     role: 'Adult' as const,
     colour: 'bg-moss-600' as const,
+    school: null,
     // Most members never sign in, so the unlinked case is the one worth having as the default.
     userId: null,
     createdAt: NOW,

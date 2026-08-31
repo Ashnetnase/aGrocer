@@ -14,6 +14,7 @@ import type {
   OrderHistoryRepository,
   PantryRepository,
   ProductsRepository,
+  SchoolRepository,
   ShoppingRepository,
 } from '@/data/repositories/types';
 import type { Database } from '@/db/client';
@@ -28,6 +29,7 @@ import {
   planEntries,
   products,
   retailerProducts,
+  schoolNotifications,
   shoppingItems,
 } from '@/db/schema';
 import {
@@ -40,6 +42,7 @@ import {
   toPantryItem,
   toPlan,
   toProduct,
+  toSchoolNotification,
   toSettings,
   toShoppingItem,
 } from '@/db/mappers';
@@ -203,6 +206,79 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
         .returning();
       if (!row) throw new Error('Insert returned no feedback row');
       return toMealFeedback(row);
+    },
+  };
+
+  const school: SchoolRepository = {
+    async list() {
+      const rows = await db
+        .select()
+        .from(schoolNotifications)
+        .where(eq(schoolNotifications.householdId, householdId))
+        .orderBy(desc(schoolNotifications.receivedAt));
+      return rows.map(toSchoolNotification);
+    },
+
+    async add(draft) {
+      const [row] = await db
+        .insert(schoolNotifications)
+        .values({
+          householdId,
+          childId: draft.childId,
+          provider: draft.provider,
+          externalReference: draft.externalReference,
+          title: draft.title,
+          summary: draft.summary,
+          receivedAt: draft.receivedAt ? new Date(draft.receivedAt) : new Date(),
+          eventDate: draft.eventDate,
+          dueDate: draft.dueDate,
+          actionRequired: draft.actionRequired,
+          actionType: draft.actionType,
+          sourceLink: draft.sourceLink,
+        })
+        // Same forwarded email ingested twice must not become two rows (see schema comment).
+        .onConflictDoNothing({
+          target: [
+            schoolNotifications.householdId,
+            schoolNotifications.provider,
+            schoolNotifications.externalReference,
+          ],
+        })
+        .returning();
+      if (row) return toSchoolNotification(row);
+
+      const [existing] = await db
+        .select()
+        .from(schoolNotifications)
+        .where(
+          and(
+            eq(schoolNotifications.householdId, householdId),
+            eq(schoolNotifications.provider, draft.provider),
+            draft.externalReference
+              ? eq(schoolNotifications.externalReference, draft.externalReference)
+              : isNull(schoolNotifications.externalReference),
+          ),
+        );
+      if (!existing) throw new Error('Insert returned no school notification row');
+      return toSchoolNotification(existing);
+    },
+
+    async markRead(id: string, read: boolean) {
+      const [row] = await db
+        .update(schoolNotifications)
+        .set({ read })
+        .where(and(eq(schoolNotifications.id, id), eq(schoolNotifications.householdId, householdId)))
+        .returning();
+      return row ? toSchoolNotification(row) : undefined;
+    },
+
+    async dismiss(id: string) {
+      const [row] = await db
+        .update(schoolNotifications)
+        .set({ dismissed: true })
+        .where(and(eq(schoolNotifications.id, id), eq(schoolNotifications.householdId, householdId)))
+        .returning();
+      return row ? toSchoolNotification(row) : undefined;
     },
   };
 
@@ -581,6 +657,7 @@ export function createDrizzleRepositories(db: Database, householdId: string): Ag
     },
     feedback,
     orderHistory,
+    school,
     shopping,
     meals: mealsRepo,
     products: productsRepo,

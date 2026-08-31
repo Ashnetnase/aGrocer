@@ -33,7 +33,9 @@ Current state of the code lives in `HANDOFF.md`.
       behind a confirmation gate. The model proposes; a person confirms)*
 - [ ] Phase 10 — pantry-aware AI meal planning
 - [ ] Phase 11 — reminders, scheduler and notifications
-- [ ] Phase 12 — kids, chores, family calendar and school-data foundation
+- [~] Phase 12 — kids, chores, family calendar and school-data foundation
+      (child school field + `school_notifications` table, `/kids` screen, hand-entered notice
+      log done; chores, family calendar and `SchoolProvider` abstraction not started)
 - [ ] Phase 13 — Hero/email/calendar school integration
 - [ ] Phase 14 — wall-dashboard enhancements, kiosk/device configuration and shared-family UX
 - [ ] Phase 15 — homelab deployment, monitoring and backups
@@ -46,7 +48,7 @@ reconciling: the phase list assumes work that the stage list already completed.
 ### Phase 1 dashboard cards
 
 - [x] `/dashboard` route with its own full-screen kiosk layout
-- [x] Kids / Today — real children, no events yet
+- [x] Kids / School — real children plus a live notice count, "Open Kids" to the full screen
 - [x] Family schedule — placeholder
 - [x] Reminders — placeholder
 - [x] Shopping — real, interactive, checkable from the wall
@@ -62,12 +64,23 @@ reconciling: the phase list assumes work that the stage list already completed.
 
 ### Kids and school
 
-- [ ] child profiles beyond household members
-- [ ] `SchoolProvider` abstraction
+- [x] child profiles beyond household members — `household_members.school`, edited from
+      Household; a real `/kids` screen listing each child
+- [x] `school_notifications` table + `SchoolRepository` (list/add/markRead/dismiss), the
+      normalised shape from `CLAUDE.md` (`childId`, `provider`, `externalReference`, dates,
+      `actionRequired`/`actionType`, `sourceLink`, `read`/`dismissed`)
+- [x] manual notice entry — the `manual` `SchoolNotificationProvider`, working today from
+      `/kids` (`NotificationSheet`), with no integration required
+- [ ] `SchoolProvider` abstraction as actual code (`HeroEmailProvider` / `CalendarProvider` /
+      `HeroApiProvider`) — today there is one provider value (`manual`) and one write path;
+      the abstraction is the enum plus the schema, not yet a pluggable interface
 - [ ] Hero email ingestion — **not started, and bound by the rules in `CLAUDE.md`**: no
-      scraping, no stored credentials, no working around Hero security
+      scraping, no stored credentials, no working around Hero security. Decided 2026-08-31:
+      automated Gmail API polling of a dedicated forwarding inbox, once OAuth credentials
+      exist for it — this is the very next slice
 - [ ] calendar feed import
 - [ ] family calendar model
+- [ ] chores
 
 ---
 

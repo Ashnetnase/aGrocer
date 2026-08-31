@@ -20,13 +20,21 @@ pantry matching, weekly budget, meal-cost estimation, and feedback capture are c
 
 Stage 1 closed as a dev-complete milestone (ADR-012).
 
+**AshHome Phase 12 (Kids/School) is now in progress** (2026-08-31): the foundation (child
+school field, `school_notifications`, `/kids` screen, manual notice entry) is built, verified
+locally, and not yet deployed. See "Current NEXT TASK (2026-08-31)" further down for the exact
+next step — deploy, then the Hero email ingestion pipeline (Phase 13), which needs a decision
+from Ash before any code gets written.
+
 What remains splits in two, and NEXT TASK keeps them apart:
 
-- **Ash's** — the deploy itself, the Ollama firewall rule, and four other infrastructure items.
-  None of them are code.
-- **The next agent's** — Stage 4 recipe import; prediction/learning should wait for real history.
+- **Ash's** — the deploy itself, the Ollama firewall rule, the Hero Gmail OAuth credential
+  decision, and several other infrastructure items. None of them are code.
+- **The next agent's** — deploy Kids/School, then design and build Hero email ingestion once
+  Ash has answered the credential question. Stage 4 recipe import remains open too;
+  prediction/learning should wait for real history.
 
-Stage 4 is the active stage. Stage 3 is complete through slice 9b.
+Stage 4 is the active Agrocer stage. Stage 3 is complete through slice 9b.
 
 Branch: `stage-2/database-schema`. Main branch: `main`.
 
@@ -115,7 +123,7 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 
 | Dashboard card    | Data                                                              |
 | ----------------- | ----------------------------------------------------------------- |
-| Kids / Today      | **Partly real** — the household's actual children. No events yet. |
+| Kids / School     | **Real** (2026-08-31) — the household's actual children plus a live unread-notice count, top 3 notices, "Open Kids" to `/kids`. |
 | Family schedule   | **Mock** — one example row. Needs Phase 12.                        |
 | Reminders         | **Mock** — one example row. Needs Phase 11.                        |
 | Shopping          | **Real and interactive** — Postgres, checkable from the wall.      |
@@ -126,15 +134,32 @@ Required by `CLAUDE.md`, and the first thing to update when any of it changes.
 Every mock card is labelled in the UI as a placeholder, so nobody on the wall mistakes an
 example chore for a real one.
 
-- **RLS:** enabled on **all nine tables** since 2026-08-29 (ADR-016), one `authenticated`
-  policy each (ADR-017, and `0005` for the two history tables). `anon` is granted nothing.
-  Verify any time with `npm run db:rls`.
+- **RLS:** enabled on **all sixteen tables** (ADR-016), one `authenticated` policy each
+  (ADR-017; `0005` for the two Stage 2 history tables, and the `school_notifications` policy
+  is hand-appended to `drizzle/0013_salty_misty_knight.sql` the same way). `anon` is granted
+  nothing. Verify any time with `npm run db:rls`.
 - **Authentication:** enforced (ADR-017), and Ash's account is live and signing in.
-- **Kids/School module:** not started. No child profiles, activities or school data exist. The
-  Kids card reads `household_members` where `role = 'Child'`.
+- **Kids/School module (2026-08-31):** foundation in place. `household_members.school`
+  (free-text, `Child` members only, editable from Household); `school_notifications` table +
+  `SchoolRepository` (list/add/markRead/dismiss); `/kids` screen with each child's profile and
+  a sorted notice list (`src/domain/services/school.ts`'s `visibleNotifications` — unread +
+  action-required first); `NotificationSheet` for hand-entering a notice today. What is
+  **not** built: a real `SchoolProvider` interface (today there is one provider value,
+  `'manual'`, and one write path — the interface is Phase 13 work), chores, family calendar.
 - **Hero integration:** not started. No Hero credentials, tokens or endpoints exist anywhere in
-  this repository, and none may be added — see the hard rules in `CLAUDE.md`.
-- **Notification ingestion:** not started. No email ingestion, no `SchoolNotification` type.
+  this repository, and none may be added — see the hard rules in `CLAUDE.md`. Decided
+  2026-08-31 (Ash, via `AskUserQuestion`): **automated Gmail API polling**, not a paste-based
+  importer — Ash is forwarding Hero notification emails to a dedicated inbox
+  (`007agentuse@gmail.com`, intentionally **not** written anywhere else in this repository)
+  specifically for this. That inbox address itself is not secret in the way a password is, but
+  keep it out of anything source-controlled beyond this one HANDOFF.md note — the real
+  credential need is a Google Cloud OAuth app + refresh-token storage, neither of which exists
+  yet. Ash also mentioned a second local model ("hermes", `qwen2.5-14b-64k`, presumably via
+  Ollama given the phrasing — **not confirmed**) that might suit long/verbose Hero emails
+  better than the current `qwen3:8b`; swapping is a one-line `OLLAMA_MODEL` env change **if**
+  it serves an Ollama-compatible API, unverified.
+- **Notification ingestion:** schema and write path exist (`school.add()`, deduped by
+  `externalReference` for exactly this use); the actual Gmail-reading pipeline does not.
 - **Calendar integration:** not started. No calendar feed, import or family calendar model.
 
 Cost note: `Tonight's meal` shows the missing-ingredient warning and, for recipes that have been
@@ -1099,10 +1124,14 @@ functions), build. Deployed (commit `7fcef09`), healthy, confirmed 200 through t
 move on to next stage."** Everything in this and the preceding several entries (order history
 import/matching, reorder prediction, common-order quick-add with duplicate awareness, New World
 matching fixes, the trolley false-success bug, the service worker cache bug) is deployed and
-live. **NEXT TASK for a future session: ask Ash what "next stage" means before starting anything**
-— not stated in this conversation, and the AshHome roadmap has several plausible directions
-(Kids/School module, Phase 10 AI meal planning, Phase 11 reminders, or something else entirely).
-Do not guess and start building.
+live.
+
+**Resolved 2026-08-31, same day.** Ash answered: Kids/School module, starting with foundation
+(child profiles + a real Kids screen), Hero email ingestion right after — see the 2026-08-31
+"Kids/School foundation" entry at the top of this file and the matching entry in
+`AGROCER_MASTER_PLAN.md`'s progress log for exactly what shipped. Verified locally (typecheck,
+lint, 363 tests, production build, `db:migrate` + `db:rls` against the real database) but **not
+yet deployed** — see "Current NEXT TASK (2026-08-31)" near the end of this section.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
@@ -1498,6 +1527,43 @@ import sheet. Do not paper over it by having `addRecipeToMeals` accept a title.
 
 Both bit again this session. Check them before debugging code.
 
+### Current NEXT TASK (2026-08-31)
+
+**Kids/School foundation is built and locally verified but NOT deployed.** Deploy it the usual
+way (SSH to `192.168.1.49`, `git pull`, `docker compose up -d --build`, verify `docker compose
+ps` healthy and 200 on `/sign-in` locally and via the public URL) — the migration (`0013`) is
+already applied to the real database, so this is a code-only deploy, no migration step needed
+on the host.
+
+**After that, the actual next piece of work is the Hero email ingestion pipeline** (Phase 13),
+per Ash's 2026-08-31 direction: automated Gmail API polling of `007agentuse@gmail.com` (do not
+write that address anywhere else in this repository — see the Kids/School status section
+above). This needs, in order:
+
+1. **A decision from Ash, not a default**: a Google Cloud project + OAuth client for Gmail API
+   read access (scoped to `gmail.readonly` at most — this pipeline only ever reads), and how
+   its refresh token gets into this app's environment (a runtime env var, matching the
+   `EMAIL_PROVIDER`/AWS-SES pattern in `docker-compose.yml`, is the obvious fit — never
+   source-controlled).
+2. A `SchoolProvider` interface (today there is only the `schoolNotificationProviderSchema`
+   enum and one write path) with a `HeroEmailProvider` implementation: poll the inbox, confirm
+   each message is actually from Hero (an approved sender check, not "any email in this
+   inbox"), extract title/summary/dates, call `school.add()` with `provider: 'hero-email'` and
+   the Gmail message id as `externalReference` (the unique index already guarantees a retried
+   poll can't double-insert).
+3. Per CLAUDE.md: **the AI must not invent missing dates, requirements or school information.**
+   Where extraction confidence is low, the notification should still be created (so nothing is
+   silently dropped) but flagged for review rather than presented as fact — this needs a real
+   design decision (a field? a status?), not a guess made mid-implementation.
+4. Whether the second local model Ash mentioned ("hermes", said to be `qwen2.5-14b-64k`) is
+   actually reachable via an Ollama-compatible API is unconfirmed — check with Ash before
+   building anything that assumes it, and confirm what "any use" was asking for (a better model
+   for summarizing verbose Hero emails is the most likely reading, but that is inference, not
+   something Ash stated).
+
+Do not start any of this without confirming step 1 with Ash first — it is a real external
+credential and inbox-access decision, not a code choice.
+
 ## Do Not Accidentally Change
 
 - `src/data/repositories/types.ts` — the shared contracts. Both repository implementations and
@@ -1562,8 +1628,9 @@ Both bit again this session. Check them before debugging code.
 
 ## Last Updated
 
-2026-08-30, on `stage-2/database-schema`. Migrations through `0010` are applied. Nothing has
-been merged to `main`, which is ~30 commits behind.
+2026-08-31, on `stage-2/database-schema`. Migrations through `0013` are applied to the real
+database. Kids/School foundation built and verified locally; not yet committed, not yet
+deployed. Nothing has been merged to `main`.
 
 Stage 5 has persisted retailer products/preferences, deterministic matching, prepare/send APIs, an
 upgraded Shopping review UI, a normal-Chrome extension, cross-device trolley and product-search

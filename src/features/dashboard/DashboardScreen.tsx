@@ -6,7 +6,8 @@ import { useAgrocer } from '@/providers/AgrocerProvider';
 import { useToday } from '@/providers/useToday';
 import { ShoppingCard } from './ShoppingCard';
 import { TonightCard } from './TonightCard';
-import { ChoresCard, KidsCard, RemindersCard, ScheduleCard } from './PlaceholderCards';
+import { KidsCard } from './KidsCard';
+import { ChoresCard, RemindersCard, ScheduleCard } from './PlaceholderCards';
 import { AskCard } from './AskCard';
 
 /**
