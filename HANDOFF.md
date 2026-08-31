@@ -989,18 +989,36 @@ build`. Deployed (commit `d3fbc9c`) the same way as before: SSH, pull, `docker c
   Settings — same data, same add logic (`CommonOrderQuickAdd.tsx`), so building a list from
   buying habits doesn't need a detour.
 
-Verified: typecheck, lint, 357 tests (unchanged — UI wiring, no new pure logic), build. Deployment
-for this batch is the next step, bundled with whatever comes out of the still-open trolley
-question below.
+Verified: typecheck, lint, 357 tests (unchanged — UI wiring, no new pure logic), build. Deployed
+(commit `34dd51d`), healthy, confirmed 200 through the public URL.
 
-**Still open, not yet diagnosed:** Ash reports the live batch-add to New World only added Milk
-again, same symptom as the bug "fixed" earlier with a 25s per-item timeout in
-`background.js`. Ash's own hypothesis — the other items may genuinely be out of stock at their
-Dunedin store — is plausible and would be *correct* behaviour, not a bug, **if** the trolley
-results panel is showing an honest per-item failure status for them. Waiting on Ash to confirm
-what the results panel actually shows for the non-Milk items (a status like "product not found"
-vs items just silently missing) before doing anything further here — do not guess and patch
-blind.
+**Resolved, same day — the real bug, and it was worse than the earlier symptom.** Ash retried and
+the results panel showed **"3/3 added"** for chicken, black pepper and milk — but on the actual
+New World site, nothing was in the trolley; the extension had loaded each product page and simply
+not clicked anything. **The app was reporting false success on a real household purchase
+action.**
+
+Root cause in `companion/extension/newworld-trolley.js`'s `addCurrent()`: it read any *visible*
+quantity number **before** ever trying to click Add. New World's product page shows a
+"how many would you like?" selector defaulting to `1` before anything is actually added — the code
+saw that default `1`, believed the item already in the trolley, and returned `'added'` without
+ever finding or clicking the real Add button. This is a different, more serious bug than the
+earlier per-item timeout fix (that one covered a truly stuck page; this one covers a page that
+responded instantly with a default value that looked like success).
+
+**Fixed:** the Add button is now always clicked first when one exists — an Add button existing at
+all means "not yet added," full stop — and a pre-existing visible quantity is only trusted once no
+Add button can be found, which is the one remaining signal that actually means "already in the
+trolley." New regression test in `scripts/extension-smoke.mjs` reproduces the exact scenario (a
+quantity selector already showing `1` alongside an unclicked Add button) and asserts the button is
+clicked regardless. Extension version bumped to **0.1.6** so Ash can confirm which build is
+loaded; the two hardcoded "reload extension 0.1.5" messages in `ShoppingScreen.tsx` updated to
+match.
+
+**This fix needs the unpacked extension reloaded in `chrome://extensions` — it is not part of the
+web app's Docker deploy at all**, so redeploying the site does nothing for this bug. Verified:
+`npm run extension:check` (including the new regression case), typecheck, lint, 357 unit tests,
+build. Live re-test after reloading the extension is the next step, not yet done.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database

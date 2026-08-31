@@ -193,10 +193,22 @@ async function addCurrent(item) {
     return result(item, 'product-not-found', { message: `Opened product did not match “${item.expectedName}”${confirmedName ? `; New World showed “${confirmedName}”` : ''}.` });
   }
 
-  let count = readVisibleQuantity();
-  if (count === undefined) {
-    const add = addButton();
-    if (!add) {
+  // An Add button and a visible quantity are not mutually exclusive: New World can show a
+  // "how many would you like?" selector defaulting to 1 *before* anything has actually been
+  // added. Trusting a visible quantity over an available Add button was exactly that bug — it
+  // read the default "1", believed the item already in the trolley, and returned "added"
+  // without ever clicking anything. An Add button existing at all means "not yet added", full
+  // stop, so it is always clicked first; a pre-existing quantity is only trusted once no Add
+  // button can be found — the one remaining signal that means "already in the trolley".
+  let count;
+  const add = addButton();
+  if (add) {
+    add.click();
+    count = await waitForQuantity();
+    if (count === undefined) return result(item, 'selector-failed', { confirmedProductName: confirmedName, message: 'New World reacted to Add, but the product quantity could not be visibly verified.' });
+  } else {
+    count = readVisibleQuantity();
+    if (count === undefined) {
       const visibleLabels = [...document.querySelectorAll('button, [role="button"]')]
         .filter((element) => element.getClientRects().length)
         .map(accessibleText).filter(Boolean).slice(0, 8);
@@ -204,9 +216,6 @@ async function addCurrent(item) {
         message: `Could not find the Add to trolley control or a visible existing quantity${visibleLabels.length ? `; visible controls: ${visibleLabels.join(', ')}` : ''}.`,
       });
     }
-    add.click();
-    count = await waitForQuantity();
-    if (count === undefined) return result(item, 'selector-failed', { confirmedProductName: confirmedName, message: 'New World reacted to Add, but the product quantity could not be visibly verified.' });
   }
   if (count > item.quantity) {
     return result(item, 'quantity-mismatch', { confirmedQuantity: count, confirmedProductName: confirmedName, message: 'The trolley already contains more than the requested quantity; nothing was removed.' });

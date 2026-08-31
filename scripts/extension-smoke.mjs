@@ -51,6 +51,30 @@ try {
     shoppingItemId: 'milk-item', status: 'added', requestedQuantity: 1,
     confirmedQuantity: 1, confirmedProductName: 'Anchor Trim Milk',
   });
+  // The real bug this pins: a "how many would you like?" selector already showing the default
+  // "1" before anything is added must not be mistaken for "already in the trolley" — the Add
+  // button existing at all means click it, regardless of what quantity is already visible.
+  await page.setContent(`
+    <main>
+      <h2>Anchor Trim Milk</h2>
+      <div id="purchase">
+        <label>Quantity <input aria-label="Quantity" id="qty" value="1"></label>
+        <button id="add-btn">Add</button>
+      </div>
+    </main>
+  `);
+  await page.evaluate(() => {
+    document.querySelector('#add-btn').addEventListener('click', (event) => {
+      event.target.dataset.clicked = 'yes';
+    });
+  });
+  const preExistingQuantityResult = await page.evaluate(() => addCurrent({
+    shoppingItemId: 'milk-item-2', expectedName: 'Anchor Trim Milk1l', quantity: 1,
+  }));
+  assert.equal(await page.locator('#add-btn').getAttribute('data-clicked'), 'yes', 'Add must be clicked even when a quantity selector is already visible');
+  assert.equal(preExistingQuantityResult.status, 'added');
+  assert.equal(preExistingQuantityResult.confirmedQuantity, 1);
+
   await page.setContent('<main><h2>Mainland Tasty Cheese 500g</h2><button id="wrong-add" onclick="this.dataset.clicked=\'yes\'">Add</button></main>');
   const wrongProduct = await page.evaluate(() => addCurrent({
     shoppingItemId: 'chips-item', expectedName: 'Mexicano Tasty Cheese Corn Chips170g', quantity: 1,
