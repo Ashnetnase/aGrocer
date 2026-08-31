@@ -20,11 +20,14 @@ interface MatchNewWorldProductProps {
   liveMessage?: string;
   searching: boolean;
   onLiveSearch: (query: string) => void;
+  onCancelSearch: () => void;
   onSaved: (message: string) => void;
+  /** The item's own name field is renamed to the exact New World title once a product is chosen. */
+  onMatchedName: (name: string) => void;
 }
 
 /** Lets a product be matched to New World while adding/editing a shopping item, so it is ready without a separate trolley step. */
-export function MatchNewWorldProduct({ itemName, quantity, extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onSaved }: MatchNewWorldProductProps) {
+export function MatchNewWorldProduct({ itemName, quantity, extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onCancelSearch, onSaved, onMatchedName }: MatchNewWorldProductProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(itemName);
   const [products, setProducts] = useState<RetailerProduct[]>([]);
@@ -80,6 +83,7 @@ export function MatchNewWorldProduct({ itemName, quantity, extensionOnline, live
       const confirmation = `${product.name} will be used for ${trimmedName} next time.`;
       setSaved({ name: product.name });
       setOpen(false);
+      onMatchedName(product.name.trim());
       onSaved(confirmation);
     } catch {
       setMessage('Could not save that New World product preference.');
@@ -126,6 +130,15 @@ export function MatchNewWorldProduct({ itemName, quantity, extensionOnline, live
         <button type="submit" disabled={busy || searching} className="flex h-11 items-center gap-1.5 rounded-xl bg-moss-600 px-3 text-sm font-bold text-white disabled:bg-line">
           <SearchIcon className="h-4 w-4" /> {busy || searching ? 'Searching…' : 'Search'}
         </button>
+        {searching ? (
+          <button
+            type="button"
+            onClick={onCancelSearch}
+            className="flex h-11 shrink-0 items-center rounded-xl border border-line bg-white px-3 text-sm font-bold text-muted"
+          >
+            Stop
+          </button>
+        ) : null}
       </form>
       {liveMessage || message ? <p className="mt-2 text-xs text-muted" role="status">{liveMessage ?? message}</p> : null}
       {displayedProducts.length ? (

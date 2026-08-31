@@ -12,6 +12,7 @@ import { FloatingAddButton } from '@/components/agrocer/FloatingAddButton';
 import { ShoppingRow } from './components/ShoppingRow';
 import { ShoppingItemSheet } from './components/ShoppingItemSheet';
 import { NewWorldCatalogue } from './components/NewWorldCatalogue';
+import { CommonOrderQuickAdd } from './components/CommonOrderQuickAdd';
 import { ProductThumbnail } from './components/ProductThumbnail';
 import { nzd } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -317,6 +318,13 @@ export function ShoppingScreen() {
     }, 60_000);
   };
 
+  /** Lets a person give up on a slow live search instead of waiting out the full 60s timeout. */
+  const cancelNewWorldSearch = (itemId: string) => {
+    if (searchTimeout.current) { window.clearTimeout(searchTimeout.current); searchTimeout.current = null; }
+    setSearchingItemId(null);
+    setExtensionSearchMessages((messages) => ({ ...messages, [itemId]: 'Search cancelled.' }));
+  };
+
   const searchNewWorld = (line: TrolleyLine) => searchNewWorldItem(line.shoppingItem, line.requestedText);
 
   const sendToNewWorld = async () => {
@@ -430,6 +438,7 @@ export function ShoppingScreen() {
       </div>
       {trolleyError ? <p className="mb-3 rounded-2xl bg-berry-50 px-4 py-3 text-sm font-semibold text-berry-700">{trolleyError}</p> : null}
       {actionMessage ? <p role="status" className="mb-3 rounded-2xl bg-moss-50 px-4 py-3 text-sm font-semibold text-moss-800">{actionMessage}</p> : null}
+      <CommonOrderQuickAdd />
       {pendingSearchJob && extensionOnline ? <section className="mb-3 rounded-2xl border border-honey-200 bg-honey-50 px-4 py-3 text-sm"><strong>Product search from another device</strong><p className="mt-0.5 text-xs text-muted">Search New World for “{pendingSearchJob.query}” and return the choices.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => void processPendingSearchJob()} className="rounded-xl bg-moss-600 px-3 py-2 text-xs font-bold text-white">Process product search</button><button type="button" onClick={() => void dismissSearchActivity()} className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-bold text-muted">Dismiss</button></div></section> : null}
       {queuedSearchJob ? <section className="mb-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm"><div className="flex items-start justify-between gap-3"><div><strong>Live product search: {queuedSearchJob.status}</strong><p className="mt-0.5 text-xs text-muted">{queuedSearchJob.status === 'pending' ? 'Open Agrocer Shopping on the desktop with extension 0.1.5.' : queuedSearchJob.status === 'processing' ? 'Desktop Chrome is searching New World. This can take up to a minute.' : queuedSearchJob.products?.length ? `${queuedSearchJob.products.length} choices returned. Select one below.` : queuedSearchJob.message ?? 'No live products were returned.'}</p></div><button type="button" onClick={() => void dismissSearchActivity()} className="shrink-0 text-xs font-bold text-muted">Clear</button></div></section> : null}
       {remaining.length ? <NewWorldCatalogue items={remaining} extensionOnline={extensionOnline} liveProducts={extensionCandidates} liveMessages={extensionSearchMessages} searchingItemId={searchingItemId} onLiveSearch={searchNewWorldItem} onPreferenceSaved={(message) => { setActionMessage(message); return trolley ? prepareNewWorld() : undefined; }} /> : null}
@@ -470,6 +479,7 @@ export function ShoppingScreen() {
       liveMessage={extensionSearchMessages[draftMatchId]}
       searching={searchingItemId === draftMatchId}
       onLiveSearch={(query) => void searchNewWorldItem({ id: draftMatchId, name: query }, query)}
+      onCancelSearch={() => cancelNewWorldSearch(draftMatchId)}
       onProductMatched={(message) => setActionMessage(message)}
     />
   </>;

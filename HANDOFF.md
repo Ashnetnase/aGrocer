@@ -970,7 +970,37 @@ Two feature requests, both built:
   Form's `dirtyFields`), so it only ever fills a blank, never overrides a choice.
 
 Verified: `npm run typecheck`, `npm run lint`, `npm run test` (357 tests, up from 352), `npm run
-build`. Not yet deployed — that's the next step.
+build`. Deployed (commit `d3fbc9c`) the same way as before: SSH, pull, `docker compose up -d
+--build`, healthy, `/sign-in` 200, `/api/shopping` 401, and confirmed 200 through the public URL.
+
+**2026-08-31, same day — three more matching-flow fixes (Claude Code).** Ash's own live testing:
+
+- **Choosing a New World product now renames the item to New World's exact title.** Confirmed
+  with Ash first (garbled request, worth checking rather than guessing): picking a product for
+  e.g. "black pepper" now updates the item's own name field to
+  "Pams Whole Black Peppercorns Grinder 45g" via a new `onMatchedName` callback on
+  `MatchNewWorldProduct`. Safe for later trolley-prepare even though the household preference is
+  still saved under the *original* typed name: an item whose name already exactly matches a
+  catalogue product resolves via the direct/exact-match path instead, which if anything scores
+  higher confidence than the preference path.
+- **A live New World search can now be cancelled** ("Stop" button, shown once a search has been
+  running) instead of the person having to wait out the full 60s timeout.
+- **"Add from your common order" is now on the Shopping screen itself**, not only tucked away in
+  Settings — same data, same add logic (`CommonOrderQuickAdd.tsx`), so building a list from
+  buying habits doesn't need a detour.
+
+Verified: typecheck, lint, 357 tests (unchanged — UI wiring, no new pure logic), build. Deployment
+for this batch is the next step, bundled with whatever comes out of the still-open trolley
+question below.
+
+**Still open, not yet diagnosed:** Ash reports the live batch-add to New World only added Milk
+again, same symptom as the bug "fixed" earlier with a 25s per-item timeout in
+`background.js`. Ash's own hypothesis — the other items may genuinely be out of stock at their
+Dunedin store — is plausible and would be *correct* behaviour, not a bug, **if** the trolley
+results panel is showing an honest per-item failure status for them. Waiting on Ash to confirm
+what the results panel actually shows for the non-Milk items (a status like "product not found"
+vs items just silently missing) before doing anything further here — do not guess and patch
+blind.
 
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database

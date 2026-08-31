@@ -46,12 +46,13 @@ interface ShoppingItemSheetProps {
   liveMessage?: string;
   searching: boolean;
   onLiveSearch: (query: string) => void;
+  onCancelSearch: () => void;
   onProductMatched: (message: string) => void;
 }
 
 export function ShoppingItemSheet({
   open, onClose, item, products, onSave, onDelete,
-  extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onProductMatched,
+  extensionOnline, liveProducts, liveMessage, searching, onLiveSearch, onCancelSearch, onProductMatched,
 }: ShoppingItemSheetProps) {
   const form = useForm<ShoppingItemDraft>({
     resolver: zodResolver(shoppingItemDraftSchema),
@@ -164,7 +165,9 @@ export function ShoppingItemSheet({
           liveMessage={liveMessage}
           searching={searching}
           onLiveSearch={onLiveSearch}
+          onCancelSearch={onCancelSearch}
           onSaved={onProductMatched}
+          onMatchedName={(name) => form.setValue('name', name, { shouldDirty: true, shouldTouch: true })}
         />
       </div>
     </BottomSheet>
