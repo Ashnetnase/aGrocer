@@ -18,11 +18,23 @@ import { AiError, type AiProvider } from './types';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:11434';
 const DEFAULT_MODEL = 'qwen3:8b';
 
-const globalForAi = globalThis as typeof globalThis & { __ashhomeAiProvider?: AiProvider };
+/**
+ * The background/summarization model (verified 2026-08-31 against the real Ollama instance).
+ * Deliberately not the interactive default: a 14B model answers in tens of seconds where
+ * `qwen3:8b` answers in a few — fine for a job nobody is watching, wrong for the wall
+ * dashboard. `getSummaryAiProvider()` is unused until Phase 13 (Hero email ingestion) gives it
+ * a caller; it exists now so that work starts from a proven model rather than a guess.
+ */
+const DEFAULT_SUMMARY_MODEL = 'qwen2.5:14b-instruct';
+/** A cold 14B model can take over a minute for a long answer; give it more room than the default. */
+const SUMMARY_TIMEOUT_MS = 180_000;
 
-export function getAiProvider(): AiProvider {
-  if (globalForAi.__ashhomeAiProvider) return globalForAi.__ashhomeAiProvider;
+const globalForAi = globalThis as typeof globalThis & {
+  __ashhomeAiProvider?: AiProvider;
+  __ashhomeSummaryAiProvider?: AiProvider;
+};
 
+function requireOllama(): void {
   const name = process.env.AI_PROVIDER ?? 'ollama';
   if (name !== 'ollama') {
     throw new AiError(
@@ -31,6 +43,11 @@ export function getAiProvider(): AiProvider {
       'The assistant is not configured.',
     );
   }
+}
+
+export function getAiProvider(): AiProvider {
+  if (globalForAi.__ashhomeAiProvider) return globalForAi.__ashhomeAiProvider;
+  requireOllama();
 
   const provider = createOllamaProvider({
     baseUrl: process.env.OLLAMA_BASE_URL ?? DEFAULT_BASE_URL,
@@ -41,7 +58,27 @@ export function getAiProvider(): AiProvider {
   return provider;
 }
 
-/** Test seam: drops the cached provider so the next call re-reads the environment. */
+/**
+ * A second, independent provider instance for background work — summarizing a long Hero
+ * email is not a request the family is waiting on, so it can afford a slower, larger model
+ * without touching what `getAiProvider()` gives the interactive assistant.
+ */
+export function getSummaryAiProvider(): AiProvider {
+  if (globalForAi.__ashhomeSummaryAiProvider) return globalForAi.__ashhomeSummaryAiProvider;
+  requireOllama();
+
+  const provider = createOllamaProvider({
+    baseUrl: process.env.OLLAMA_BASE_URL ?? DEFAULT_BASE_URL,
+    model: process.env.OLLAMA_SUMMARY_MODEL ?? DEFAULT_SUMMARY_MODEL,
+    timeoutMs: SUMMARY_TIMEOUT_MS,
+  });
+
+  globalForAi.__ashhomeSummaryAiProvider = provider;
+  return provider;
+}
+
+/** Test seam: drops both cached providers so the next call re-reads the environment. */
 export function resetAiProvider(): void {
   globalForAi.__ashhomeAiProvider = undefined;
+  globalForAi.__ashhomeSummaryAiProvider = undefined;
 }

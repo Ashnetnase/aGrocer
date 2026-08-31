@@ -19,6 +19,7 @@
     "ai:check": "tsx scripts/ollama-check.ts",
     "ai:chat": "tsx scripts/ai-chat.ts",
     "ai:ask": "tsx scripts/ai-ask-check.ts",
+    "ai:summary-check": "tsx scripts/ai-summary-check.ts",
     "db:rls": "tsx scripts/rls-check.ts",
     "db:claim": "tsx scripts/claim.ts",
     "orders:import": "tsx scripts/import-orders.ts",

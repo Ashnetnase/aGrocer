@@ -83,6 +83,8 @@ services:
       # crash. Reaching it from here is a separate decision; see docs/deploy.md.
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      # Background/summarization model — unused until Phase 13 has a caller for it.
+      OLLAMA_SUMMARY_MODEL: ${OLLAMA_SUMMARY_MODEL:-qwen2.5:14b-instruct}
 
       # Stage 5. The companion normally runs visibly on the workstation, so the deployed
       # container needs that workstation's LAN URL rather than 127.0.0.1. Keep `manual` until

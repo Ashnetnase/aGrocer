@@ -1557,14 +1557,19 @@ above). This needs, in order:
    Where extraction confidence is low, the notification should still be created (so nothing is
    silently dropped) but flagged for review rather than presented as fact — this needs a real
    design decision (a field? a status?), not a guess made mid-implementation.
-4. Whether the second local model Ash mentioned ("hermes", said to be `qwen2.5-14b-64k`) is
-   actually reachable via an Ollama-compatible API is unconfirmed — check with Ash before
-   building anything that assumes it, and confirm what "any use" was asking for (a better model
-   for summarizing verbose Hero emails is the most likely reading, but that is inference, not
-   something Ash stated).
+4. ~~Whether the second local model Ash mentioned is reachable~~ **Resolved 2026-08-31.** The
+   "hermes agent" itself (Nous Research's autonomous Docker agent, terminal/filesystem/web
+   access) is deliberately not being wired in — it contradicts this project's fixed-tool-
+   allow-list AI safety design and CLAUDE.md's narrow Hero-access rules. The Ollama model
+   behind it is useful though: `qwen2.5-14b-64k:latest` and `qwen2.5:14b-instruct` were both
+   verified reachable and working (`npm run ai:check`); Ash chose `qwen2.5:14b-instruct`
+   (17 tok/s vs 12 tok/s for the 64k-context variant, and Hero emails don't need 64k context).
+   `getSummaryAiProvider()` (`src/ai/provider.ts`, `OLLAMA_SUMMARY_MODEL` env var) is built and
+   verified end-to-end (`npm run ai:summary-check`) — ready for step 2 to call into. The
+   interactive assistant's `OLLAMA_MODEL`/`getAiProvider()` are untouched.
 
-Do not start any of this without confirming step 1 with Ash first — it is a real external
-credential and inbox-access decision, not a code choice.
+Do not start step 1/2/3 without confirming the Gmail OAuth/credential question with Ash first —
+it is a real external credential and inbox-access decision, not a code choice.
 
 ## Do Not Accidentally Change
 

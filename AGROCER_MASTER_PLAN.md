@@ -671,6 +671,41 @@ Update this file:
 
 Agents must append new entries at the top of this section.
 
+## 2026-08-31 - Background AI provider for Hero-email summarization, verified against real models (Claude Code)
+
+Ash offered two more local Ollama models beyond the `qwen3:8b` the interactive assistant uses:
+`qwen2.5-14b-64k` (custom 65536-context Modelfile) and `qwen2.5:14b-instruct`. Also described a
+separate "Hermes agent" (Nous Research's `hermes-agent`, an autonomous Docker agent with
+terminal/filesystem/web-search access, dashboard on `:9119`) — assessed and set aside: it is
+the opposite of this project's AI-safety design (ADR-014/015/018, fixed tool allow-lists,
+confirmation gates, no unrestricted system access), and Hero access specifically has to stay
+narrow per CLAUDE.md's hard rules, not delegated to a broad autonomous agent. The underlying
+model behind it, not the agent framework, is what's useful here.
+
+Verified both 14B models with `npm run ai:check` (raw Ollama connectivity) before deciding:
+`qwen2.5-14b-64k:latest` — 931 tokens in 77.6s (~12 tok/s); `qwen2.5:14b-instruct` — 889 tokens
+in 52.9s (~17 tok/s). Both far too slow to become the interactive `OLLAMA_MODEL` default — a
+family member waiting 50-80s for "what's for dinner" on the wall tablet is a worse experience
+than today's `qwen3:8b` — but exactly right for a background job nobody is watching, like
+summarizing a Hero email. Ash chose `qwen2.5:14b-instruct`.
+
+**What shipped:** `getSummaryAiProvider()` in `src/ai/provider.ts` — a second, independently
+cached `AiProvider` instance (`OLLAMA_SUMMARY_MODEL`, default `qwen2.5:14b-instruct`, longer
+180s timeout than the interactive provider's 120s) alongside the existing `getAiProvider()`.
+`getAiProvider()` and `OLLAMA_MODEL` are completely untouched — this is additive, not a swap.
+`npm run ai:summary-check` (`scripts/ai-summary-check.ts`) proves it end-to-end through the
+real `AiProvider.chat()` path (not raw `fetch`, so it's the actual seam a future caller will
+use), against a school-notice summarization prompt: correctly produced a one-sentence summary
+and flagged that a reply was needed, in 1.0s for that short prompt.
+
+**Nothing calls this provider yet.** It exists so the Hero email ingestion pipeline (Phase 13)
+starts from a proven, chosen model rather than a default guessed at implementation time. That
+pipeline itself remains blocked on the Gmail OAuth/credential decision recorded in the previous
+entry and in HANDOFF.md's NEXT TASK.
+
+Verified: `npx tsc --noEmit`, `npm run lint`, `npm test -- --run` (38 files, 363 tests,
+unchanged — no new domain logic, just a second provider instance), `NEXT_PUBLIC_AGROCER_SERVER_DATA=1 npm run build`.
+
 ## 2026-08-31 - Kids/School foundation: child school field, notifications table, `/kids` screen (Claude Code)
 
 Ash closed out the shopping/order-history work ("i think the shopping works lets move on to
