@@ -24,7 +24,7 @@ import { OrderImportSheet } from './components/OrderImportSheet';
 
 export function SettingsScreen() {
   const {
-    household, products, updateSettings, resetDemoData,
+    household, products, shopping, updateSettings, resetDemoData,
     listOrderHistory, importOrderHistory, matchOrderHistory,
     addShoppingItem, addShoppingItems,
   } = useAgrocer();
@@ -66,9 +66,12 @@ export function SettingsScreen() {
 
   const commonOrder = summariseCommonOrder(orderHistory, { limit: 10 });
   const matchedCount = orderHistory.filter((line) => line.matchedProductId).length;
-  const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
   const [addingAll, setAddingAll] = useState(false);
   const [addMessage, setAddMessage] = useState<string>();
+
+  // The real shopping list, not just what this panel has added this session.
+  const onListNames = new Set(shopping.filter((item) => !item.checked).map((item) => item.name.trim().toLowerCase()));
+  const isOnList = (name: string) => onListNames.has(name.trim().toLowerCase());
 
   const draftFor = (entry: CommonOrderEntry) => ({
     name: entry.name,
@@ -80,17 +83,28 @@ export function SettingsScreen() {
   });
 
   const addCommonOrderEntry = async (entry: CommonOrderEntry) => {
+    if (isOnList(entry.name)) {
+      setAddMessage(`${entry.name} is already on your shopping list.`);
+      return;
+    }
     await addShoppingItem(draftFor(entry));
-    setAddedNames((current) => new Set(current).add(entry.name));
     setAddMessage(`${entry.name} added to your shopping list.`);
   };
 
   const addAllCommonOrder = async () => {
+    const toAdd = commonOrder.filter((entry) => !isOnList(entry.name));
+    if (toAdd.length === 0) {
+      setAddMessage('Everything in your common order is already on the list.');
+      return;
+    }
     setAddingAll(true);
     try {
-      await addShoppingItems(commonOrder.map(draftFor));
-      setAddedNames(new Set(commonOrder.map((entry) => entry.name)));
-      setAddMessage(`${commonOrder.length} item${commonOrder.length === 1 ? '' : 's'} added to your shopping list.`);
+      await addShoppingItems(toAdd.map(draftFor));
+      const skipped = commonOrder.length - toAdd.length;
+      setAddMessage(
+        `${toAdd.length} item${toAdd.length === 1 ? '' : 's'} added to your shopping list.` +
+          (skipped > 0 ? ` ${skipped} already on the list.` : ''),
+      );
     } finally {
       setAddingAll(false);
     }
@@ -296,7 +310,7 @@ export function SettingsScreen() {
                   </div>
                   <ul className="mt-2 space-y-1.5">
                     {commonOrder.map((entry) => {
-                      const added = addedNames.has(entry.name);
+                      const onList = isOnList(entry.name);
                       return (
                         <li
                           key={entry.name}
@@ -312,10 +326,10 @@ export function SettingsScreen() {
                           <button
                             type="button"
                             onClick={() => void addCommonOrderEntry(entry)}
-                            disabled={added}
+                            disabled={onList}
                             className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-moss-700 shadow-sm disabled:opacity-50"
                           >
-                            {added ? 'Added' : 'Add'}
+                            {onList ? 'On list' : 'Add'}
                           </button>
                         </li>
                       );

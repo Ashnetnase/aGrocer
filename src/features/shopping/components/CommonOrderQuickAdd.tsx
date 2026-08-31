@@ -16,14 +16,20 @@ import { useAgrocer } from '@/providers/AgrocerProvider';
  * than showing nothing with no explanation.
  */
 export function CommonOrderQuickAdd({ onAdded }: { onAdded: (message: string) => void }) {
-  const { products, listOrderHistory, addShoppingItem, addShoppingItems } = useAgrocer();
+  const { shopping, products, listOrderHistory, addShoppingItem, addShoppingItems } = useAgrocer();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [orderHistory, setOrderHistory] = useState<OrderLineItem[]>([]);
-  const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
   const [addingAll, setAddingAll] = useState(false);
 
   const commonOrder = summariseCommonOrder(orderHistory, { limit: 10 });
+
+  // The real shopping list, not just what this panel has added this session — an item put on
+  // the list yesterday, from anywhere, is still "already on the list" today.
+  const onListNames = new Set(
+    shopping.filter((item) => !item.checked).map((item) => item.name.trim().toLowerCase()),
+  );
+  const isOnList = (name: string) => onListNames.has(name.trim().toLowerCase());
 
   const draftFor = (entry: (typeof commonOrder)[number]) => ({
     name: entry.name,
@@ -35,17 +41,28 @@ export function CommonOrderQuickAdd({ onAdded }: { onAdded: (message: string) =>
   });
 
   const addEntry = async (entry: (typeof commonOrder)[number]) => {
+    if (isOnList(entry.name)) {
+      onAdded(`${entry.name} is already on your shopping list.`);
+      return;
+    }
     await addShoppingItem(draftFor(entry));
-    setAddedNames((current) => new Set(current).add(entry.name));
     onAdded(`${entry.name} added to your shopping list.`);
   };
 
   const addAll = async () => {
+    const toAdd = commonOrder.filter((entry) => !isOnList(entry.name));
+    if (toAdd.length === 0) {
+      onAdded('Everything in your common order is already on the list.');
+      return;
+    }
     setAddingAll(true);
     try {
-      await addShoppingItems(commonOrder.map(draftFor));
-      setAddedNames(new Set(commonOrder.map((entry) => entry.name)));
-      onAdded(`${commonOrder.length} item${commonOrder.length === 1 ? '' : 's'} added to your shopping list.`);
+      await addShoppingItems(toAdd.map(draftFor));
+      const skipped = commonOrder.length - toAdd.length;
+      onAdded(
+        `${toAdd.length} item${toAdd.length === 1 ? '' : 's'} added to your shopping list.` +
+          (skipped > 0 ? ` ${skipped} already on the list.` : ''),
+      );
     } finally {
       setAddingAll(false);
     }
@@ -98,7 +115,7 @@ export function CommonOrderQuickAdd({ onAdded }: { onAdded: (message: string) =>
           </div>
           <ul className="mt-2 space-y-1.5">
             {commonOrder.map((entry) => {
-              const added = addedNames.has(entry.name);
+              const onList = isOnList(entry.name);
               return (
                 <li key={entry.name} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm">
                   <span className="min-w-0 flex-1 truncate text-ink">
@@ -109,10 +126,10 @@ export function CommonOrderQuickAdd({ onAdded }: { onAdded: (message: string) =>
                   <button
                     type="button"
                     onClick={() => void addEntry(entry)}
-                    disabled={added}
+                    disabled={onList}
                     className="shrink-0 rounded-full bg-moss-50 px-2.5 py-1 text-xs font-bold text-moss-700 disabled:opacity-50"
                   >
-                    {added ? 'Added' : 'Add'}
+                    {onList ? 'On list' : 'Add'}
                   </button>
                 </li>
               );

@@ -1076,6 +1076,25 @@ until it is replaced, which normally happens automatically on the next visit but
 with a full reload; not yet confirmed live that the shopping list now reflects real data
 immediately after an add.
 
+**2026-08-31, same day — common-order add now checks the real shopping list, not just this
+session's memory (Claude Code).** The repository already merges a duplicate name into the
+existing unchecked row rather than creating a second one, so a literal duplicate row was never
+possible — the gap was purely that the UI only remembered what *this panel* had added since it
+opened, not whether an item was already on the list from earlier. Both `CommonOrderQuickAdd`
+(Shopping) and Settings' equivalent now check the real `shopping` state: an item already
+unchecked on the list shows "On list" and is disabled rather than "Add", clicking it anyway (or
+"Add all" when everything qualifies) says so explicitly instead of silently merging, and "Add
+all" only sends the items that are not already there, reporting how many were skipped.
+
+Ash also described wanting a "you ordered toilet paper last time, is it due?" style reminder —
+that is what `predictReordersFromHistory` / Pantry's "Keep an eye on" card and the
+`getReorderSuggestions` AI tool already do (2026-08-31 earlier entries). Ash explicitly deferred
+building anything further there ("for now just a message... let's move on to next stage") — noted
+so a future session does not duplicate this, but nothing new was built for it this pass.
+
+Verified: typecheck, lint, 357 tests (unchanged — UI wiring against already-tested pure
+functions), build.
+
 Next in the staged plan: none remain from the original list. The natural next steps are (1)
 confirming the server-data fix actually shows Order History/Email and the household-database
 message on the live site, (2) setting up real SES credentials and doing a live send test, (3)
